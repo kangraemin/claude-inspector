@@ -462,6 +462,44 @@
       line-height: 1.7;
     }
 
+    /* ── Messages view ── */
+    .msg-filter {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 12px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0; background: var(--surface);
+    }
+    .mf-btn {
+      padding: 3px 10px; font-size: 11px; border-radius: 4px;
+      background: none; border: 1px solid var(--border);
+      color: var(--dim); cursor: pointer; transition: all .15s;
+    }
+    .mf-btn.active { background: var(--surface2); border-color: var(--blue); color: var(--text); }
+    .msg-count { font-size: 10px; color: var(--dim); margin-left: auto; }
+    .msgs-list { display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto; }
+    .msg-card { border-radius: 6px; border: 1px solid var(--border); overflow: hidden; font-size: 12px; }
+    .msg-card.msg-user { border-color: rgba(86,156,214,.35); }
+    .msg-card.msg-assistant { border-color: var(--border); opacity: .65; }
+    .msg-role {
+      padding: 4px 10px; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .6px; border-bottom: 1px solid var(--border);
+    }
+    .msg-card.msg-user .msg-role { color: var(--blue); background: rgba(86,156,214,.08); }
+    .msg-card.msg-assistant .msg-role { color: var(--dim); background: var(--surface2); }
+    .msg-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+    .msg-text {
+      white-space: pre-wrap; word-break: break-word; line-height: 1.6;
+      font-family: 'SF Mono', monospace; max-height: 220px; overflow-y: auto;
+    }
+    .msg-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 3px;
+      font-size: 10px; font-weight: 700; margin: 1px 2px;
+    }
+    .msg-badge.green { background: rgba(78,201,176,.15); color: var(--green); border: 1px solid rgba(78,201,176,.3); }
+    .msg-badge.yellow { background: rgba(220,220,170,.1); color: var(--yellow); border: 1px solid rgba(220,220,170,.25); }
+    .msg-tool { color: var(--purple); font-family: 'SF Mono', monospace; font-size: 11px; }
+    .msg-tool-result { color: var(--green); font-family: 'SF Mono', monospace; font-size: 11px; }
+    .msg-other { color: var(--dim); font-family: 'SF Mono', monospace; font-size: 11px; }
+
     /* ── Analysis view ── */
     .analysis-view { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
     .analysis-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -714,7 +752,8 @@
     </div>
     <div class="proxy-detail">
       <div class="dtabs">
-        <button class="dtab active" data-dtab="request"  onclick="showDetailTab('request')">Request</button>
+        <button class="dtab active" data-dtab="messages" onclick="showDetailTab('messages')">Messages</button>
+        <button class="dtab"        data-dtab="request"  onclick="showDetailTab('request')">Request</button>
         <button class="dtab"        data-dtab="response" onclick="showDetailTab('response')">Response</button>
         <button class="dtab"        data-dtab="analysis" onclick="showDetailTab('analysis')" style="color:var(--purple)">Analysis</button>
         <button class="copy-small" style="margin-left:auto" onclick="copyProxyDetail()">Copy</button>
@@ -1483,7 +1522,8 @@ function escAttr(s) {
 // ─── Proxy ────────────────────────────────────────────────────────────────
 let proxyCaptures = [];
 let selectedProxyId = null;
-let proxyDetailTab = 'request';
+let proxyDetailTab = 'messages';
+let msgFilter = 'user';
 let proxyRunning = false;
 let proxyActualPort = 9090;
 
@@ -1598,6 +1638,62 @@ function selectProxyEntry(id) {
   renderProxyDetail();
 }
 
+// ─── Messages view ───────────────────────────────────────────────────────────
+function formatMsgText(text) {
+  let t = esc(text);
+  t = t.replace(/&lt;system-reminder&gt;[\s\S]*?&lt;\/system-reminder&gt;/g,
+    '<span class="msg-badge green">📋 CLAUDE.md</span>');
+  t = t.replace(/&lt;command-message&gt;[\s\S]*?&lt;\/command-message&gt;/g,
+    '<span class="msg-badge yellow">⌨ slash command</span>');
+  return t;
+}
+
+function renderProxyMessages(entry, container) {
+  const msgs = entry.body?.messages || [];
+  if (msgs.length === 0) {
+    container.innerHTML = '<div class="proxy-empty"><span>messages 배열 없음</span></div>';
+    return;
+  }
+  const filtered = msgFilter === 'user' ? msgs.filter(m => m.role === 'user') : msgs;
+
+  const filterHtml = `<div class="msg-filter">
+    <button class="mf-btn${msgFilter==='user'?' active':''}" onclick="setMsgFilter('user')">User 만</button>
+    <button class="mf-btn${msgFilter==='all'?' active':''}" onclick="setMsgFilter('all')">전체</button>
+    <span class="msg-count">${filtered.length} / ${msgs.length}개</span>
+  </div>`;
+
+  const msgsHtml = filtered.map(msg => {
+    const contents = Array.isArray(msg.content)
+      ? msg.content
+      : [{ type: 'text', text: String(msg.content || '') }];
+
+    const bodyHtml = contents.map(c => {
+      if (c.type === 'text') return `<div class="msg-text">${formatMsgText(c.text)}</div>`;
+      if (c.type === 'tool_use') return `<div class="msg-tool">🔧 ${esc(c.name)}()</div>`;
+      if (c.type === 'tool_result') {
+        const preview = typeof c.content === 'string' ? c.content.slice(0, 120)
+          : Array.isArray(c.content) ? c.content.map(x => x.text||'').join('').slice(0, 120) : '[object]';
+        return `<div class="msg-tool-result">📤 ${esc(preview)}${preview.length===120?'…':''}</div>`;
+      }
+      return `<div class="msg-other">[${esc(c.type)}]</div>`;
+    }).join('');
+
+    return `<div class="msg-card msg-${esc(msg.role)}">
+      <div class="msg-role">${esc(msg.role)}</div>
+      <div class="msg-body">${bodyHtml}</div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = filterHtml + `<div class="msgs-list">${msgsHtml}</div>`;
+}
+
+function setMsgFilter(f) {
+  msgFilter = f;
+  const entry = proxyCaptures.find(e => e.id === selectedProxyId);
+  const detail = document.getElementById('proxyDetailView');
+  if (entry && detail) renderProxyMessages(entry, detail);
+}
+
 function renderProxyDetail() {
   const entry = proxyCaptures.find(e => e.id === selectedProxyId);
   const detail = document.getElementById('proxyDetailView');
@@ -1605,6 +1701,11 @@ function renderProxyDetail() {
 
   if (!entry) {
     detail.innerHTML = '<div class="proxy-empty"><span style="font-size:28px">🔍</span><span>요청을 선택하면<br>페이로드가 표시됩니다</span></div>';
+    return;
+  }
+
+  if (proxyDetailTab === 'messages') {
+    renderProxyMessages(entry, detail);
     return;
   }
 
@@ -1765,7 +1866,7 @@ function showDetailTab(tab) {
   document.querySelectorAll('.dtab').forEach(b => b.classList.toggle('active', b.dataset.dtab === tab));
   // Analysis tab copy button - hide it (analysis view는 copy가 의미없음)
   const copyBtn = document.querySelector('[onclick="copyProxyDetail()"]');
-  if (copyBtn) copyBtn.style.display = tab === 'analysis' ? 'none' : '';
+  if (copyBtn) copyBtn.style.display = (tab === 'analysis' || tab === 'messages') ? 'none' : '';
   renderProxyDetail();
 }
 
