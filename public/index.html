@@ -551,6 +551,10 @@
     .mech-chip.sc  { background: rgba(220,220,170,.12); color: var(--yellow); border: 1px solid rgba(220,220,170,.3); }
     .mech-chip.sk  { background: rgba(197,134,192,.15); color: var(--purple); border: 1px solid rgba(197,134,192,.35); }
     .mech-chip.sa  { background: rgba(206,145,120,.15); color: var(--orange); border: 1px solid rgba(206,145,120,.35); }
+    .mech-chip.mn  { background: rgba(156,220,254,.12); color: #9cdcfe;       border: 1px solid rgba(156,220,254,.3); }
+    .mech-chip.btn { cursor: pointer; transition: filter .1s; }
+    .mech-chip.btn:hover { filter: brightness(1.3); }
+    .mech-chip.btn.active { outline: 2px solid currentColor; outline-offset: 1px; }
     .analysis-section { display: flex; flex-direction: column; gap: 6px; }
     .analysis-section-title {
       font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px;
@@ -1547,6 +1551,7 @@ let proxyDetailTab = 'messages';
 let msgFilter = 'user';
 let msgSearchQuery = '';
 let proxyDetailSearch = '';
+let proxyDetailMechFilter = null;
 let proxyRunning = false;
 let proxyActualPort = 9090;
 
@@ -1822,7 +1827,46 @@ function setMsgSearch(q) {
 
 function setProxyDetailSearch(q) {
   proxyDetailSearch = q;
+  if (!q) proxyDetailMechFilter = null;
   renderProxyDetail();
+}
+
+function setProxyDetailMechFilter(key, pattern) {
+  if (proxyDetailMechFilter === key) {
+    proxyDetailMechFilter = null;
+    proxyDetailSearch = '';
+  } else {
+    proxyDetailMechFilter = key;
+    proxyDetailSearch = pattern;
+  }
+  renderProxyDetail();
+}
+
+function buildMechFilterChips(body) {
+  const det = detectMechanisms(body);
+  const allText = (body?.messages || [])
+    .flatMap(m => Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content || '') }])
+    .filter(c => c.type === 'text').map(c => c.text || '').join('\n');
+  const hasMemory = /auto-memory|currentDate/i.test(allText);
+  const styleSnippet = det.outputStyle?.[1]?.trim().slice(0, 40) || '';
+
+  const chips = [
+    { key: 'cm', found: !!det.claudeMd,          label: '📋 CLAUDE.md',    pattern: 'claudeMd' },
+    { key: 'mn', found: hasMemory,                label: '🧠 Memory',       pattern: 'auto-memory' },
+    { key: 'st', found: !!det.outputStyle,        label: '🎨 Output Style', pattern: styleSnippet },
+    { key: 'sc', found: !!det.slashCommand,       label: '⌨ Slash Cmd',    pattern: 'command-message' },
+    { key: 'sk', found: det.skills.length > 0,   label: '🔧 Skill',        pattern: 'skills are available' },
+    { key: 'sa', found: det.subAgents.length > 0, label: '🤖 Sub-Agent',   pattern: det.subAgents[0]?.name || 'Agent' },
+  ].filter(c => c.found && c.pattern);
+
+  if (chips.length === 0) return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:5px 10px 7px;flex-shrink:0;border-bottom:1px solid var(--border)">'
+    + chips.map(c => {
+        const active = proxyDetailMechFilter === c.key ? ' active' : '';
+        const safePattern = c.pattern.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<span class="mech-chip ${c.key} found btn${active}" onclick="setProxyDetailMechFilter('${c.key}','${safePattern}')">${c.label}</span>`;
+      }).join('')
+    + '</div>';
 }
 
 function applyDetailHighlight(container, query) {
@@ -1882,13 +1926,14 @@ function renderProxyDetail() {
       oninput="setProxyDetailSearch(this.value)">
     ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('')" title="검색 초기화">✕</button>` : ''}
   </div>`;
+  const mechChips = proxyDetailTab === 'request' ? buildMechFilterChips(entry.body) : '';
 
   if (data === null || data === undefined) {
-    detail.innerHTML = searchBar + `<div style="color:var(--dim);padding:16px;font-size:12px">${proxyDetailTab === 'response' ? '응답 대기 중…' : '바디 없음'}</div>`;
+    detail.innerHTML = searchBar + mechChips + `<div style="color:var(--dim);padding:16px;font-size:12px">${proxyDetailTab === 'response' ? '응답 대기 중…' : '바디 없음'}</div>`;
     return;
   }
 
-  detail.innerHTML = searchBar + '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
+  detail.innerHTML = searchBar + mechChips + '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
   const code = document.getElementById('proxyDetailCode');
   renderJsonTree(code, data);
   if (q) applyDetailHighlight(code, q);
@@ -2045,6 +2090,7 @@ function renderProxyAnalysis(entry, container) {
 function showDetailTab(tab) {
   proxyDetailTab = tab;
   proxyDetailSearch = '';
+  proxyDetailMechFilter = null;
   document.querySelectorAll('.dtab').forEach(b => b.classList.toggle('active', b.dataset.dtab === tab));
   // Analysis tab copy button - hide it (analysis view는 copy가 의미없음)
   const copyBtn = document.querySelector('[onclick="copyProxyDetail()"]');
