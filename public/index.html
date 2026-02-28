@@ -495,7 +495,13 @@
       font-size: 10px; font-weight: 700; margin: 1px 2px;
     }
     .msg-badge.green { background: rgba(78,201,176,.15); color: var(--green); border: 1px solid rgba(78,201,176,.3); }
+    .msg-badge.cyan  { background: rgba(86,156,214,.15); color: var(--blue);  border: 1px solid rgba(86,156,214,.3); }
     .msg-badge.yellow { background: rgba(220,220,170,.1); color: var(--yellow); border: 1px solid rgba(220,220,170,.25); }
+    .msg-badge.hl-active { outline: 2px solid currentColor; outline-offset: 1px; }
+    .badge-expand-content.badge-section-hl {
+      background: rgba(255,235,59,.08); border-left: 3px solid rgba(255,235,59,.5);
+      padding-left: 8px;
+    }
     .msg-tool { color: var(--purple); font-family: 'SF Mono', monospace; font-size: 11px; }
     .msg-tool-result { color: var(--green); font-family: 'SF Mono', monospace; font-size: 11px; }
     .msg-other { color: var(--dim); font-family: 'SF Mono', monospace; font-size: 11px; }
@@ -1681,6 +1687,33 @@ function selectProxyEntry(id) {
 
 // ─── Messages view ───────────────────────────────────────────────────────────
 
+// Parse CLAUDE.md system-reminder into global/local sections
+function parseClaudeMdSections(inner) {
+  const re = /Contents of (.+?) \((.+?)\):\n\n([\s\S]*?)(?=\n\nContents of |\s*$)/g;
+  const sections = [];
+  let m;
+  while ((m = re.exec(inner)) !== null) {
+    const path = m[1], desc = m[2], content = m[3].trim();
+    const fname = path.split('/').pop();
+    const isGlobal = /global|private global/i.test(desc);
+    const isMemory = /memory/i.test(desc) || /\/memory\//.test(path);
+    let label, cls;
+    if (isMemory) {
+      label = '🧠 Memory: ' + fname; cls = 'green';
+    } else if (/\/rules\//.test(path)) {
+      label = (isGlobal ? '📜 Global Rule: ' : '📜 Local Rule: ') + fname;
+      cls = isGlobal ? 'green' : 'cyan';
+    } else if (/CLAUDE\.md$/i.test(path)) {
+      label = isGlobal ? '📋 Global CLAUDE.md' : '📋 Local CLAUDE.md';
+      cls = isGlobal ? 'green' : 'cyan';
+    } else {
+      label = '📋 ' + fname; cls = 'green';
+    }
+    sections.push({ label, path, content, cls, scope: isGlobal ? 'global' : 'local' });
+  }
+  return sections;
+}
+
 // Parse user message text into typed portions and injected blocks
 function parseUserText(text) {
   const parts = [];
@@ -1694,11 +1727,22 @@ function parseUserText(text) {
     const raw = m[0];
     if (raw.startsWith('<system-reminder>')) {
       const inner = raw.slice('<system-reminder>'.length, -'</system-reminder>'.length);
-      let label = '📋 CLAUDE.md';
-      if (/skills are available/i.test(inner))        label = '🔧 Skills';
-      else if (/currentDate|auto-memory/i.test(inner)) label = '🧠 Memory';
-      else if (!/claudeMd|CLAUDE\.md/i.test(inner))    label = '📋 system-reminder';
-      parts.push({ type: 'injected', label, content: inner, cls: 'green' });
+      if (/skills are available/i.test(inner)) {
+        parts.push({ type: 'injected', label: '🔧 Skills', content: inner, cls: 'green' });
+      } else if (/currentDate|auto-memory/i.test(inner) && !/claudeMd|CLAUDE\.md/i.test(inner)) {
+        parts.push({ type: 'injected', label: '🧠 Memory', content: inner, cls: 'green' });
+      } else if (/claudeMd|CLAUDE\.md/i.test(inner)) {
+        const sections = parseClaudeMdSections(inner);
+        if (sections.length > 0) {
+          for (const s of sections) {
+            parts.push({ type: 'injected', label: s.label, content: s.content, cls: s.cls });
+          }
+        } else {
+          parts.push({ type: 'injected', label: '📋 CLAUDE.md', content: inner, cls: 'green' });
+        }
+      } else {
+        parts.push({ type: 'injected', label: '📋 system-reminder', content: inner, cls: 'green' });
+      }
     } else {
       const inner = raw.slice('<command-message>'.length, -'</command-message>'.length);
       parts.push({ type: 'injected', label: '⌨ slash command', content: inner, cls: 'yellow' });
@@ -1718,13 +1762,29 @@ function highlightSearch(escapedHtml, query) {
   return escapedHtml.replace(re, m => `<mark class="search-hl">${m}</mark>`);
 }
 
+let _activeBadgeUid = null;
+
 function toggleBadge(uid) {
   const content = document.getElementById('bc_' + uid);
   const btn = document.getElementById('bb_' + uid);
   if (!content) return;
+
+  // 이전 활성 배지 하이라이트 해제
+  if (_activeBadgeUid && _activeBadgeUid !== uid) {
+    const prevContent = document.getElementById('bc_' + _activeBadgeUid);
+    const prevBtn = document.getElementById('bb_' + _activeBadgeUid);
+    if (prevContent) { prevContent.style.display = 'none'; prevContent.classList.remove('badge-section-hl'); }
+    if (prevBtn) { prevBtn.classList.remove('open', 'hl-active'); }
+  }
+
   const open = content.style.display !== 'none';
   content.style.display = open ? 'none' : 'block';
-  if (btn) btn.classList.toggle('open', !open);
+  content.classList.toggle('badge-section-hl', !open);
+  if (btn) {
+    btn.classList.toggle('open', !open);
+    btn.classList.toggle('hl-active', !open);
+  }
+  _activeBadgeUid = open ? null : uid;
 }
 
 // Render user message content with typed/injected separation
@@ -2165,11 +2225,28 @@ function renderProxyAnalysis(entry, container) {
 
   // CLAUDE.md
   if (det.claudeMd) {
-    html += `<div class="analysis-section">
-      <div class="analysis-section-title" style="color:var(--green)">CLAUDE.md — system-reminder 주입</div>
-      <div class="analysis-desc">Claude Code가 프로젝트/글로벌 CLAUDE.md 내용을 &lt;system-reminder&gt; 태그로 감싸서 messages[] 안에 삽입</div>
-      <div class="analysis-block highlight-green">${esc(det.claudeMd)}</div>
-    </div>`;
+    const mdSections = parseClaudeMdSections(det.claudeMd);
+    if (mdSections.length > 0) {
+      html += `<div class="analysis-section">
+        <div class="analysis-section-title" style="color:var(--green)">CLAUDE.md — system-reminder 주입</div>
+        <div class="analysis-desc">Claude Code가 프로젝트/글로벌 CLAUDE.md 내용을 &lt;system-reminder&gt; 태그로 감싸서 messages[] 안에 삽입</div>`;
+      for (const s of mdSections) {
+        const color = s.scope === 'global' ? 'var(--green)' : 'var(--blue)';
+        const hlClass = s.scope === 'global' ? 'highlight-green' : 'highlight-blue';
+        html += `<div style="margin-top:8px">
+          <div style="font-size:10px;font-weight:700;color:${color};margin-bottom:4px">${esc(s.label)}</div>
+          <div style="font-size:10px;color:var(--dim);margin-bottom:4px;word-break:break-all">${esc(s.path)}</div>
+          <div class="analysis-block ${hlClass}">${esc(s.content)}</div>
+        </div>`;
+      }
+      html += '</div>';
+    } else {
+      html += `<div class="analysis-section">
+        <div class="analysis-section-title" style="color:var(--green)">CLAUDE.md — system-reminder 주입</div>
+        <div class="analysis-desc">Claude Code가 프로젝트/글로벌 CLAUDE.md 내용을 &lt;system-reminder&gt; 태그로 감싸서 messages[] 안에 삽입</div>
+        <div class="analysis-block highlight-green">${esc(det.claudeMd)}</div>
+      </div>`;
+    }
   }
 
   // Output Style
