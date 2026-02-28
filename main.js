@@ -8,6 +8,44 @@ const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai
 let mainWin = null;
 let proxyServer = null;
 
+// Parse SSE stream into a reconstructed Anthropic message object
+function parseSseStream(text) {
+  try {
+    const events = {};
+    for (const rawLine of text.split('\n')) {
+      const line = rawLine.replace(/\r$/, '');
+      const m = line.match(/^(event|data):\s?(.*)/);
+      if (m) events[m[1]] = m[2].trimEnd();
+      if (line === '' && events.data) {
+        try {
+          const d = JSON.parse(events.data);
+          if (d.type === 'message_start') {
+            var msg = Object.assign({}, d.message, { _streaming: true });
+          }
+          if (d.type === 'content_block_start' && msg) {
+            msg.content = msg.content || [];
+            msg.content[d.index] = Object.assign({}, d.content_block);
+          }
+          if (d.type === 'content_block_delta' && msg) {
+            const block = msg.content && msg.content[d.index];
+            if (block) {
+              if (d.delta.type === 'text_delta') block.text = (block.text || '') + d.delta.text;
+              if (d.delta.type === 'thinking_delta') block.thinking = (block.thinking || '') + d.delta.thinking;
+            }
+          }
+          if (d.type === 'message_delta' && msg) {
+            if (d.delta) Object.assign(msg, d.delta);
+            if (d.usage) msg.usage = Object.assign({}, msg.usage, d.usage);
+          }
+        } catch {}
+        events.event = undefined;
+        events.data = undefined;
+      }
+    }
+    return msg || null;
+  } catch { return null; }
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1320,
@@ -110,6 +148,7 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
             const respStr = Buffer.concat(respChunks).toString('utf8');
             let respObj = null;
             try { respObj = JSON.parse(respStr); } catch {}
+            if (!respObj) respObj = parseSseStream(respStr);
             if (mainWin && !mainWin.isDestroyed()) {
               mainWin.webContents.send('proxy-response', {
                 id: reqId, status: proxyRes.statusCode,
