@@ -1850,28 +1850,36 @@ function setMsgFilter(f) {
 
 let _imeComposing = false;
 let _msgSearchWasFocused = false;
+let _msgSearchTimer = null;
 
 function setMsgSearch(q) {
   msgSearchQuery = q;
   if (_imeComposing) return;
-  _msgSearchWasFocused = document.activeElement?.id === 'msgSearchInput';
-  const entry = proxyCaptures.find(e => e.id === selectedProxyId);
-  const detail = document.getElementById('proxyDetailView');
-  if (entry && detail && proxyDetailTab === 'messages') renderProxyMessages(entry, detail);
+  clearTimeout(_msgSearchTimer);
+  _msgSearchTimer = setTimeout(() => {
+    _msgSearchWasFocused = document.activeElement?.id === 'msgSearchInput';
+    const entry = proxyCaptures.find(e => e.id === selectedProxyId);
+    const detail = document.getElementById('proxyDetailView');
+    if (entry && detail && proxyDetailTab === 'messages') renderProxyMessages(entry, detail);
+  }, 150);
 }
 
 let searchCurrentIdx = -1;
 
 let _detailSearchWasFocused = false;
+let _detailSearchTimer = null;
 
 function setProxyDetailSearch(q) {
   proxyDetailSearch = q;
   if (_imeComposing) return;
-  _detailSearchWasFocused = document.activeElement?.id === 'proxyDetailSearchInput';
-  searchCurrentIdx = -1;
-  if (!q) proxyDetailMechFilter = null;
-  renderProxyDetail();
-  if (q) navigateSearchMatch(0);
+  clearTimeout(_detailSearchTimer);
+  _detailSearchTimer = setTimeout(() => {
+    _detailSearchWasFocused = document.activeElement?.id === 'proxyDetailSearchInput';
+    searchCurrentIdx = -1;
+    if (!q) proxyDetailMechFilter = null;
+    renderProxyDetail();
+    if (q) navigateSearchMatch(0);
+  }, 150);
 }
 
 function navigateSearchMatch(delta) {
