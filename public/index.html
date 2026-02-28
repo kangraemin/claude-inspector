@@ -1993,17 +1993,32 @@ const CHIP_META = {
 function buildMechFilterChips(body) {
   const det = detectMechanisms(body);
 
-  const chips = [
-    { key: 'cm', found: !!det.claudeMd,          label: '📋 CLAUDE.md',  pattern: 'system-reminder' },
-    { key: 'sc', found: !!det.slashCommand,       label: '⌨ Slash Cmd',  pattern: 'command-message' },
-    { key: 'sk', found: det.skills.length > 0,   label: '🔧 Skill',      pattern: 'skills are available' },
-    { key: 'sa', found: det.subAgents.length > 0, label: '🤖 Sub-Agent', pattern: det.subAgents[0]?.name || 'Agent' },
-  ].filter(c => c.found && c.pattern);
+  const chips = [];
+
+  // CLAUDE.md → 섹션별 분리 칩
+  if (det.claudeMd) {
+    const sections = parseClaudeMdSections(det.claudeMd);
+    if (sections.length > 0) {
+      for (let i = 0; i < sections.length; i++) {
+        const s = sections[i];
+        // 칩 내 검색 패턴: 해당 섹션의 첫 줄 (고유성 확보)
+        const firstLine = s.content.split('\n').find(l => l.trim().length > 8) || s.content.slice(0, 40);
+        chips.push({ key: 'cm_' + i, found: true, label: s.label, pattern: firstLine.trim(),
+                      cls: s.cls === 'cyan' ? 'st' : 'cm', metaKey: 'cm' });
+      }
+    } else {
+      chips.push({ key: 'cm', found: true, label: '📋 CLAUDE.md', pattern: 'system-reminder', cls: 'cm', metaKey: 'cm' });
+    }
+  }
+
+  if (det.slashCommand)       chips.push({ key: 'sc', found: true, label: '⌨ Slash Cmd',  pattern: 'command-message', cls: 'sc', metaKey: 'sc' });
+  if (det.skills.length > 0)  chips.push({ key: 'sk', found: true, label: '🔧 Skill',      pattern: 'skills are available', cls: 'sk', metaKey: 'sk' });
+  if (det.subAgents.length > 0) chips.push({ key: 'sa', found: true, label: '🤖 Sub-Agent', pattern: det.subAgents[0]?.name || 'Agent', cls: 'sa', metaKey: 'sa' });
 
   if (chips.length === 0) return '';
 
   const activeChip = chips.find(c => c.key === proxyDetailMechFilter);
-  const meta = activeChip ? CHIP_META[activeChip.key] : null;
+  const meta = activeChip ? CHIP_META[activeChip.metaKey] : null;
   const descBanner = meta
     ? `<div class="mech-filter-desc">
         <span class="mech-filter-desc-dot" style="background:${meta.color}"></span>
@@ -2019,7 +2034,7 @@ function buildMechFilterChips(body) {
     + chips.map(c => {
         const active = proxyDetailMechFilter === c.key ? ' active' : '';
         const safePattern = c.pattern.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return `<span class="mech-chip ${c.key} found btn${active}" onclick="setProxyDetailMechFilter('${c.key}','${safePattern}')">${c.label}</span>`;
+        return `<span class="mech-chip ${c.cls} found btn${active}" onclick="setProxyDetailMechFilter('${c.key}','${safePattern}')">${c.label}</span>`;
       }).join('')
     + '</div>'
     + descBanner
