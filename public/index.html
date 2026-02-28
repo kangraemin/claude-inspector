@@ -1546,6 +1546,7 @@ let selectedProxyId = null;
 let proxyDetailTab = 'messages';
 let msgFilter = 'user';
 let msgSearchQuery = '';
+let proxyDetailSearch = '';
 let proxyRunning = false;
 let proxyActualPort = 9090;
 
@@ -1819,6 +1820,26 @@ function setMsgSearch(q) {
   if (entry && detail && proxyDetailTab === 'messages') renderProxyMessages(entry, detail);
 }
 
+function setProxyDetailSearch(q) {
+  proxyDetailSearch = q;
+  renderProxyDetail();
+}
+
+function applyDetailHighlight(container, query) {
+  if (!query) return;
+  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    if (!re.test(node.textContent)) continue;
+    re.lastIndex = 0;
+    const span = document.createElement('span');
+    span.innerHTML = node.textContent.replace(re, m => `<mark class="search-hl">${m}</mark>`);
+    node.parentNode.replaceChild(span, node);
+  }
+}
+
 function renderProxyDetail() {
   const entry = proxyCaptures.find(e => e.id === selectedProxyId);
   const detail = document.getElementById('proxyDetailView');
@@ -1836,19 +1857,38 @@ function renderProxyDetail() {
 
   if (proxyDetailTab === 'analysis') {
     renderProxyAnalysis(entry, detail);
+    if (proxyDetailSearch) applyDetailHighlight(detail, proxyDetailSearch);
+    if (proxyDetailSearch || document.activeElement?.id === 'proxyDetailSearchInput') {
+      const inp = document.getElementById('proxyDetailSearchInput');
+      if (inp) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
+    }
     return;
   }
 
   const data = proxyDetailTab === 'request' ? entry.body : (entry.response?.body ?? null);
 
+  const q = proxyDetailSearch;
+  const searchBar = `<div class="msg-search-bar" style="flex-shrink:0">
+    <input type="text" class="msg-search-input" id="proxyDetailSearchInput"
+      placeholder="🔍 검색..." value="${esc(q)}"
+      oninput="setProxyDetailSearch(this.value)">
+    ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('')" title="검색 초기화">✕</button>` : ''}
+  </div>`;
+
   if (data === null || data === undefined) {
-    detail.innerHTML = `<div style="color:var(--dim);padding:16px;font-size:12px">${proxyDetailTab === 'response' ? '응답 대기 중…' : '바디 없음'}</div>`;
+    detail.innerHTML = searchBar + `<div style="color:var(--dim);padding:16px;font-size:12px">${proxyDetailTab === 'response' ? '응답 대기 중…' : '바디 없음'}</div>`;
     return;
   }
 
-  detail.innerHTML = '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
+  detail.innerHTML = searchBar + '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
   const code = document.getElementById('proxyDetailCode');
   renderJsonTree(code, data);
+  if (q) applyDetailHighlight(code, q);
+
+  if (q || document.activeElement?.id === 'proxyDetailSearchInput') {
+    const inp = document.getElementById('proxyDetailSearchInput');
+    if (inp) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
+  }
 }
 
 // ─── Proxy Analysis ────────────────────────────────────────────────────────
@@ -1911,7 +1951,15 @@ function renderProxyAnalysis(entry, container) {
     { key: 'sa',  found: det.subAgents.length > 0, label: `Sub-Agent${det.subAgents.length > 1 ? ' ×'+det.subAgents.length : ''}` },
   ];
 
-  let html = '<div class="analysis-view">';
+  const aq = proxyDetailSearch;
+  const analysisSearchBar = `<div class="msg-search-bar" style="flex-shrink:0">
+    <input type="text" class="msg-search-input" id="proxyDetailSearchInput"
+      placeholder="🔍 검색..." value="${esc(aq)}"
+      oninput="setProxyDetailSearch(this.value)">
+    ${aq ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('')" title="검색 초기화">✕</button>` : ''}
+  </div>`;
+
+  let html = analysisSearchBar + '<div class="analysis-view">';
 
   // Chips row
   html += '<div class="analysis-chips">';
@@ -1988,6 +2036,7 @@ function renderProxyAnalysis(entry, container) {
 
 function showDetailTab(tab) {
   proxyDetailTab = tab;
+  proxyDetailSearch = '';
   document.querySelectorAll('.dtab').forEach(b => b.classList.toggle('active', b.dataset.dtab === tab));
   // Analysis tab copy button - hide it (analysis view는 copy가 의미없음)
   const copyBtn = document.querySelector('[onclick="copyProxyDetail()"]');
