@@ -572,6 +572,7 @@
       font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px;
       display: flex; align-items: center; gap: 6px;
     }
+    .analysis-desc { font-size: 11px; color: var(--dim); margin: 4px 0 8px; line-height: 1.5; }
     .analysis-block {
       background: var(--surface2); border: 1px solid var(--border);
       border-radius: 5px; padding: 9px 11px;
@@ -2143,6 +2144,7 @@ function renderProxyAnalysis(entry, container) {
   if (det.claudeMd) {
     html += `<div class="analysis-section">
       <div class="analysis-section-title" style="color:var(--green)">CLAUDE.md — system-reminder 주입</div>
+      <div class="analysis-desc">Claude Code가 프로젝트/글로벌 CLAUDE.md 내용을 &lt;system-reminder&gt; 태그로 감싸서 messages[] 안에 삽입</div>
       <div class="analysis-block highlight-green">${esc(det.claudeMd)}</div>
     </div>`;
   }
@@ -2152,23 +2154,28 @@ function renderProxyAnalysis(entry, container) {
     const extra = det.outputStyle.slice(1).join('\n\n---\n\n');
     html += `<div class="analysis-section">
       <div class="analysis-section-title" style="color:var(--blue)">Output Style — system[] 추가 블록</div>
+      <div class="analysis-desc">Claude Code가 system 프롬프트 배열에 추가 블록으로 삽입 (모델 응답 스타일 제어)</div>
       <div class="analysis-block highlight-blue">${esc(extra)}</div>
     </div>`;
   }
 
-  // Slash Command
+  // Slash Command + Skill (연결된 흐름이면 하나로 합침)
+  const slashSkillLinked = det.slashCommand && det.skills.length > 0;
+
   if (det.slashCommand) {
     html += `<div class="analysis-section">
-      <div class="analysis-section-title" style="color:var(--yellow)">Slash Command</div>
-      <div class="analysis-kv"><span class="ak">command</span><span class="av" style="color:var(--yellow)">${esc(det.slashCommand.tag)}</span></div>
+      <div class="analysis-section-title" style="color:var(--yellow)">① 입력 — Slash Command</div>
+      <div class="analysis-desc">사용자가 /${esc(det.slashCommand.tag)}을 입력하면 Claude Code가 &lt;command-message&gt; 태그로 감싸서 프롬프트에 주입</div>
       <div class="analysis-block highlight-yellow">${esc(det.slashCommand.full)}</div>
     </div>`;
   }
 
-  // Skills
   for (const sk of det.skills) {
     html += `<div class="analysis-section">
-      <div class="analysis-section-title" style="color:var(--purple)">Skill — tool_use/tool_result</div>
+      <div class="analysis-section-title" style="color:var(--purple)">${slashSkillLinked ? '② 실행 — ' : ''}Skill (tool_use → tool_result)</div>
+      <div class="analysis-desc">${slashSkillLinked
+        ? 'Claude가 위 슬래시 커맨드를 읽고, 매칭되는 스킬을 tool_use로 호출'
+        : 'Claude가 스킬을 tool_use로 호출하고 결과를 tool_result로 수신'}</div>
       <div class="analysis-kv"><span class="ak">id</span><span class="av">${esc(sk.id)}</span></div>
       <div class="analysis-block highlight-purple jt-json-block" data-json="${escAttr(JSON.stringify(sk.input))}"></div>
       ${sk.result ? `<div class="analysis-kv"><span class="ak">result (tool_result)</span></div><div class="analysis-block highlight-purple">${esc(sk.result)}</div>` : '<div class="analysis-kv"><span class="ak" style="color:var(--dim)">tool_result 없음 (다음 메시지에 있거나 아직 수신 전)</span></div>'}
@@ -2180,6 +2187,7 @@ function renderProxyAnalysis(entry, container) {
     const isJson = sa.input && typeof sa.input === 'object';
     html += `<div class="analysis-section">
       <div class="analysis-section-title" style="color:var(--orange)">${esc(sa.name)} — Sub-Agent 호출</div>
+      <div class="analysis-desc">Claude가 Task tool로 독립적인 서브에이전트 API 요청을 생성 (별도 컨텍스트에서 실행)</div>
       <div class="analysis-kv"><span class="ak">subagent_type</span><span class="av" style="color:var(--orange)">${esc(sa.input?.subagent_type || sa.input?.type || '?')}</span></div>
       <div class="analysis-block highlight-orange ${isJson ? 'jt-json-block' : ''}" ${isJson ? `data-json="${escAttr(JSON.stringify(sa.input))}"` : ''}>${isJson ? '' : esc(sa.input?.prompt || '')}</div>
     </div>`;
