@@ -499,6 +499,42 @@
     .msg-tool { color: var(--purple); font-family: 'SF Mono', monospace; font-size: 11px; }
     .msg-tool-result { color: var(--green); font-family: 'SF Mono', monospace; font-size: 11px; }
     .msg-other { color: var(--dim); font-family: 'SF Mono', monospace; font-size: 11px; }
+    /* typed vs injected separation */
+    .msg-typed {
+      background: rgba(86,156,214,.06); border-left: 2px solid var(--blue);
+      padding: 6px 10px; border-radius: 0 4px 4px 0;
+      white-space: pre-wrap; word-break: break-word; line-height: 1.6;
+      font-family: 'SF Mono', monospace;
+    }
+    .msg-injected-row { margin: 2px 0; }
+    .msg-badge.expandable { cursor: pointer; user-select: none; }
+    .msg-badge.expandable::after { content: ' ▶'; font-size: 8px; opacity: .7; }
+    .msg-badge.expandable.open::after { content: ' ▼'; }
+    .badge-expand-content {
+      display: none; margin-top: 4px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 8px 10px;
+      font-size: 11px; font-family: 'SF Mono', monospace;
+      white-space: pre-wrap; word-break: break-word;
+      max-height: 250px; overflow-y: auto; color: var(--dim);
+    }
+    /* search bar */
+    .msg-search-bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 10px; border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+    }
+    .msg-search-input {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); padding: 3px 8px; border-radius: 4px;
+      font-size: 11px; font-family: 'SF Mono', monospace; outline: none;
+    }
+    .msg-search-input:focus { border-color: var(--blue); }
+    .msg-search-clear {
+      background: none; border: none; color: var(--dim); cursor: pointer;
+      font-size: 13px; padding: 0 2px; line-height: 1;
+    }
+    mark.search-hl { background: rgba(255,235,59,.45); color: inherit; border-radius: 2px; padding: 0 1px; }
 
     /* ── Analysis view ── */
     .analysis-view { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
@@ -1524,6 +1560,7 @@ let proxyCaptures = [];
 let selectedProxyId = null;
 let proxyDetailTab = 'messages';
 let msgFilter = 'user';
+let msgSearchQuery = '';
 let proxyRunning = false;
 let proxyActualPort = 9090;
 
@@ -1639,19 +1676,71 @@ function selectProxyEntry(id) {
 }
 
 // ─── Messages view ───────────────────────────────────────────────────────────
-function formatMsgText(text) {
-  let t = esc(text);
-  t = t.replace(/&lt;system-reminder&gt;([\s\S]*?)&lt;\/system-reminder&gt;/g, (_m, inner) => {
-    const raw = inner.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-    let label = '📋 CLAUDE.md';
-    if (/skills are available/i.test(raw))        label = '🔧 Skills';
-    else if (/currentDate|auto-memory/i.test(raw)) label = '🧠 Memory';
-    else if (!/claudeMd|CLAUDE\.md/i.test(raw))    label = '📋 system-reminder';
-    return `<span class="msg-badge green">${label}</span>`;
-  });
-  t = t.replace(/&lt;command-message&gt;[\s\S]*?&lt;\/command-message&gt;/g,
-    '<span class="msg-badge yellow">⌨ slash command</span>');
-  return t;
+
+// Parse user message text into typed portions and injected blocks
+function parseUserText(text) {
+  const parts = [];
+  const blockRe = /(<system-reminder>[\s\S]*?<\/system-reminder>|<command-message>[\s\S]*?<\/command-message>)/g;
+  let pos = 0, m;
+  while ((m = blockRe.exec(text)) !== null) {
+    if (m.index > pos) {
+      const plain = text.slice(pos, m.index).trim();
+      if (plain) parts.push({ type: 'text', content: plain });
+    }
+    const raw = m[0];
+    if (raw.startsWith('<system-reminder>')) {
+      const inner = raw.slice('<system-reminder>'.length, -'</system-reminder>'.length);
+      let label = '📋 CLAUDE.md';
+      if (/skills are available/i.test(inner))        label = '🔧 Skills';
+      else if (/currentDate|auto-memory/i.test(inner)) label = '🧠 Memory';
+      else if (!/claudeMd|CLAUDE\.md/i.test(inner))    label = '📋 system-reminder';
+      parts.push({ type: 'injected', label, content: inner, cls: 'green' });
+    } else {
+      const inner = raw.slice('<command-message>'.length, -'</command-message>'.length);
+      parts.push({ type: 'injected', label: '⌨ slash command', content: inner, cls: 'yellow' });
+    }
+    pos = m.index + raw.length;
+  }
+  if (pos < text.length) {
+    const plain = text.slice(pos).trim();
+    if (plain) parts.push({ type: 'text', content: plain });
+  }
+  return parts;
+}
+
+function highlightSearch(escapedHtml, query) {
+  if (!query) return escapedHtml;
+  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  return escapedHtml.replace(re, m => `<mark class="search-hl">${m}</mark>`);
+}
+
+function toggleBadge(uid) {
+  const content = document.getElementById('bc_' + uid);
+  const btn = document.getElementById('bb_' + uid);
+  if (!content) return;
+  const open = content.style.display !== 'none';
+  content.style.display = open ? 'none' : 'block';
+  if (btn) btn.classList.toggle('open', !open);
+}
+
+// Render user message content with typed/injected separation
+function renderUserMsgContent(text, typedOnly, query) {
+  const parts = parseUserText(text);
+  if (typedOnly) {
+    const typed = parts.filter(p => p.type === 'text');
+    if (typed.length === 0) return null;
+    return typed.map(p => `<div class="msg-typed">${highlightSearch(esc(p.content), query)}</div>`).join('');
+  }
+  return parts.map(p => {
+    if (p.type === 'text') {
+      return `<div class="msg-typed">${highlightSearch(esc(p.content), query)}</div>`;
+    }
+    const uid = Math.random().toString(36).slice(2, 8);
+    return `<div class="msg-injected-row">
+      <span id="bb_${uid}" class="msg-badge ${p.cls} expandable" onclick="toggleBadge('${uid}')">${esc(p.label)}</span>
+      <div id="bc_${uid}" class="badge-expand-content" style="display:none">${highlightSearch(esc(p.content), query)}</div>
+    </div>`;
+  }).join('');
 }
 
 function renderProxyMessages(entry, container) {
@@ -1660,40 +1749,75 @@ function renderProxyMessages(entry, container) {
     container.innerHTML = '<div class="proxy-empty"><span>messages 배열 없음</span></div>';
     return;
   }
-  const filtered = msgFilter === 'user' ? msgs.filter(m => m.role === 'user')
+
+  const typedOnly = msgFilter === 'typed';
+  const baseFiltered = (msgFilter === 'user' || typedOnly) ? msgs.filter(m => m.role === 'user')
     : msgFilter === 'assistant' ? msgs.filter(m => m.role === 'assistant')
     : msgs;
 
+  const q = msgSearchQuery;
+
   const filterHtml = `<div class="msg-filter">
     <button class="mf-btn${msgFilter==='user'?' active':''}" onclick="setMsgFilter('user')">내가 보낸 것</button>
+    <button class="mf-btn${msgFilter==='typed'?' active':''}" onclick="setMsgFilter('typed')">직접 입력만</button>
     <button class="mf-btn${msgFilter==='assistant'?' active':''}" onclick="setMsgFilter('assistant')">클로드가 보낸 것</button>
     <button class="mf-btn${msgFilter==='all'?' active':''}" onclick="setMsgFilter('all')">전체</button>
-    <span class="msg-count">${filtered.length} / ${msgs.length}개</span>
+    <span class="msg-count" id="msgCountEl"></span>
   </div>`;
 
-  const msgsHtml = filtered.map(msg => {
+  const searchHtml = `<div class="msg-search-bar">
+    <input type="text" id="msgSearchInput" class="msg-search-input"
+      placeholder="🔍 검색... (⌘F)" value="${esc(q)}"
+      oninput="setMsgSearch(this.value)">
+    ${q ? `<button class="msg-search-clear" onclick="setMsgSearch('')" title="검색 초기화">✕</button>` : ''}
+  </div>`;
+
+  const cards = [];
+  for (const msg of baseFiltered) {
     const contents = Array.isArray(msg.content)
       ? msg.content
       : [{ type: 'text', text: String(msg.content || '') }];
 
-    const bodyHtml = contents.map(c => {
-      if (c.type === 'text') return `<div class="msg-text">${formatMsgText(c.text)}</div>`;
-      if (c.type === 'tool_use') return `<div class="msg-tool">🔧 ${esc(c.name)}()</div>`;
-      if (c.type === 'tool_result') {
+    const bodyParts = [];
+    for (const c of contents) {
+      if (c.type === 'text') {
+        if (msg.role === 'user') {
+          const rendered = renderUserMsgContent(c.text, typedOnly, q);
+          if (rendered !== null) bodyParts.push(rendered);
+        } else {
+          bodyParts.push(`<div class="msg-text">${highlightSearch(esc(c.text), q)}</div>`);
+        }
+      } else if (c.type === 'tool_use') {
+        bodyParts.push(`<div class="msg-tool">🔧 ${esc(c.name)}()</div>`);
+      } else if (c.type === 'tool_result') {
         const preview = typeof c.content === 'string' ? c.content.slice(0, 120)
           : Array.isArray(c.content) ? c.content.map(x => x.text||'').join('').slice(0, 120) : '[object]';
-        return `<div class="msg-tool-result">📤 ${esc(preview)}${preview.length===120?'…':''}</div>`;
+        bodyParts.push(`<div class="msg-tool-result">📤 ${esc(preview)}${preview.length===120?'…':''}</div>`);
+      } else {
+        bodyParts.push(`<div class="msg-other">[${esc(c.type)}]</div>`);
       }
-      return `<div class="msg-other">[${esc(c.type)}]</div>`;
-    }).join('');
+    }
 
-    return `<div class="msg-card msg-${esc(msg.role)}">
+    if (bodyParts.length === 0) continue;
+    if (q && !bodyParts.join('').includes('class="search-hl"')) continue;
+
+    cards.push(`<div class="msg-card msg-${esc(msg.role)}">
       <div class="msg-role">${esc(msg.role)}</div>
-      <div class="msg-body">${bodyHtml}</div>
-    </div>`;
-  }).join('');
+      <div class="msg-body">${bodyParts.join('')}</div>
+    </div>`);
+  }
 
-  container.innerHTML = filterHtml + `<div class="msgs-list">${msgsHtml}</div>`;
+  container.innerHTML = filterHtml + searchHtml +
+    `<div class="msgs-list">${cards.join('') || '<div class="proxy-empty"><span>결과 없음</span></div>'}</div>`;
+
+  const countEl = document.getElementById('msgCountEl');
+  if (countEl) countEl.textContent = `${cards.length} / ${msgs.length}개`;
+
+  // Restore focus on search input after re-render
+  if (q || document.activeElement?.id === 'msgSearchInput') {
+    const inp = document.getElementById('msgSearchInput');
+    if (inp) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
+  }
 }
 
 function setMsgFilter(f) {
@@ -1701,6 +1825,13 @@ function setMsgFilter(f) {
   const entry = proxyCaptures.find(e => e.id === selectedProxyId);
   const detail = document.getElementById('proxyDetailView');
   if (entry && detail) renderProxyMessages(entry, detail);
+}
+
+function setMsgSearch(q) {
+  msgSearchQuery = q;
+  const entry = proxyCaptures.find(e => e.id === selectedProxyId);
+  const detail = document.getElementById('proxyDetailView');
+  if (entry && detail && proxyDetailTab === 'messages') renderProxyMessages(entry, detail);
 }
 
 function renderProxyDetail() {
@@ -1905,6 +2036,23 @@ function copyProxyDetail() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+    const inp = document.getElementById('msgSearchInput');
+    if (inp) {
+      e.preventDefault();
+      inp.focus();
+      inp.select();
+    }
+  }
+  if (e.key === 'Escape') {
+    const inp = document.getElementById('msgSearchInput');
+    if (inp && document.activeElement === inp && msgSearchQuery) {
+      setMsgSearch('');
+    }
+  }
+});
+
 document.getElementById('modelSel').addEventListener('change', updatePreview);
 
 if (window.electronAPI?.platform === 'darwin') document.body.classList.add('darwin');
