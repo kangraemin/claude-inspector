@@ -367,6 +367,47 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
 
+    /* ── Landing ── */
+    .landing {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 40px; padding: 40px;
+      background: var(--bg);
+    }
+    .landing-title { font-size: 20px; font-weight: 700; color: var(--text); text-align: center; }
+    .landing-sub { font-size: 13px; color: var(--dim); text-align: center; margin-top: 6px; }
+    .landing-cards { display: flex; gap: 24px; }
+    .landing-card {
+      width: 280px; padding: 28px 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; cursor: pointer;
+      transition: border-color .2s, transform .15s, box-shadow .2s;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .landing-card:hover {
+      border-color: var(--blue); transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    }
+    .landing-card.proxy:hover { border-color: var(--red); }
+    .lc-icon { font-size: 32px; }
+    .lc-title { font-size: 16px; font-weight: 700; color: var(--text); }
+    .lc-desc { font-size: 12px; color: var(--dim); line-height: 1.65; }
+    .lc-req {
+      font-size: 11px; padding: 4px 10px; border-radius: 5px; align-self: flex-start;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--dim);
+      font-family: 'SF Mono', monospace;
+    }
+    .landing-card:hover .lc-req { color: var(--text); }
+    .lc-btn {
+      margin-top: 4px; padding: 8px 16px; border-radius: 6px; font-size: 13px;
+      font-weight: 600; cursor: pointer; border: none; transition: opacity .15s;
+      text-align: center;
+    }
+    .landing-card .lc-btn { background: var(--blue); color: #fff; }
+    .landing-card.proxy .lc-btn { background: var(--red); color: #fff; }
+    .lc-btn:hover { opacity: .85; }
+    .logo { cursor: pointer; }
+
     /* ── Proxy panel ── */
     #normalPanels { display: flex; flex: 1; overflow: hidden; }
     .proxy-panel { flex: 1; display: flex; overflow: hidden; }
@@ -425,7 +466,7 @@
 <body>
 
 <header class="header">
-  <div class="logo">
+  <div class="logo" onclick="switchM('home')" title="홈으로">
     <div class="logo-icon">CI</div>
     <span class="logo-text">Claude Inspector</span>
     <span class="logo-sub">Prompt Mechanism Visualizer</span>
@@ -437,7 +478,7 @@
       <option value="claude-opus-4-6">claude-opus-4-6</option>
       <option value="claude-haiku-4-5-20251001">claude-haiku-4-5</option>
     </select>
-    <div class="api-group">
+    <div class="api-group" id="apiGroup">
       <span class="api-label">API Key</span>
       <span class="api-saved" id="apiSaved" style="display:none">저장됨</span>
       <div class="api-dot" id="apiDot"></div>
@@ -448,8 +489,8 @@
   </div>
 </header>
 
-<nav class="tabs">
-  <button class="tab active" data-m="claude-md"     onclick="switchM('claude-md')">    <span class="badge">MD</span> CLAUDE.md</button>
+<nav class="tabs" id="tabNav">
+  <button class="tab" data-m="claude-md"     onclick="switchM('claude-md')">    <span class="badge">MD</span> CLAUDE.md</button>
   <button class="tab"        data-m="output-style"  onclick="switchM('output-style')">  <span class="badge">ST</span> Output Style</button>
   <button class="tab"        data-m="slash-command" onclick="switchM('slash-command')"> <span class="badge">/</span>  Slash Command</button>
   <button class="tab"        data-m="skill"         onclick="switchM('skill')">         <span class="badge">SK</span> Skill</button>
@@ -458,7 +499,37 @@
 </nav>
 
 <div class="main">
-<div id="normalPanels">
+
+<div id="landingPanel" class="landing">
+  <div>
+    <div class="landing-title">Claude Inspector에 오신 걸 환영합니다</div>
+    <div class="landing-sub">사용 목적에 맞는 모드를 선택하세요</div>
+  </div>
+  <div class="landing-cards">
+    <div class="landing-card" onclick="switchM('claude-md')">
+      <div class="lc-icon">🔬</div>
+      <div class="lc-title">Simulator</div>
+      <div class="lc-desc">
+        5가지 프롬프트 메커니즘(CLAUDE.md, Output Style, Slash Command, Skill, Sub-Agent)의
+        실제 API 페이로드를 직접 구성하고 테스트합니다.
+      </div>
+      <span class="lc-req">필요: Anthropic API Key</span>
+      <div class="lc-btn">시작하기 →</div>
+    </div>
+    <div class="landing-card proxy" onclick="switchM('proxy')">
+      <div class="lc-icon">🔌</div>
+      <div class="lc-title">Proxy Mode</div>
+      <div class="lc-desc">
+        Claude Code CLI의 실제 API 트래픽을 가로채 실시간으로 시각화합니다.
+        실제 사용 중 어떤 페이로드가 오가는지 확인할 수 있습니다.
+      </div>
+      <span class="lc-req">필요: Claude Code CLI 설치</span>
+      <div class="lc-btn">시작하기 →</div>
+    </div>
+  </div>
+</div>
+
+<div id="normalPanels" style="display:none">
   <div class="config-panel">
     <div class="panel-header">
       <span id="panelTitle">Configuration</span>
@@ -922,14 +993,45 @@ function renderForm(mech) {
 
 // ─── Switch mechanism ────────────────────────────────────────────────────────
 function switchM(mech) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.m === mech));
-  if (mech === 'proxy') {
-    document.getElementById('normalPanels').style.display = 'none';
-    document.getElementById('proxyPanel').style.display = 'flex';
+  const landing   = document.getElementById('landingPanel');
+  const normal    = document.getElementById('normalPanels');
+  const proxy     = document.getElementById('proxyPanel');
+  const tabNav    = document.getElementById('tabNav');
+  const apiGroup  = document.getElementById('apiGroup');
+  const modelSel  = document.getElementById('modelSel');
+  const histBtn   = document.getElementById('histToggleBtn');
+
+  if (mech === 'home') {
+    landing.style.display  = 'flex';
+    normal.style.display   = 'none';
+    proxy.style.display    = 'none';
+    tabNav.style.display   = 'none';
+    if (apiGroup) apiGroup.style.display = 'none';
+    if (modelSel) modelSel.style.display = 'none';
+    if (histBtn)  histBtn.style.display  = 'none';
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     return;
   }
-  document.getElementById('normalPanels').style.display = 'flex';
-  document.getElementById('proxyPanel').style.display = 'none';
+
+  landing.style.display = 'none';
+  tabNav.style.display  = 'flex';
+  if (modelSel) modelSel.style.display = '';
+
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.m === mech));
+
+  if (mech === 'proxy') {
+    normal.style.display = 'none';
+    proxy.style.display  = 'flex';
+    if (apiGroup) apiGroup.style.display = 'none';
+    if (histBtn)  histBtn.style.display  = 'none';
+    return;
+  }
+
+  normal.style.display = 'flex';
+  proxy.style.display  = 'none';
+  if (apiGroup) apiGroup.style.display = 'flex';
+  if (histBtn)  histBtn.style.display  = '';
+
   current = mech;
   renderForm(mech);
   updatePreview();
@@ -1438,7 +1540,7 @@ if (savedKey) {
   onApiKeyChange();
 }
 
-switchM('claude-md');
+switchM('home');
 </script>
 </body>
 </html>
