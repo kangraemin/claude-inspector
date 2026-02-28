@@ -1641,8 +1641,14 @@ function selectProxyEntry(id) {
 // ─── Messages view ───────────────────────────────────────────────────────────
 function formatMsgText(text) {
   let t = esc(text);
-  t = t.replace(/&lt;system-reminder&gt;[\s\S]*?&lt;\/system-reminder&gt;/g,
-    '<span class="msg-badge green">📋 CLAUDE.md</span>');
+  t = t.replace(/&lt;system-reminder&gt;([\s\S]*?)&lt;\/system-reminder&gt;/g, (_m, inner) => {
+    const raw = inner.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+    let label = '📋 CLAUDE.md';
+    if (/skills are available/i.test(raw))        label = '🔧 Skills';
+    else if (/currentDate|auto-memory/i.test(raw)) label = '🧠 Memory';
+    else if (!/claudeMd|CLAUDE\.md/i.test(raw))    label = '📋 system-reminder';
+    return `<span class="msg-badge green">${label}</span>`;
+  });
   t = t.replace(/&lt;command-message&gt;[\s\S]*?&lt;\/command-message&gt;/g,
     '<span class="msg-badge yellow">⌨ slash command</span>');
   return t;
