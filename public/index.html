@@ -28,6 +28,10 @@
       background: var(--surface); border-bottom: 1px solid var(--border);
       flex-shrink: 0; gap: 12px;
     }
+    /* ── Window drag (macOS hiddenInset) ── */
+    .header { -webkit-app-region: drag; }
+    .header-right, .header-right *, .logo { -webkit-app-region: no-drag; }
+
     .logo { display: flex; align-items: center; gap: 9px; }
     .logo-icon {
       width: 28px; height: 28px;
