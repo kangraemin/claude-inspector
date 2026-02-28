@@ -2,6 +2,7 @@
   "name": "claude-inspector",
   "version": "1.0.0",
   "description": "Claude Code Prompt Mechanism Visualizer",
+  "license": "MIT",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
