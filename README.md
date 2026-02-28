@@ -7,7 +7,7 @@
 MITM proxy that intercepts Claude Code CLI traffic in real-time<br>
 and visualizes all 5 prompt augmentation mechanisms.
 
-[Getting Started](#getting-started) · [Proxy Mode](#-proxy-mode) · [How It Works](#how-it-works)
+[Getting Started](#getting-started) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#-proxy-mode) · [How It Works](#how-it-works)
 
 </div>
 
@@ -23,13 +23,142 @@ and visualizes all 5 prompt augmentation mechanisms.
 
 ## What You'll Learn
 
-Things you can't see from the Claude Code CLI, but become obvious once you inspect the raw traffic:
+Everything below was discovered by inspecting **real captured traffic** with Claude Inspector.
 
-- **Your CLAUDE.md, rules, and memory are injected into every single request** — bundled as `<system-reminder>` inside `messages[]`. The longer these files get, the more tokens you burn per turn.
-- **Slash Commands and Skills are a two-step dance** — typing `/commit` injects a `<command-message>` tag, then the model autonomously calls the matching Skill via `tool_use`. The slash command is the trigger; the skill is the execution.
-- **You can read Claude Code's full system prompt** — the entire "You are Claude Code, Anthropic's official CLI for Claude..." instruction set is visible in `system[]`.
-- **Cache tokens add up fast** — the same CLAUDE.md content is re-sent every turn, causing `cache_read_tokens` to skyrocket. Understanding this helps you keep instruction files lean.
-- **Sub-Agents run as completely separate API calls** — isolated from the main conversation, with their own system prompt and context window.
+### 1. The anatomy of a single API request
+
+Every time Claude Code talks to the API, it sends this structure:
+
+```json
+{
+  "model": "claude-opus-4-6",
+  "system": [ ... ],          // System prompt (3 blocks)
+  "messages": [ ... ],        // Full conversation history
+  "tools": [ ... ],           // 24+ tool definitions
+  "metadata": { "user_id": "user_..._{account}_{session}" },
+  "max_tokens": 32000,
+  "thinking": { "type": "enabled", "budget_tokens": 31999 },
+  "context_management": { "edits": [{ "type": "clear_thinking_20251015", "keep": "all" }] },
+  "stream": true
+}
+```
+
+### 2. `system[]` — three blocks, not one
+
+The system prompt is an **array** of separate blocks:
+
+```json
+"system": [
+  // [0] Billing — Claude Code version tracking
+  { "text": "x-anthropic-billing-header: cc_version=2.1.63.a43; cc_entrypoint=cli; cch=9fa5e;" },
+
+  // [1] Identity — one-liner
+  { "text": "You are Claude Code, Anthropic's official CLI for Claude.",
+    "cache_control": { "type": "ephemeral", "ttl": "1h" } },
+
+  // [2] Everything else — behavior rules, tool instructions, environment, MCP server descriptions, git status
+  { "text": "You are an interactive agent that helps users with software engineering tasks...(thousands of lines)",
+    "cache_control": { "type": "ephemeral", "ttl": "1h" } }
+]
+```
+
+The `cache_control` with `ttl: "1h"` means this massive prompt is **cached for 1 hour** — repeat requests hit the cache instead of re-processing the full text.
+
+### 3. `messages[]` — your input is never just your input
+
+When you type `"hello"`, the actual first `user` message sent to the API looks like this:
+
+```json
+{
+  "role": "user",
+  "content": [
+    // [0] Injected: available skills list
+    { "type": "text", "text": "<system-reminder> The following skills are available: commit, review, test, pr, push... </system-reminder>" },
+
+    // [1] Injected: CLAUDE.md + rules + memory + currentDate
+    { "type": "text", "text": "<system-reminder> Contents of CLAUDE.md... Contents of git-rules.md... Contents of review-rules.md... </system-reminder>" },
+
+    // [2] What you actually typed
+    { "type": "text", "text": "hello" }
+  ]
+}
+```
+
+Your CLAUDE.md, rules, memory — **all re-sent every single turn** inside `<system-reminder>` tags. Longer files = more tokens burned per turn.
+
+### 4. `thinking` — the model's hidden reasoning
+
+Every assistant response includes a `thinking` block that you never see in the CLI:
+
+```json
+{
+  "role": "assistant",
+  "content": [
+    { "type": "thinking",
+      "thinking": "The user is greeting me in Korean. I'll respond briefly and friendly.",
+      "signature": "Eu0BCkYICxgCKkDLtz8rLXrByzrD..." },
+    { "type": "text",
+      "text": "안녕하세요! 무엇을 도와드릴까요?" }
+  ]
+}
+```
+
+- `thinking` — the model's actual chain-of-thought reasoning
+- `signature` — cryptographic signature to prevent tampering with thinking content
+- `budget_tokens: 31999` — almost the entire `max_tokens` (32000) is allocated to thinking
+
+### 5. `tools[]` — 24 built-in tools, MCP tools are lazy-loaded
+
+Built-in tools like `Read`, `Bash`, `Edit`, `Glob`, `Grep` are sent with **full JSON schemas** every request:
+
+```
+Agent, TaskOutput, Bash, Glob, Grep, ExitPlanMode, Read, Edit, Write,
+NotebookEdit, WebFetch, WebSearch, TaskStop, AskUserQuestion, Skill,
+EnterPlanMode, TaskCreate, TaskGet, TaskUpdate, TaskList, EnterWorktree,
+TeamCreate, TeamDelete, SendMessage, ToolSearch, ListMcpResourcesTool,
+ReadMcpResourceTool
+```
+
+But **MCP tools** (like `context7`, `til-server`) are NOT in the `tools[]` array. Instead, only their names appear inside the `ToolSearch` tool's description:
+
+```json
+{
+  "name": "ToolSearch",
+  "description": "...Available deferred tools (must be loaded before use):
+    mcp__context7__resolve-library-id
+    mcp__context7__query-docs
+    mcp__til-server__create_til
+    ..."
+}
+```
+
+The model must call `ToolSearch` first to load the full schema, then call the actual MCP tool. This **lazy-loading** saves tokens — 8 MCP tools' schemas don't get sent in every request.
+
+### 6. Hooks inject messages as if the user sent them
+
+When a hook fires (e.g., a stop hook detecting uncommitted changes), it appears as a **user message** with a `<system-reminder>`:
+
+```json
+{
+  "role": "user",
+  "content": [
+    { "text": "<system-reminder> Stop hook blocking error from command: \"$HOME/.claude/hooks/auto-commit.sh\": 커밋되지 않은 변경사항이 있습니다. </system-reminder>" },
+    { "text": "Stop hook feedback: 커밋되지 않은 변경사항이 있습니다. /commit을 실행하세요." }
+  ]
+}
+```
+
+The hook message is injected **as a user message** — the model sees it as coming from you.
+
+### 7. `context_management` — controlling thinking block retention
+
+```json
+"context_management": {
+  "edits": [{ "type": "clear_thinking_20251015", "keep": "all" }]
+}
+```
+
+This controls whether previous turns' `thinking` blocks are kept or cleared. `keep: "all"` preserves all thinking history. When context runs low, Claude Code can change this to clear old thinking blocks — that's how context compression works under the hood.
 
 ## Getting Started
 
