@@ -534,7 +534,11 @@
       background: none; border: none; color: var(--dim); cursor: pointer;
       font-size: 13px; padding: 0 2px; line-height: 1;
     }
-    mark.search-hl { background: rgba(255,235,59,.45); color: inherit; border-radius: 2px; padding: 0 1px; }
+    mark.search-hl { background: rgba(255,235,59,.35); color: inherit; border-radius: 2px; padding: 0 1px; }
+    mark.search-hl.current { background: rgba(255,152,0,.7); }
+    .search-nav { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--dim); white-space: nowrap; }
+    .search-nav-btn { background: none; border: 1px solid var(--border); color: var(--dim); border-radius: 4px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+    .search-nav-btn:hover { color: var(--fg); border-color: var(--fg); }
 
     /* ── Analysis view ── */
     .analysis-view { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
@@ -1833,10 +1837,36 @@ function setMsgSearch(q) {
   if (entry && detail && proxyDetailTab === 'messages') renderProxyMessages(entry, detail);
 }
 
+let searchCurrentIdx = -1;
+
 function setProxyDetailSearch(q) {
   proxyDetailSearch = q;
+  searchCurrentIdx = -1;
   if (!q) proxyDetailMechFilter = null;
   renderProxyDetail();
+  if (q) navigateSearchMatch(0); // 첫 매칭으로 이동
+}
+
+function navigateSearchMatch(delta) {
+  const container = document.getElementById('proxyDetailCode')
+                 || document.querySelector('.analysis-view');
+  if (!container) return;
+  const marks = container.querySelectorAll('mark.search-hl');
+  if (marks.length === 0) return;
+  // 현재 하이라이트 제거
+  const prev = container.querySelector('mark.search-hl.current');
+  if (prev) prev.classList.remove('current');
+  // 새 인덱스 계산
+  if (delta === 0) searchCurrentIdx = 0;
+  else searchCurrentIdx = ((searchCurrentIdx + delta) % marks.length + marks.length) % marks.length;
+  marks[searchCurrentIdx].classList.add('current');
+  marks[searchCurrentIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  updateSearchCounter(marks.length);
+}
+
+function updateSearchCounter(total) {
+  const el = document.getElementById('searchCounter');
+  if (el) el.textContent = total > 0 ? `${searchCurrentIdx + 1}/${total}` : '0개';
 }
 
 function setProxyDetailMechFilter(key, pattern) {
@@ -1941,7 +1971,16 @@ function renderProxyDetail() {
 
   if (proxyDetailTab === 'analysis') {
     renderProxyAnalysis(entry, detail);
-    if (proxyDetailSearch) applyDetailHighlight(detail, proxyDetailSearch);
+    if (proxyDetailSearch) {
+      applyDetailHighlight(detail, proxyDetailSearch);
+      const marks = detail.querySelectorAll('mark.search-hl');
+      if (marks.length > 0) {
+        if (searchCurrentIdx < 0) searchCurrentIdx = 0;
+        if (searchCurrentIdx >= marks.length) searchCurrentIdx = 0;
+        marks[searchCurrentIdx].classList.add('current');
+        updateSearchCounter(marks.length);
+      }
+    }
     if (proxyDetailSearch || document.activeElement?.id === 'proxyDetailSearchInput') {
       const inp = document.getElementById('proxyDetailSearchInput');
       if (inp) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
@@ -1952,10 +1991,16 @@ function renderProxyDetail() {
   const data = proxyDetailTab === 'request' ? entry.body : (entry.response?.body ?? null);
 
   const q = proxyDetailSearch;
+  const searchNav = q ? `<div class="search-nav">
+    <span id="searchCounter"></span>
+    <button class="search-nav-btn" onclick="navigateSearchMatch(-1)" title="이전">▲</button>
+    <button class="search-nav-btn" onclick="navigateSearchMatch(1)" title="다음">▼</button>
+  </div>` : '';
   const searchBar = `<div class="msg-search-bar" style="flex-shrink:0">
     <input type="text" class="msg-search-input" id="proxyDetailSearchInput"
       placeholder="🔍 검색..." value="${esc(q)}"
       oninput="setProxyDetailSearch(this.value)">
+    ${searchNav}
     ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('')" title="검색 초기화">✕</button>` : ''}
   </div>`;
   const mechChips = proxyDetailTab === 'request' ? buildMechFilterChips(entry.body) : '';
@@ -1971,9 +2016,13 @@ function renderProxyDetail() {
   renderJsonTree(code, data);
   if (q) {
     applyDetailHighlight(code, q);
-    if (proxyDetailMechFilter) {
-      const first = code.querySelector('mark.search-hl');
-      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const marks = code.querySelectorAll('mark.search-hl');
+    if (marks.length > 0) {
+      if (searchCurrentIdx < 0) searchCurrentIdx = 0;
+      if (searchCurrentIdx >= marks.length) searchCurrentIdx = 0;
+      marks[searchCurrentIdx].classList.add('current');
+      marks[searchCurrentIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      updateSearchCounter(marks.length);
     }
   }
 
