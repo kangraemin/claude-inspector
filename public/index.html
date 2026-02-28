@@ -1819,8 +1819,10 @@ function renderProxyMessages(entry, container) {
     </div>`);
   }
 
-  container.innerHTML = `<div style="flex-shrink:0">${filterHtml}${searchHtml}</div>` +
-    `<div class="msgs-list" style="flex:1;min-height:0">${cards.join('') || '<div class="proxy-empty"><span>결과 없음</span></div>'}</div>`;
+  // flex 레이아웃 대신 단순 스크롤
+  container.style.overflow = 'auto';
+  container.innerHTML = `<div style="position:sticky;top:0;z-index:1;background:var(--bg)">${filterHtml}${searchHtml}</div>` +
+    `<div class="msgs-list">${cards.join('') || '<div class="proxy-empty"><span>결과 없음</span></div>'}</div>`;
 
   const countEl = document.getElementById('msgCountEl');
   if (countEl) countEl.textContent = `${cards.length} / ${msgs.length}개`;
@@ -1967,6 +1969,9 @@ function renderProxyDetail() {
   const entry = proxyCaptures.find(e => e.id === selectedProxyId);
   const detail = document.getElementById('proxyDetailView');
   if (!detail) return;
+
+  // Messages 탭에서 설정한 overflow 원복
+  detail.style.overflow = '';
 
   if (!entry) {
     detail.innerHTML = '<div class="proxy-empty"><span style="font-size:28px">🔍</span><span>요청을 선택하면<br>페이로드가 표시됩니다</span></div>';
