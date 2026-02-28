@@ -1781,18 +1781,22 @@ function renderProxyMessages(entry, container) {
       ? msg.content
       : [{ type: 'text', text: String(msg.content || '') }];
 
-    // "내가 보낸 것" 필터: text 블록 없이 tool_result만 있는 user 메시지 스킵
+    // "내가 보낸 것" 필터: 사용자가 직접 입력한 텍스트가 없는 메시지 스킵
     const isUserFilter = msgFilter === 'user' || typedOnly;
     if (isUserFilter && msg.role === 'user') {
-      const hasText = contents.some(c => c.type === 'text' && c.text && c.text.trim());
-      if (!hasText) continue;
+      const hasTypedText = contents.some(c => {
+        if (c.type !== 'text' || !c.text || !c.text.trim()) return false;
+        const parts = parseUserText(c.text);
+        return parts.some(p => p.type === 'text');
+      });
+      if (!hasTypedText) continue;
     }
 
     const bodyParts = [];
     for (const c of contents) {
       if (c.type === 'text') {
         if (msg.role === 'user') {
-          const rendered = renderUserMsgContent(c.text, typedOnly, q);
+          const rendered = renderUserMsgContent(c.text, isUserFilter, q);
           if (rendered !== null) bodyParts.push(rendered);
         } else {
           bodyParts.push(`<div class="msg-text">${highlightSearch(esc(c.text), q)}</div>`);
@@ -1819,10 +1823,10 @@ function renderProxyMessages(entry, container) {
     </div>`);
   }
 
-  // flex 레이아웃 대신 단순 스크롤
-  container.style.overflow = 'auto';
+  // flex/overflow 전부 덮어씌워서 단순 스크롤 컨테이너로 전환
+  container.style.cssText = 'flex:1;overflow-y:auto;display:block';
   container.innerHTML = `<div style="position:sticky;top:0;z-index:1;background:var(--bg)">${filterHtml}${searchHtml}</div>` +
-    `<div class="msgs-list">${cards.join('') || '<div class="proxy-empty"><span>결과 없음</span></div>'}</div>`;
+    `<div style="display:flex;flex-direction:column;gap:8px;padding:12px">${cards.join('') || '<div class="proxy-empty"><span>결과 없음</span></div>'}</div>`;
 
   const countEl = document.getElementById('msgCountEl');
   if (countEl) countEl.textContent = `${cards.length} / ${msgs.length}개`;
@@ -1970,8 +1974,8 @@ function renderProxyDetail() {
   const detail = document.getElementById('proxyDetailView');
   if (!detail) return;
 
-  // Messages 탭에서 설정한 overflow 원복
-  detail.style.overflow = '';
+  // Messages 탭에서 변경한 inline style 원복
+  detail.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column';
 
   if (!entry) {
     detail.innerHTML = '<div class="proxy-empty"><span style="font-size:28px">🔍</span><span>요청을 선택하면<br>페이로드가 표시됩니다</span></div>';
