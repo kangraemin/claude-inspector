@@ -793,7 +793,7 @@
         <button class="dtab"        data-dtab="analysis" onclick="showDetailTab('analysis')" style="color:var(--purple)">Analysis</button>
         <button class="copy-small" style="margin-left:auto" onclick="copyProxyDetail()">Copy</button>
       </div>
-      <div id="proxyDetailView" style="flex:1;overflow:auto">
+      <div id="proxyDetailView" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
         <div class="proxy-empty">
           <span style="font-size:28px">🔍</span>
           <span>요청을 선택하면<br>페이로드가 표시됩니다</span>
@@ -1927,16 +1927,23 @@ function renderProxyDetail() {
     ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('')" title="검색 초기화">✕</button>` : ''}
   </div>`;
   const mechChips = proxyDetailTab === 'request' ? buildMechFilterChips(entry.body) : '';
+  const header = `<div style="flex-shrink:0">${searchBar}${mechChips}</div>`;
 
   if (data === null || data === undefined) {
-    detail.innerHTML = searchBar + mechChips + `<div style="color:var(--dim);padding:16px;font-size:12px">${proxyDetailTab === 'response' ? '응답 대기 중…' : '바디 없음'}</div>`;
+    detail.innerHTML = header + `<div style="color:var(--dim);padding:16px;font-size:12px">${proxyDetailTab === 'response' ? '응답 대기 중…' : '바디 없음'}</div>`;
     return;
   }
 
-  detail.innerHTML = searchBar + mechChips + '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
+  detail.innerHTML = header + '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
   const code = document.getElementById('proxyDetailCode');
   renderJsonTree(code, data);
-  if (q) applyDetailHighlight(code, q);
+  if (q) {
+    applyDetailHighlight(code, q);
+    if (proxyDetailMechFilter) {
+      const first = code.querySelector('mark.search-hl');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
 
   if (q || document.activeElement?.id === 'proxyDetailSearchInput') {
     const inp = document.getElementById('proxyDetailSearchInput');
@@ -2012,7 +2019,7 @@ function renderProxyAnalysis(entry, container) {
     ${aq ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('')" title="검색 초기화">✕</button>` : ''}
   </div>`;
 
-  let html = analysisSearchBar + '<div class="analysis-view">';
+  let html = '<div style="flex:1;overflow:auto"><div class="analysis-view">';
 
   // Chips row
   html += '<div class="analysis-chips">';
@@ -2023,8 +2030,8 @@ function renderProxyAnalysis(entry, container) {
 
   if (!hasAny) {
     html += '<div class="analysis-none">감지된 메커니즘 없음<br><small>일반 API 요청이거나 분석 지원 외 패턴입니다</small></div>';
-    html += '</div>';
-    container.innerHTML = html;
+    html += '</div></div>';
+    container.innerHTML = `<div style="flex-shrink:0">${analysisSearchBar}</div>` + html;
     return;
   }
 
@@ -2079,8 +2086,8 @@ function renderProxyAnalysis(entry, container) {
     </div>`;
   }
 
-  html += '</div>';
-  container.innerHTML = html;
+  html += '</div></div>';
+  container.innerHTML = `<div style="flex-shrink:0">${analysisSearchBar}</div>` + html;
   container.querySelectorAll('.jt-json-block').forEach(el => {
     try { renderJsonTree(el, JSON.parse(el.dataset.json)); }
     catch (e) { el.textContent = el.dataset.json; }
