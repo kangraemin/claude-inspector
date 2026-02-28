@@ -1781,6 +1781,13 @@ function renderProxyMessages(entry, container) {
       ? msg.content
       : [{ type: 'text', text: String(msg.content || '') }];
 
+    // "내가 보낸 것" 필터: text 블록 없이 tool_result만 있는 user 메시지 스킵
+    const isUserFilter = msgFilter === 'user' || typedOnly;
+    if (isUserFilter && msg.role === 'user') {
+      const hasText = contents.some(c => c.type === 'text' && c.text && c.text.trim());
+      if (!hasText) continue;
+    }
+
     const bodyParts = [];
     for (const c of contents) {
       if (c.type === 'text') {
@@ -1791,11 +1798,13 @@ function renderProxyMessages(entry, container) {
           bodyParts.push(`<div class="msg-text">${highlightSearch(esc(c.text), q)}</div>`);
         }
       } else if (c.type === 'tool_use') {
-        bodyParts.push(`<div class="msg-tool">🔧 ${esc(c.name)}()</div>`);
+        if (!isUserFilter) bodyParts.push(`<div class="msg-tool">🔧 ${esc(c.name)}()</div>`);
       } else if (c.type === 'tool_result') {
-        const preview = typeof c.content === 'string' ? c.content.slice(0, 120)
-          : Array.isArray(c.content) ? c.content.map(x => x.text||'').join('').slice(0, 120) : '[object]';
-        bodyParts.push(`<div class="msg-tool-result">📤 ${esc(preview)}${preview.length===120?'…':''}</div>`);
+        if (!isUserFilter) {
+          const preview = typeof c.content === 'string' ? c.content.slice(0, 120)
+            : Array.isArray(c.content) ? c.content.map(x => x.text||'').join('').slice(0, 120) : '[object]';
+          bodyParts.push(`<div class="msg-tool-result">📤 ${esc(preview)}${preview.length===120?'…':''}</div>`);
+        }
       } else {
         bodyParts.push(`<div class="msg-other">[${esc(c.type)}]</div>`);
       }
