@@ -31,6 +31,7 @@
     /* ── Window drag (macOS hiddenInset) ── */
     .header { -webkit-app-region: drag; }
     .header-right, .header-right *, .logo { -webkit-app-region: no-drag; }
+    body.darwin .header { padding-left: 76px; }
 
     .logo { display: flex; align-items: center; gap: 9px; }
     .logo-icon {
@@ -1119,6 +1120,8 @@ function esc(s) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────
 document.getElementById('modelSel').addEventListener('change', updatePreview);
+
+if (window.electronAPI?.platform === 'darwin') document.body.classList.add('darwin');
 
 const savedKey = localStorage.getItem('ci-api-key');
 if (savedKey) {
