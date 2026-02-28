@@ -98,6 +98,7 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
         if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('proxy-request', reqData);
 
         const headers = Object.assign({}, req.headers, { host: 'api.anthropic.com' });
+        delete headers['accept-encoding']; // Prevent gzip response so we can parse it
         const options = { hostname: 'api.anthropic.com', port: 443, path: req.url, method: req.method, headers };
 
         const proxyReq = https.request(options, (proxyRes) => {
