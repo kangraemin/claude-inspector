@@ -24,187 +24,199 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+      background: var(--bg); color: var(--text);
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
     }
 
-    /* Header */
+    /* ── Header ── */
     .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 20px;
-      height: 50px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-      gap: 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; height: 50px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      flex-shrink: 0; gap: 12px;
     }
-    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo { display: flex; align-items: center; gap: 9px; }
     .logo-icon {
       width: 28px; height: 28px;
-      background: linear-gradient(135deg, #569cd6 0%, #c586c0 100%);
-      border-radius: 6px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 800; color: #fff;
+      background: linear-gradient(135deg, #569cd6, #c586c0);
+      border-radius: 6px; display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 800; color: #fff; letter-spacing: -.5px;
     }
     .logo-text { font-size: 15px; font-weight: 700; }
-    .logo-sub { font-size: 12px; color: var(--dim); font-weight: 400; }
-    .header-right { display: flex; align-items: center; gap: 10px; }
-    .api-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background .2s; flex-shrink: 0; }
+    .logo-sub { font-size: 11px; color: var(--dim); }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .model-select {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--text);
+      padding: 4px 8px; font-size: 12px; outline: none; cursor: pointer;
+    }
+    .api-group { display: flex; align-items: center; gap: 6px; }
+    .api-label { font-size: 11px; color: var(--dim); }
+    .api-saved {
+      font-size: 10px; padding: 2px 6px; border-radius: 10px;
+      background: rgba(78,201,176,.15); color: var(--green);
+      border: 1px solid rgba(78,201,176,.3);
+    }
+    .api-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background .2s; }
     .api-dot.ok { background: var(--green); }
     .api-input {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      color: var(--text);
-      padding: 5px 10px;
-      font-size: 12px;
-      width: 260px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      outline: none;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--text);
+      padding: 5px 10px; font-size: 12px; width: 240px;
+      font-family: 'SF Mono', monospace; outline: none;
+      transition: border-color .15s;
     }
     .api-input:focus { border-color: var(--blue); }
-    .model-select {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      color: var(--text);
-      padding: 5px 8px;
-      font-size: 12px;
-      outline: none;
-      cursor: pointer;
-    }
+    .api-hint { font-size: 10px; color: var(--dim); white-space: nowrap; }
 
-    /* Tabs */
+    /* ── Tabs ── */
     .tabs {
-      display: flex;
-      background: var(--surface);
+      display: flex; background: var(--surface);
       border-bottom: 1px solid var(--border);
-      padding: 0 12px;
-      gap: 2px;
-      flex-shrink: 0;
+      padding: 0 12px; gap: 2px; flex-shrink: 0;
     }
     .tab {
       display: flex; align-items: center; gap: 7px;
-      padding: 10px 18px;
-      cursor: pointer;
-      background: none; border: none;
-      color: var(--dim); font-size: 13px;
+      padding: 10px 16px; cursor: pointer;
+      background: none; border: none; color: var(--dim); font-size: 13px;
       border-bottom: 2px solid transparent;
-      transition: color .15s, border-color .15s;
-      white-space: nowrap;
+      transition: color .15s, border-color .15s; white-space: nowrap;
     }
     .tab:hover { color: var(--text); }
     .tab.active { color: var(--text); border-bottom-color: var(--blue); }
     .badge {
       font-size: 10px; font-weight: 700;
-      padding: 2px 6px; border-radius: 3px;
-      font-family: 'SF Mono', monospace;
+      padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', monospace;
     }
-    .tab[data-m="claude-md"] .badge    { background: var(--green); color: #000; }
-    .tab[data-m="output-style"] .badge { background: var(--blue); color: #000; }
-    .tab[data-m="slash-command"] .badge { background: var(--yellow); color: #000; }
-    .tab[data-m="skill"] .badge        { background: var(--purple); color: #fff; }
-    .tab[data-m="sub-agent"] .badge    { background: var(--orange); color: #000; }
+    .tab[data-m="claude-md"]    .badge { background: var(--green);  color: #000; }
+    .tab[data-m="output-style"] .badge { background: var(--blue);   color: #000; }
+    .tab[data-m="slash-command"].badge { background: var(--yellow); color: #000; }
+    .tab[data-m="skill"]        .badge { background: var(--purple); color: #fff; }
+    .tab[data-m="sub-agent"]    .badge { background: var(--orange); color: #000; }
 
-    /* Layout */
+    /* ── Layout ── */
     .main { display: flex; flex: 1; overflow: hidden; }
 
-    /* Left: Config */
+    /* ── Left: Config ── */
     .config-panel {
-      width: 380px; flex-shrink: 0;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      overflow: hidden;
+      width: 400px; flex-shrink: 0;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
     }
     .panel-header {
-      padding: 10px 16px;
-      font-size: 11px; text-transform: uppercase;
+      padding: 9px 14px; font-size: 11px; text-transform: uppercase;
       letter-spacing: .8px; color: var(--dim);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
       display: flex; align-items: center; justify-content: space-between;
     }
     .inject-chip {
-      font-size: 10px; padding: 2px 7px;
-      border-radius: 10px;
-      background: rgba(86,156,214,.15);
-      color: var(--blue);
-      border: 1px solid rgba(86,156,214,.3);
-      text-transform: none; letter-spacing: 0;
-      font-family: 'SF Mono', monospace;
+      font-size: 10px; padding: 2px 7px; border-radius: 10px;
+      background: rgba(86,156,214,.12); color: var(--blue);
+      border: 1px solid rgba(86,156,214,.25);
+      text-transform: none; letter-spacing: 0; font-family: 'SF Mono', monospace;
     }
     .config-body {
-      flex: 1; overflow-y: auto;
-      padding: 14px;
-      display: flex; flex-direction: column; gap: 12px;
+      flex: 1; overflow-y: auto; padding: 13px;
+      display: flex; flex-direction: column; gap: 11px;
     }
-    .desc-box {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
-      font-size: 12px; color: var(--dim);
-      line-height: 1.55;
-    }
-    .desc-box b { color: var(--text); display: block; margin-bottom: 3px; font-size: 13px; }
     .field { display: flex; flex-direction: column; gap: 5px; }
     .field label { font-size: 11px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
     .field input, .field textarea, .field select {
-      background: var(--bg);
-      border: 1px solid var(--border);
+      background: var(--bg); border: 1px solid var(--border);
       border-radius: 5px; color: var(--text);
-      padding: 7px 10px; font-size: 12px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      outline: none; transition: border-color .15s;
-      resize: vertical;
+      padding: 6px 10px; font-size: 12px;
+      font-family: 'SF Mono', monospace; outline: none;
+      transition: border-color .15s; resize: vertical;
     }
     .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); }
     .field textarea { min-height: 80px; }
-    .field textarea.tall { min-height: 130px; }
+    .field textarea.tall { min-height: 120px; }
 
-    /* Buttons */
+    /* ── How-it-works box ── */
+    .how-box {
+      background: rgba(86,156,214,.05);
+      border: 1px solid rgba(86,156,214,.18);
+      border-radius: 7px; padding: 11px 13px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .how-title {
+      font-size: 10px; font-weight: 700; color: var(--blue);
+      text-transform: uppercase; letter-spacing: .7px;
+    }
+    .how-text { font-size: 12px; color: var(--dim); line-height: 1.55; }
+    .how-text code {
+      background: var(--surface2); padding: 1px 4px; border-radius: 3px;
+      font-family: 'SF Mono', monospace; font-size: 11px; color: var(--text);
+    }
+    .example-row {
+      display: flex; align-items: flex-start; gap: 6px;
+      font-size: 11px; color: var(--dim); line-height: 1.45;
+    }
+    .example-row .ex-tag {
+      flex-shrink: 0; background: rgba(78,201,176,.12);
+      color: var(--green); border: 1px solid rgba(78,201,176,.25);
+      border-radius: 4px; font-size: 10px; font-weight: 700;
+      padding: 1px 5px;
+    }
+    .warn-row {
+      display: flex; align-items: flex-start; gap: 6px;
+      font-size: 11px; color: var(--yellow); line-height: 1.45;
+    }
+    .warn-row .w-icon { flex-shrink: 0; }
+
+    /* ── Flow diagram ── */
+    .flow { display: flex; flex-direction: column; gap: 0; }
+    .flow-api-label {
+      font-size: 10px; font-weight: 700; color: var(--blue);
+      text-transform: uppercase; letter-spacing: .5px;
+      margin-bottom: 4px; margin-top: 6px;
+    }
+    .flow-api-label:first-child { margin-top: 0; }
+    .flow-step {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 6px 10px;
+      font-size: 11px; font-family: 'SF Mono', monospace; line-height: 1.4;
+      color: var(--text);
+    }
+    .flow-step.hi-purple { border-color: var(--purple); color: var(--purple); background: rgba(197,134,192,.07); }
+    .flow-step.hi-orange { border-color: var(--orange); color: var(--orange); background: rgba(206,145,120,.07); }
+    .flow-step.hi-yellow { border-color: var(--yellow); color: var(--yellow); background: rgba(220,220,170,.07); }
+    .flow-arrow { text-align: center; color: var(--dim); font-size: 11px; padding: 3px 0; }
+    .flow-divider {
+      border: none; border-top: 1px dashed var(--border);
+      margin: 7px 0;
+    }
+
+    /* ── Buttons ── */
     .config-footer {
-      padding: 12px 14px;
-      border-top: 1px solid var(--border);
-      display: flex; gap: 8px; flex-shrink: 0;
+      padding: 11px 13px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px; flex-shrink: 0; align-items: center;
     }
     .btn {
-      padding: 8px 16px; border-radius: 5px;
-      font-size: 12px; font-weight: 600;
-      cursor: pointer; border: none;
-      transition: opacity .15s, background .15s;
-      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 5px;
+      font-size: 12px; font-weight: 600; cursor: pointer; border: none;
+      transition: opacity .15s; display: flex; align-items: center; gap: 6px;
     }
     .btn:disabled { opacity: .4; cursor: not-allowed; }
     .btn-send { background: var(--blue); color: #fff; flex: 1; justify-content: center; }
-    .btn-send:not(:disabled):hover { opacity: .85; }
+    .btn-sim  { background: var(--purple); color: #fff; flex: 1; justify-content: center; }
+    .btn-sa   { background: var(--orange); color: #000; flex: 1; justify-content: center; }
+    .btn-send:not(:disabled):hover,
+    .btn-sim:not(:disabled):hover,
+    .btn-sa:not(:disabled):hover  { opacity: .82; }
     .btn-copy { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
     .btn-copy:hover { border-color: var(--blue); }
-    .inspect-note {
-      font-size: 11px; color: var(--yellow);
-      display: flex; align-items: center; gap: 5px;
-    }
 
-    /* Right: Preview */
+    /* ── Right: Preview ── */
     .preview-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     .preview-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 14px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
+      padding: 7px 14px; background: var(--surface);
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
     }
     .ptabs { display: flex; gap: 4px; }
     .ptab {
-      padding: 4px 12px; font-size: 12px;
-      border-radius: 4px; cursor: pointer;
+      padding: 4px 12px; font-size: 12px; border-radius: 4px; cursor: pointer;
       background: none; border: 1px solid transparent;
       color: var(--dim); transition: all .15s;
     }
@@ -213,46 +225,55 @@
     .live-pill {
       display: flex; align-items: center; gap: 5px;
       font-size: 11px; padding: 3px 8px; border-radius: 10px;
-      background: rgba(78,201,176,.12);
-      color: var(--green);
-      border: 1px solid rgba(78,201,176,.25);
+      background: rgba(78,201,176,.1); color: var(--green);
+      border: 1px solid rgba(78,201,176,.22);
     }
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
     .copy-small {
       padding: 4px 10px; font-size: 11px;
       background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 4px; color: var(--dim);
-      cursor: pointer; transition: all .15s;
+      border-radius: 4px; color: var(--dim); cursor: pointer; transition: all .15s;
     }
     .copy-small:hover { color: var(--text); border-color: var(--blue); }
-
     .pview { flex: 1; overflow: auto; }
     .pview pre { margin: 0; padding: 16px; font-size: 12px; line-height: 1.65; min-height: 100%; }
     .pview code { font-family: 'SF Mono', 'Fira Code', monospace !important; }
     .pview.hidden { display: none; }
 
-    /* Response */
-    #resp-view { padding: 16px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+    /* ── Response ── */
+    #resp-view { padding: 16px; }
+    .resp-body { font-size: 13px; line-height: 1.75; white-space: pre-wrap; color: var(--text); }
     .resp-err { color: var(--red); font-family: monospace; font-size: 12px; }
     .resp-meta {
-      margin-top: 14px; font-size: 11px; color: var(--dim);
-      border-top: 1px solid var(--border); padding-top: 10px;
+      margin-top: 14px; padding-top: 10px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 16px; flex-wrap: wrap;
     }
+    .resp-stat { font-size: 11px; }
+    .resp-stat span { color: var(--dim); }
+    .resp-stat b { color: var(--text); }
+    .resp-copy {
+      margin-top: 10px;
+      padding: 5px 12px; font-size: 11px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--dim); cursor: pointer; transition: all .15s;
+      display: inline-block;
+    }
+    .resp-copy:hover { color: var(--text); border-color: var(--blue); }
 
-    /* Spinner */
+    /* ── Spinner ── */
     .spin {
-      display: inline-block; width: 14px; height: 14px;
+      display: inline-block; width: 13px; height: 13px;
       border: 2px solid var(--border); border-top-color: var(--blue);
       border-radius: 50%; animation: spin .7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #555; }
   </style>
 </head>
 <body>
@@ -261,7 +282,7 @@
   <div class="logo">
     <div class="logo-icon">CI</div>
     <span class="logo-text">Claude Inspector</span>
-    <span class="logo-sub">— Prompt Mechanism Visualizer</span>
+    <span class="logo-sub">Prompt Mechanism Visualizer</span>
   </div>
   <div class="header-right">
     <select class="model-select" id="modelSel">
@@ -269,12 +290,18 @@
       <option value="claude-opus-4-6">claude-opus-4-6</option>
       <option value="claude-haiku-4-5-20251001">claude-haiku-4-5</option>
     </select>
-    <div class="api-dot" id="apiDot"></div>
-    <input type="password" class="api-input" id="apiKey" placeholder="sk-ant-api03-..." oninput="onApiKeyChange()">
+    <div class="api-group">
+      <span class="api-label">API Key</span>
+      <span class="api-saved" id="apiSaved" style="display:none">저장됨</span>
+      <div class="api-dot" id="apiDot"></div>
+      <input type="password" class="api-input" id="apiKey"
+        placeholder="sk-ant-api03-…  (입력하면 자동 저장)"
+        oninput="onApiKeyChange()">
+    </div>
   </div>
 </header>
 
-<nav class="tabs" id="tabNav">
+<nav class="tabs">
   <button class="tab active" data-m="claude-md"     onclick="switchM('claude-md')">    <span class="badge">MD</span> CLAUDE.md</button>
   <button class="tab"        data-m="output-style"  onclick="switchM('output-style')">  <span class="badge">ST</span> Output Style</button>
   <button class="tab"        data-m="slash-command" onclick="switchM('slash-command')"> <span class="badge">/</span>  Slash Command</button>
@@ -283,20 +310,15 @@
 </nav>
 
 <div class="main">
-  <!-- Left: Config -->
   <div class="config-panel">
     <div class="panel-header">
       <span id="panelTitle">Configuration</span>
       <span class="inject-chip" id="injectChip">—</span>
     </div>
     <div class="config-body" id="configBody"></div>
-    <div class="config-footer" id="configFooter">
-      <button class="btn btn-copy" onclick="copyPayload()">Copy JSON</button>
-      <button class="btn btn-send" id="sendBtn" onclick="sendToApi()">Send to Claude →</button>
-    </div>
+    <div class="config-footer" id="configFooter"></div>
   </div>
 
-  <!-- Right: Preview -->
   <div class="preview-panel">
     <div class="preview-header">
       <div class="ptabs">
@@ -305,10 +327,9 @@
       </div>
       <div class="pactions">
         <span class="live-pill" id="livePill" style="display:none"><span class="live-dot"></span>Live</span>
-        <button class="copy-small" onclick="copyPayload()">Copy</button>
+        <button class="copy-small" onclick="copyPayload()">Copy JSON</button>
       </div>
     </div>
-
     <div class="pview" id="pv-payload">
       <pre><code class="language-json" id="payloadCode">{}</code></pre>
     </div>
@@ -319,84 +340,172 @@
 </div>
 
 <script>
-// ─── Mechanism definitions ────────────────────────────────────────────────
+// ─── Mechanism definitions ─────────────────────────────────────────────────
 const M = {
   'claude-md': {
     label: 'CLAUDE.md',
     inject: 'messages[].content → system-reminder',
-    desc: 'Injected as &lt;system-reminder&gt; in every user message. Automatic and persistent once the file exists. Project-level context, not identity.',
     sendable: true,
+    howHtml: `
+      <div class="how-title">⚡ Claude Code에서 실제 동작</div>
+      <div class="how-text">
+        프로젝트 루트에 <code>CLAUDE.md</code>가 있으면 Claude Code가
+        <strong>모든 요청</strong>에 자동으로 <code>&lt;system-reminder&gt;</code> 태그로 주입.
+        설정 불필요 — 파일 존재만으로 동작.
+      </div>
+      <div class="example-row">
+        <span class="ex-tag">예시</span>
+        <span>팀 코딩 스탠다드, 아키텍처 결정, 기술 스택 정보를 적어두면 모든 팀원의 요청에 자동 적용됨</span>
+      </div>
+      <div class="example-row">
+        <span class="ex-tag">레이어</span>
+        <span>메시지 레벨 (system 아님) — 프로젝트 <em>컨텍스트</em>지 Claude의 <em>정체성</em>이 아님</span>
+      </div>`,
     fields: [
-      { id:'content', label:'CLAUDE.md Content', type:'textarea', tall:true,
-        val:`# Project Standards\n\n## Tech Stack\n- TypeScript (strict mode)\n- Bun runtime\n- React + Vite frontend\n\n## Conventions\n- Named exports only (no default exports)\n- File naming: kebab-case\n- Write tests for all features\n- No console.log in production` },
+      { id:'content', label:'CLAUDE.md 내용', type:'textarea', tall:true,
+        val:`# Project Standards\n\n## Tech Stack\n- TypeScript (strict mode)\n- Bun runtime\n- React + Vite frontend\n\n## Conventions\n- Named exports only\n- File naming: kebab-case\n- Write tests for all features\n- No console.log in production` },
       { id:'userMessage', label:'User Message', type:'textarea',
         val:'How should I structure my TypeScript project?' }
     ]
   },
+
   'output-style': {
     label: 'Output Style',
     inject: 'system[] → additional text block',
-    desc: 'Appended to the system array. Modifies Claude\'s identity/behavior for the entire session. Persists until explicitly changed or session ends.',
     sendable: true,
+    howHtml: `
+      <div class="how-title">⚡ Claude Code에서 실제 동작</div>
+      <div class="how-text">
+        <code>/output-style software-architect</code> 실행 시
+        <code>system</code> 배열에 스타일 블록이 추가됨.
+        세션이 끝날 때까지 <strong>모든 응답</strong>에 적용.
+      </div>
+      <div class="example-row">
+        <span class="ex-tag">예시</span>
+        <span>코드 리뷰 세션 시작 전 "senior engineer" 스타일 설정 → 이후 모든 답변이 아키텍처 관점으로 변함</span>
+      </div>
+      <div class="example-row">
+        <span class="ex-tag">레이어</span>
+        <span>시스템 레벨 — CLAUDE.md(메시지)와 달리 Claude의 <em>정체성/행동</em>을 변경</span>
+      </div>`,
     fields: [
-      { id:'name', label:'Style Name', type:'input', val:'software-architect' },
-      { id:'content', label:'Style Instructions', type:'textarea', tall:true,
-        val:`You are operating as a senior software architect.\n\n## Response Guidelines\n- Lead with architectural decisions, not implementation details\n- Highlight trade-offs explicitly\n- Reference design patterns by name (Factory, Observer, CQRS)\n- Keep responses concise but precise\n- Assume deep technical knowledge` },
+      { id:'name', label:'스타일 이름', type:'input', val:'software-architect' },
+      { id:'content', label:'스타일 지침', type:'textarea', tall:true,
+        val:`You are operating as a senior software architect.\n\n## Response Guidelines\n- Lead with architectural decisions, not implementation details\n- Highlight trade-offs explicitly\n- Reference design patterns by name (Factory, Observer, CQRS)\n- Keep responses concise but precise` },
       { id:'userMessage', label:'User Message', type:'textarea',
         val:'Should I use Redux or React Context for state management?' }
     ]
   },
+
   'slash-command': {
     label: 'Slash Command',
-    inject: 'messages[].content → command-message wrapper',
-    desc: 'Deterministic template substitution. Activated explicitly by the user with /command-name. No model decision-making — pure string replacement.',
+    inject: 'messages[].content → command-message',
     sendable: true,
+    howHtml: `
+      <div class="how-title">⚡ Claude Code에서 실제 동작</div>
+      <div class="how-text">
+        <code>.claude/commands/review.md</code> 파일 생성 →
+        <code>/review @file.js</code> 입력 시 <code>{arg1}</code>이 인수로 치환.
+        <strong>Claude가 결정하는 게 아님</strong> — 순수 문자열 치환.
+      </div>
+      <div class="example-row">
+        <span class="ex-tag">예시</span>
+        <span>코드 리뷰, PR 체크리스트, 배포 절차 등 반복 작업을 명시적으로 실행할 때</span>
+      </div>
+      <div class="example-row">
+        <span class="ex-tag">vs Skill</span>
+        <span>Slash Command는 <em>사용자가 직접 호출</em>, Skill은 <em>Claude가 자율 판단</em></span>
+      </div>`,
     fields: [
-      { id:'name', label:'Command Name', type:'input', val:'review' },
-      { id:'template', label:'Command Template ({arg1} placeholder)', type:'textarea', tall:true,
+      { id:'name', label:'커맨드 이름', type:'input', val:'review' },
+      { id:'template', label:'커맨드 템플릿 ({arg1} 치환)', type:'textarea', tall:true,
         val:`Perform a thorough code review of the following code:\n\n{arg1}\n\nFocus on:\n1. Logic errors and off-by-one bugs\n2. Security vulnerabilities\n3. Performance issues\n4. Code clarity and naming` },
-      { id:'args', label:'Arguments (replaces {arg1})', type:'textarea',
+      { id:'args', label:'인수 ({arg1} 대체값)', type:'textarea',
         val:`function calculateTotal(items) {\n  let total = 0;\n  for (var i = 0; i <= items.length; i++) {\n    total += items[i].price;\n  }\n  return total;\n}` }
     ]
   },
+
   'skill': {
     label: 'Skill',
-    inject: 'tool_result (after Skill tool_use)',
-    desc: 'Model-invoked via tool calling. Claude autonomously decides to use the skill based on semantic matching with the description. Two-step: tool_use decision → tool_result injection.',
+    inject: 'tool_result (Skill tool_use 이후)',
     sendable: false,
-    inspectNote: 'Skill invocation requires Claude Code runtime (tool calling flow). Use the payload below for inspection.',
+    simulatable: true,
+    howHtml: `
+      <div class="how-title">⚡ Claude Code에서 실제 동작 (2단계)</div>
+      <div class="flow">
+        <div class="flow-step">사용자: "git squash 어떻게 해?"</div>
+        <div class="flow-arrow">↓ description 필드와 시맨틱 매칭</div>
+        <div class="flow-step hi-purple">매칭 성공 → tool_use: Skill { command: "git-helper" }</div>
+        <div class="flow-arrow">↓ SKILL.md 전체 내용 주입</div>
+        <div class="flow-step hi-purple">tool_result: [스킬 내용]</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step">Claude: 스킬 컨텍스트를 바탕으로 응답</div>
+      </div>
+      <div class="warn-row" style="margin-top:6px">
+        <span class="w-icon">⚠️</span>
+        <span><strong>description이 부정확하면 매칭 실패.</strong> "git, squash, commits, rebase" 같이 키워드를 명시적으로 나열해야 함.</span>
+      </div>
+      <div class="example-row">
+        <span class="ex-tag">▶ Simulate</span>
+        <span>실제 API로 스킬 효과를 확인 (스킬 내용을 system에 주입하는 단순화 버전)</span>
+      </div>`,
     fields: [
-      { id:'name', label:'Skill Name', type:'input', val:'git-helper' },
-      { id:'description', label:'Skill Description (used for matching)', type:'input',
+      { id:'name', label:'스킬 이름', type:'input', val:'git-helper' },
+      { id:'description', label:'매칭에 사용할 description', type:'input',
         val:'Git workflows, commits, branches, rebasing, squashing, version control' },
-      { id:'content', label:'Skill Content (SKILL.md body)', type:'textarea', tall:true,
-        val:`# Git Helper\n\nWhen invoked:\n1. Analyze the user's git-related request\n2. Provide exact commands with explanations\n3. Warn about destructive operations (reset --hard, force push)\n4. Suggest safe alternatives when available\n\nAlways include:\n- The exact git command(s) to run\n- What each command does\n- Any potential risks` },
-      { id:'userMessage', label:'User Message (triggers skill)', type:'textarea',
+      { id:'content', label:'스킬 내용 (SKILL.md 본문)', type:'textarea', tall:true,
+        val:`# Git Helper\n\nWhen invoked:\n1. Analyze the git-related request\n2. Provide exact commands with explanations\n3. Warn about destructive operations (reset --hard, force push)\n4. Suggest safe alternatives\n\nAlways include:\n- The exact git command(s)\n- What each command does\n- Any potential risks` },
+      { id:'userMessage', label:'User Message (스킬 트리거)', type:'textarea',
         val:'How do I squash my last 3 commits?' }
     ]
   },
+
   'sub-agent': {
     label: 'Sub-Agent',
-    inject: 'Separate isolated API call (Task tool)',
-    desc: 'Spawns a completely isolated conversation via the Task tool. Sub-agent has zero access to main conversation history. CLAUDE.md is still injected.',
+    inject: '격리된 별도 API 호출 (Task 도구)',
     sendable: false,
-    inspectNote: 'Sub-agents require two separate API calls. Both payloads are shown for inspection.',
+    simulatable: true,
+    howHtml: `
+      <div class="how-title">⚡ Claude Code에서 실제 동작 (API 2번 호출)</div>
+      <div class="flow">
+        <div class="flow-api-label">API Call #1 — 메인 대화</div>
+        <div class="flow-step">사용자: "auth 구현 분석해줘"</div>
+        <div class="flow-arrow">↓ Claude가 복잡한 작업으로 판단</div>
+        <div class="flow-step hi-orange">tool_use: Task { subagent_type: "Explore", prompt: "…" }</div>
+        <hr class="flow-divider">
+        <div class="flow-api-label">API Call #2 — Sub-Agent (완전 격리)</div>
+        <div class="flow-step hi-yellow">⚠️ 메인 대화 컨텍스트 없음</div>
+        <div class="flow-step">✅ CLAUDE.md는 여전히 주입됨</div>
+        <div class="flow-step">Explore 에이전트가 자율적으로 탐색/분석</div>
+        <div class="flow-arrow">↓ 결과 반환</div>
+        <div class="flow-api-label">다시 API Call #1</div>
+        <div class="flow-step hi-orange">tool_result: [sub-agent 분석 결과]</div>
+        <div class="flow-step">Claude: 결과 종합하여 응답</div>
+      </div>
+      <div class="warn-row" style="margin-top:6px">
+        <span class="w-icon">⚠️</span>
+        <span><strong>컨텍스트 브리징 없음.</strong> delegation prompt에 필요한 모든 정보를 명시해야 함. "우리가 이전에 얘기한…" 은 sub-agent가 모름.</span>
+      </div>
+      <div class="example-row">
+        <span class="ex-tag">▶ Run</span>
+        <span>Sub-Agent 대화만 단독 실행하여 delegation prompt 효과 확인</span>
+      </div>`,
     fields: [
-      { id:'type', label:'Sub-Agent Type', type:'select',
-        options:['Explore','general-purpose','Plan','software-architect'],
-        val:'Explore' },
-      { id:'prompt', label:'Delegation Prompt', type:'textarea', tall:true,
+      { id:'type', label:'Sub-Agent 타입', type:'select',
+        options:['Explore','general-purpose','Plan','software-architect'], val:'Explore' },
+      { id:'prompt', label:'Delegation Prompt (sub-agent에게 전달)', type:'textarea', tall:true,
         val:`Analyze the authentication flow in this codebase.\n\nContext: OAuth 2.0 with PKCE, Next.js application.\n\nFocus on:\n1. Token storage mechanisms\n2. Refresh token rotation logic\n3. Background token refresh handling\n\nReport back with a structured summary.` },
-      { id:'userMessage', label:'User Message (main conversation)', type:'textarea',
+      { id:'userMessage', label:'User Message (메인 대화 트리거)', type:'textarea',
         val:'Analyze our authentication implementation for security issues.' }
     ]
   }
 };
 
-// ─── State ────────────────────────────────────────────────────────────────
+// ─── State ─────────────────────────────────────────────────────────────────
 let current = 'claude-md';
+let lastResponseText = '';
 
-// ─── Payload builder ──────────────────────────────────────────────────────
+// ─── Payload builder ───────────────────────────────────────────────────────
 function buildPayload(mech, cfg) {
   const sys = "You are Claude Code, Anthropic's official CLI for Claude.";
   const model = document.getElementById('modelSel').value;
@@ -405,16 +514,11 @@ function buildPayload(mech, cfg) {
   if (mech === 'claude-md') {
     return {
       model, max_tokens: 1024, system: sys,
-      messages: [{
-        role: 'user',
-        content: [{
-          type: 'text',
-          text: `<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\nCodebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n\nContents of /path/to/CLAUDE.md (project instructions, checked into the codebase):\n\n${cfg.content || ''}\n</system-reminder>\n\n${msg}`
-        }]
-      }]
+      messages: [{ role: 'user', content: [{ type: 'text',
+        text: `<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\nCodebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n\nContents of /path/to/CLAUDE.md (project instructions, checked into the codebase):\n\n${cfg.content || ''}\n</system-reminder>\n\n${msg}`
+      }] }]
     };
   }
-
   if (mech === 'output-style') {
     return {
       model, max_tokens: 1024,
@@ -425,102 +529,81 @@ function buildPayload(mech, cfg) {
       messages: [{ role: 'user', content: msg }]
     };
   }
-
   if (mech === 'slash-command') {
     const expanded = (cfg.template || '').replace(/\{arg1\}/g, cfg.args || '');
     return {
       model, max_tokens: 1024, system: sys,
-      messages: [{
-        role: 'user',
-        content: [{
-          type: 'text',
-          text: `<command-message>${cfg.name || 'command'} is running…</command-message>\n\n${expanded}${cfg.args ? `\n\nARGUMENTS: ${cfg.args}` : ''}`
-        }]
-      }]
+      messages: [{ role: 'user', content: [{ type: 'text',
+        text: `<command-message>${cfg.name || 'command'} is running…</command-message>\n\n${expanded}${cfg.args ? `\n\nARGUMENTS: ${cfg.args}` : ''}`
+      }] }]
     };
   }
-
   if (mech === 'skill') {
     return {
       model, max_tokens: 1024, system: sys,
       messages: [
         { role: 'user', content: msg },
-        {
-          role: 'assistant',
-          content: [{ type: 'tool_use', id: 'toolu_skill_01', name: 'Skill', input: { command: cfg.name || 'skill-name' } }]
-        },
-        {
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: 'toolu_skill_01', content: cfg.content || '' }]
-        }
+        { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_skill_01', name: 'Skill', input: { command: cfg.name || 'skill-name' } }] },
+        { role: 'user',      content: [{ type: 'tool_result', tool_use_id: 'toolu_skill_01', content: cfg.content || '' }] }
       ]
     };
   }
-
   if (mech === 'sub-agent') {
     return {
-      '⚡ STEP 1 — Main Conversation (API Call #1)': {
+      '⚡ API Call #1 — Main Conversation': {
         model, max_tokens: 1024, system: sys,
         messages: [
           { role: 'user', content: msg },
-          {
-            role: 'assistant',
-            content: [{
-              type: 'tool_use', id: 'toolu_task_01', name: 'Task',
-              input: { subagent_type: cfg.type || 'Explore', prompt: cfg.prompt || '' }
-            }]
-          }
+          { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_task_01', name: 'Task',
+              input: { subagent_type: cfg.type || 'Explore', prompt: cfg.prompt || '' } }] }
         ]
       },
-      '🤖 STEP 2 — Sub-Agent Conversation (API Call #2 — Isolated)': {
+      '🤖 API Call #2 — Sub-Agent (Isolated)': {
         model, max_tokens: 2048,
-        system: `[${cfg.type || 'Explore'} specialized system prompt]\n[⚠️  No access to main conversation history]\n[✅ CLAUDE.md still injected here]`,
+        system: `[${cfg.type || 'Explore'} specialized system prompt]\n⚠️  No main conversation context\n✅ CLAUDE.md injected here too`,
         messages: [{ role: 'user', content: cfg.prompt || '' }]
       }
     };
   }
-
   return {};
 }
 
-// ─── Config collector ─────────────────────────────────────────────────────
+// ─── Collect config ─────────────────────────────────────────────────────────
 function collectCfg() {
   const cfg = {};
-  const fields = M[current].fields;
-  for (const f of fields) {
+  for (const f of M[current].fields) {
     const el = document.getElementById('f-' + f.id);
     cfg[f.id] = el ? el.value : (f.val || '');
   }
   return cfg;
 }
 
-// ─── Update preview ───────────────────────────────────────────────────────
+// ─── Update preview ─────────────────────────────────────────────────────────
 function updatePreview() {
   const cfg = collectCfg();
   const payload = buildPayload(current, cfg);
-  const json = JSON.stringify(payload, null, 2);
   const code = document.getElementById('payloadCode');
-  code.textContent = json;
+  code.textContent = JSON.stringify(payload, null, 2);
   hljs.highlightElement(code);
 }
 
-// ─── Render config form ───────────────────────────────────────────────────
+// ─── Render form ────────────────────────────────────────────────────────────
 function renderForm(mech) {
   const def = M[mech];
   document.getElementById('panelTitle').textContent = def.label;
   document.getElementById('injectChip').textContent = def.inject;
 
-  let html = `<div class="desc-box"><b>${def.label}</b>${def.desc}</div>`;
+  let html = `<div class="how-box">${def.howHtml}</div>`;
 
   for (const f of def.fields) {
     if (f.type === 'textarea') {
       html += `<div class="field"><label>${f.label}</label>
-        <textarea id="f-${f.id}" class="${f.tall ? 'tall' : ''}" oninput="updatePreview()">${esc(f.val || '')}</textarea></div>`;
+        <textarea id="f-${f.id}" class="${f.tall?'tall':''}" oninput="updatePreview()">${esc(f.val||'')}</textarea></div>`;
     } else if (f.type === 'input') {
       html += `<div class="field"><label>${f.label}</label>
-        <input type="text" id="f-${f.id}" value="${esc(f.val || '')}" oninput="updatePreview()"></div>`;
+        <input type="text" id="f-${f.id}" value="${esc(f.val||'')}" oninput="updatePreview()"></div>`;
     } else if (f.type === 'select') {
-      const opts = (f.options || []).map(o => `<option${o === f.val ? ' selected' : ''}>${o}</option>`).join('');
+      const opts = (f.options||[]).map(o=>`<option${o===f.val?' selected':''}>${o}</option>`).join('');
       html += `<div class="field"><label>${f.label}</label>
         <select id="f-${f.id}" onchange="updatePreview()">${opts}</select></div>`;
     }
@@ -530,26 +613,20 @@ function renderForm(mech) {
 
   // Footer
   const footer = document.getElementById('configFooter');
-  const sendBtn = document.getElementById('sendBtn');
+  const copyBtn = `<button class="btn btn-copy" onclick="copyPayload()">Copy JSON</button>`;
   if (def.sendable) {
-    sendBtn.textContent = 'Send to Claude →';
-    sendBtn.disabled = false;
-    sendBtn.title = '';
-    footer.querySelector('.inspect-note')?.remove();
-  } else {
-    sendBtn.innerHTML = '🔒 Inspect Only';
-    sendBtn.disabled = true;
-    sendBtn.title = def.inspectNote || '';
-    if (!footer.querySelector('.inspect-note')) {
-      const note = document.createElement('span');
-      note.className = 'inspect-note';
-      note.textContent = '⚠ ' + (def.inspectNote || 'Cannot send directly to API');
-      footer.insertBefore(note, footer.firstChild);
-    }
+    footer.innerHTML = copyBtn +
+      `<button class="btn btn-send" id="actionBtn" onclick="sendToApi()">Send to Claude →</button>`;
+  } else if (mech === 'skill') {
+    footer.innerHTML = copyBtn +
+      `<button class="btn btn-sim" id="actionBtn" onclick="simulateSkill()">▶ Simulate Effect</button>`;
+  } else if (mech === 'sub-agent') {
+    footer.innerHTML = copyBtn +
+      `<button class="btn btn-sa" id="actionBtn" onclick="simulateSubAgent()">▶ Run Sub-Agent</button>`;
   }
 }
 
-// ─── Switch mechanism ─────────────────────────────────────────────────────
+// ─── Switch mechanism ────────────────────────────────────────────────────────
 function switchM(mech) {
   current = mech;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.m === mech));
@@ -567,88 +644,149 @@ function showPTab(tab) {
   document.getElementById('ptab-response').classList.toggle('active', tab === 'response');
 }
 
-// ─── Copy ─────────────────────────────────────────────────────────────────
+// ─── Copy payload ─────────────────────────────────────────────────────────
 function copyPayload() {
   const text = document.getElementById('payloadCode').textContent;
   navigator.clipboard.writeText(text).then(() => {
     document.querySelectorAll('.btn-copy, .copy-small').forEach(b => {
-      const orig = b.textContent;
-      b.textContent = '✓ Copied';
-      setTimeout(() => { b.textContent = orig; }, 1500);
+      const o = b.textContent; b.textContent = '✓ Copied';
+      setTimeout(() => { b.textContent = o; }, 1500);
     });
   });
 }
 
-// ─── Send to API ──────────────────────────────────────────────────────────
-async function sendToApi() {
+// ─── Core send function ───────────────────────────────────────────────────
+async function callApi(payload, loadingMsg = 'Sending…') {
   const apiKey = document.getElementById('apiKey').value.trim();
   if (!apiKey) {
-    document.getElementById('apiKey').focus();
-    document.getElementById('apiKey').style.borderColor = 'var(--red)';
-    setTimeout(() => { document.getElementById('apiKey').style.borderColor = ''; }, 2000);
-    return;
+    const inp = document.getElementById('apiKey');
+    inp.focus(); inp.style.borderColor = 'var(--red)';
+    setTimeout(() => { inp.style.borderColor = ''; }, 2000);
+    return false;
   }
 
-  const cfg = collectCfg();
-  const payload = buildPayload(current, cfg);
-  const sendBtn = document.getElementById('sendBtn');
-  sendBtn.disabled = true;
-  sendBtn.innerHTML = '<span class="spin"></span> Sending…';
+  const btn = document.getElementById('actionBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spin"></span> ${loadingMsg}`; }
 
-  const respEl = document.getElementById('resp-view');
-  respEl.innerHTML = '<span class="spin"></span> Waiting for response…';
+  document.getElementById('resp-view').innerHTML =
+    `<div style="color:var(--dim);padding-top:4px"><span class="spin"></span> ${loadingMsg}</div>`;
   showPTab('response');
 
   try {
     let data;
     if (window.electronAPI) {
-      // Electron IPC (desktop app)
       data = await window.electronAPI.sendToClaude(payload, apiKey);
     } else {
-      // Web server fallback
       const res = await fetch('/api/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payload, apiKey })
       });
       data = await res.json();
     }
 
     if (data.error) {
-      respEl.innerHTML = `<div class="resp-err">Error: ${esc(data.error)}</div>`;
+      document.getElementById('resp-view').innerHTML =
+        `<div class="resp-err">Error: ${esc(data.error)}</div>`;
     } else if (data.response) {
       const r = data.response;
       const text = r.content?.filter(c => c.type === 'text').map(c => c.text).join('\n') || '(no text)';
+      lastResponseText = text;
       const u = r.usage;
-      const meta = u
-        ? `<div class="resp-meta">Model: ${r.model} · Input: ${u.input_tokens} tokens · Output: ${u.output_tokens} tokens · Stop: ${r.stop_reason}</div>`
-        : '';
-      respEl.innerHTML = `<div>${esc(text)}</div>${meta}`;
+      const meta = u ? `
+        <div class="resp-meta">
+          <div class="resp-stat"><span>Model </span><b>${r.model}</b></div>
+          <div class="resp-stat"><span>Input </span><b>${u.input_tokens.toLocaleString()} tokens</b></div>
+          <div class="resp-stat"><span>Output </span><b>${u.output_tokens.toLocaleString()} tokens</b></div>
+          <div class="resp-stat"><span>Stop </span><b>${r.stop_reason}</b></div>
+        </div>` : '';
+      document.getElementById('resp-view').innerHTML =
+        `<div class="resp-body">${esc(text)}</div>
+         <button class="resp-copy" onclick="copyResponse()">Copy Response</button>
+         ${meta}`;
       document.getElementById('livePill').style.display = 'flex';
     }
+    return true;
   } catch (e) {
-    respEl.innerHTML = `<div class="resp-err">Network error: ${esc(e.message)}</div>`;
+    document.getElementById('resp-view').innerHTML =
+      `<div class="resp-err">Network error: ${esc(e.message)}</div>`;
+    return false;
   } finally {
-    sendBtn.disabled = false;
-    sendBtn.textContent = 'Send to Claude →';
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = btn.className.includes('btn-send') ? 'Send to Claude →'
+                    : btn.className.includes('btn-sim') ? '▶ Simulate Effect'
+                    : '▶ Run Sub-Agent';
+    }
   }
 }
 
-// ─── API key indicator ────────────────────────────────────────────────────
+// ─── Send (direct mechanisms) ─────────────────────────────────────────────
+function sendToApi() {
+  const cfg = collectCfg();
+  callApi(buildPayload(current, cfg));
+}
+
+// ─── Simulate Skill ───────────────────────────────────────────────────────
+function simulateSkill() {
+  const cfg = collectCfg();
+  const model = document.getElementById('modelSel').value;
+  // Inject skill content via system (simplified — real flow uses tool_result)
+  const payload = {
+    model, max_tokens: 1024,
+    system: [
+      { type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." },
+      { type: 'text', text: `# Active Skill: ${cfg.name}\n\nDescription: ${cfg.description}\n\n${cfg.content}` }
+    ],
+    messages: [{ role: 'user', content: cfg.userMessage || '' }]
+  };
+  callApi(payload, 'Simulating skill…');
+}
+
+// ─── Simulate Sub-Agent ───────────────────────────────────────────────────
+function simulateSubAgent() {
+  const cfg = collectCfg();
+  const model = document.getElementById('modelSel').value;
+  // Send just the sub-agent conversation (API Call #2)
+  const payload = {
+    model, max_tokens: 1024,
+    system: `You are a ${cfg.type || 'general-purpose'} sub-agent. You operate in an isolated conversation with no access to the main conversation history.`,
+    messages: [{ role: 'user', content: cfg.prompt || '' }]
+  };
+  callApi(payload, `Running ${cfg.type || 'Explore'} sub-agent…`);
+}
+
+// ─── Copy response ────────────────────────────────────────────────────────
+function copyResponse() {
+  navigator.clipboard.writeText(lastResponseText).then(() => {
+    const btn = document.querySelector('.resp-copy');
+    if (btn) { btn.textContent = '✓ Copied'; setTimeout(() => { btn.textContent = 'Copy Response'; }, 1500); }
+  });
+}
+
+// ─── API key (with localStorage) ─────────────────────────────────────────
 function onApiKeyChange() {
-  const v = document.getElementById('apiKey').value.trim();
-  document.getElementById('apiDot').className = 'api-dot' + (v.startsWith('sk-ant') ? ' ok' : '');
+  const v = document.getElementById('apiKey').value;
+  localStorage.setItem('ci-api-key', v);
+  const ok = v.trim().startsWith('sk-ant');
+  document.getElementById('apiDot').className = 'api-dot' + (ok ? ' ok' : '');
+  document.getElementById('apiSaved').style.display = v.trim() ? 'inline' : 'none';
 }
 
-// ─── Utils ────────────────────────────────────────────────────────────────
+// ─── Util ─────────────────────────────────────────────────────────────────
 function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
-
-// ─── Model change ─────────────────────────────────────────────────────────
-document.getElementById('modelSel').addEventListener('change', updatePreview);
 
 // ─── Init ─────────────────────────────────────────────────────────────────
+document.getElementById('modelSel').addEventListener('change', updatePreview);
+
+// Load saved API key
+const savedKey = localStorage.getItem('ci-api-key');
+if (savedKey) {
+  document.getElementById('apiKey').value = savedKey;
+  onApiKeyChange();
+}
+
 switchM('claude-md');
 </script>
 </body>
