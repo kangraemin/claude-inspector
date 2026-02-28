@@ -2042,6 +2042,7 @@ function renderProxyDetail() {
       oncompositionend="_imeComposing=false;setProxyDetailSearch(this.value)">
     ${searchNav}
     ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('');document.getElementById('proxyDetailSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
+    <button class="msg-search-clear" onclick="copyProxyData()" title="JSON 복사" style="margin-left:auto;font-size:11px;padding:2px 8px;width:auto">Copy</button>
   </div>`;
   const mechChips = proxyDetailTab === 'request' ? buildMechFilterChips(entry.body) : '';
   const header = `<div style="flex-shrink:0">${searchBar}${mechChips}</div>`;
@@ -2070,6 +2071,18 @@ function renderProxyDetail() {
     const inp = document.getElementById('proxyDetailSearchInput');
     if (inp) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
   }
+}
+
+function copyProxyData() {
+  const entry = proxyCaptures.find(e => e.id === selectedProxyId);
+  if (!entry) return;
+  const data = proxyDetailTab === 'request' ? entry.body : (entry.response?.body ?? null);
+  if (data === null || data === undefined) return;
+  const text = JSON.stringify(data, null, 2);
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.msg-search-bar button[onclick="copyProxyData()"]');
+    if (btn) { const orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = orig, 1500); }
+  });
 }
 
 // ─── Proxy Analysis ────────────────────────────────────────────────────────
