@@ -866,6 +866,9 @@ const M = {
   }
 };
 
+// ─── Feature flags ──────────────────────────────────────────────────────────
+const SHOW_SIMULATOR = false; // true로 바꾸면 Simulator 탭/카드 활성화
+
 // ─── State ─────────────────────────────────────────────────────────────────
 let current = 'claude-md';
 let lastResponseText = '';
@@ -1722,7 +1725,27 @@ if (savedKey) {
   onApiKeyChange();
 }
 
-switchM('home');
+// 시뮬레이터 플래그에 따라 관련 UI 숨기기
+if (!SHOW_SIMULATOR) {
+  // 탭 숨기기
+  document.querySelectorAll('.tab:not([data-m="proxy"])').forEach(t => t.style.display = 'none');
+  // 랜딩 Simulator 카드 숨기기
+  const simCard = document.querySelector('.landing-card:not(.proxy)');
+  if (simCard) simCard.style.display = 'none';
+  // API Key, 모델 선택, History 버튼 숨기기 (시뮬레이터 전용)
+  const apiGroup = document.getElementById('apiGroup');
+  const modelSel = document.getElementById('modelSel');
+  const histBtn  = document.getElementById('histToggleBtn');
+  if (apiGroup) apiGroup.style.display = 'none';
+  if (modelSel) modelSel.style.display = 'none';
+  if (histBtn)  histBtn.style.display  = 'none';
+}
+
+if (!SHOW_SIMULATOR) {
+  switchM('proxy'); // 시뮬레이터 꺼지면 바로 프록시 모드로
+} else {
+  switchM('home');
+}
 </script>
 </body>
 </html>
