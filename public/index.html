@@ -1810,8 +1810,8 @@ function renderProxyMessages(entry, container) {
     </div>`);
   }
 
-  container.innerHTML = filterHtml + searchHtml +
-    `<div class="msgs-list">${cards.join('') || '<div class="proxy-empty"><span>결과 없음</span></div>'}</div>`;
+  container.innerHTML = `<div style="flex-shrink:0">${filterHtml}${searchHtml}</div>` +
+    `<div class="msgs-list" style="flex:1">${cards.join('') || '<div class="proxy-empty"><span>결과 없음</span></div>'}</div>`;
 
   const countEl = document.getElementById('msgCountEl');
   if (countEl) countEl.textContent = `${cards.length} / ${msgs.length}개`;
