@@ -495,6 +495,31 @@
     .analysis-block.highlight-yellow{ border-color: rgba(220,220,170,.35); }
     .analysis-block.highlight-purple{ border-color: rgba(197,134,192,.4); }
     .analysis-block.highlight-orange{ border-color: rgba(206,145,120,.4); }
+
+    /* ── JSON Tree Viewer ── */
+    .json-tree-view {
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: 12px; line-height: 1.7;
+      padding: 12px 16px; overflow: auto;
+    }
+    .jt-key  { color: #9cdcfe; }
+    .jt-str  { color: var(--orange); }
+    .jt-num  { color: var(--green); }
+    .jt-bool { color: var(--blue); }
+    .jt-null { color: var(--dim); }
+    .jt-row  { display: block; }
+    .jt-btn {
+      display: inline-block; width: 14px; font-size: 8px; line-height: 1;
+      color: var(--dim); cursor: pointer; user-select: none;
+      text-align: center; vertical-align: middle; transition: color .1s;
+    }
+    .jt-btn:hover { color: var(--yellow); }
+    .jt-tag {
+      color: var(--dim); font-size: 10px; cursor: pointer;
+      padding: 0 3px; vertical-align: middle;
+    }
+    .jt-tag:hover { color: var(--text); }
+    .analysis-block .jt-row { white-space: normal; }
     .analysis-kv { display: flex; gap: 8px; font-size: 11px; font-family: 'SF Mono', monospace; }
     .analysis-kv .ak { color: var(--dim); flex-shrink: 0; }
     .analysis-kv .av { color: var(--text); }
@@ -595,7 +620,7 @@
     </div>
 
     <div class="pview" id="pv-payload">
-      <pre><code class="language-json" id="payloadCode">{}</code></pre>
+      <div class="json-tree-view" id="payloadCode"></div>
     </div>
 
     <div class="pview hidden" id="pv-response">
@@ -872,6 +897,7 @@ const SHOW_SIMULATOR = false; // true로 바꾸면 Simulator 탭/카드 활성�
 // ─── State ─────────────────────────────────────────────────────────────────
 let current = 'claude-md';
 let lastResponseText = '';
+let currentPayload = null;
 let mdEnabled = false;
 let exportLang = 'curl';
 let sessionHistory = [];
@@ -972,14 +998,64 @@ function collectCfg() {
   return cfg;
 }
 
+// ─── JSON Tree Viewer ─────────────────────────────────────────────────────
+let _jtId = 0;
+function buildJsonHtml(val, depth) {
+  depth = depth || 0;
+  if (val === null) return '<span class="jt-null">null</span>';
+  if (val === true || val === false) return `<span class="jt-bool">${val}</span>`;
+  if (typeof val === 'number') return `<span class="jt-num">${val}</span>`;
+  if (typeof val === 'string') return `<span class="jt-str">"${esc(val)}"</span>`;
+
+  const isArr = Array.isArray(val);
+  const entries = isArr ? val.map((v, i) => [null, v]) : Object.entries(val);
+  const open = isArr ? '[' : '{'; const close = isArr ? ']' : '}';
+  if (entries.length === 0) return `<span>${open}${close}</span>`;
+
+  const id = `jt${++_jtId}`;
+  const label = isArr ? `${entries.length}` : `${entries.length}`;
+  const rows = entries.map(([k, v], i) => {
+    const comma = i < entries.length - 1 ? '<span style="color:var(--dim)">,</span>' : '';
+    const keyPart = k !== null ? `<span class="jt-key">"${esc(String(k))}"</span><span style="color:var(--dim)">: </span>` : '';
+    return `<div class="jt-row" style="padding-left:${(depth + 1) * 16}px">${keyPart}${buildJsonHtml(v, depth + 1)}${comma}</div>`;
+  }).join('');
+  const typeTag = isArr ? `[${label}]` : `{${label}}`;
+
+  return `<span>`
+    + `<span class="jt-btn" id="${id}-btn" onclick="jtToggle('${id}')">▼</span>`
+    + `<span style="color:var(--dim)">${open}</span>`
+    + `<span class="jt-tag" id="${id}-s" onclick="jtToggle('${id}')" style="display:none">${typeTag}</span>`
+    + `<span id="${id}-b">`
+    +   rows
+    +   `<div style="padding-left:${depth * 16}px"><span style="color:var(--dim)">${close}</span></div>`
+    + `</span>`
+    + `</span>`;
+}
+
+function jtToggle(id) {
+  const body = document.getElementById(`${id}-b`);
+  const summary = document.getElementById(`${id}-s`);
+  const btn = document.getElementById(`${id}-btn`);
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  summary.style.display = open ? '' : 'none';
+  btn.textContent = open ? '▶' : '▼';
+}
+
+function renderJsonTree(container, data) {
+  let obj;
+  try { obj = typeof data === 'string' ? JSON.parse(data) : data; }
+  catch (e) { container.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); return; }
+  container.innerHTML = buildJsonHtml(obj, 0);
+}
+
 // ─── Update preview ─────────────────────────────────────────────────────────
 function updatePreview() {
   const cfg = collectCfg();
   const payload = buildPayload(current, cfg);
-  const json = JSON.stringify(payload, null, 2);
+  currentPayload = payload;
   const code = document.getElementById('payloadCode');
-  code.textContent = json;
-  hljs.highlightElement(code);
+  renderJsonTree(code, payload);
 
   // Size + token estimate
   const bytes = new TextEncoder().encode(JSON.stringify(payload)).length;
@@ -1100,7 +1176,7 @@ function showPTab(tab) {
 
 // ─── Copy payload ─────────────────────────────────────────────────────────
 function copyPayload() {
-  const text = document.getElementById('payloadCode').textContent;
+  const text = JSON.stringify(currentPayload, null, 2);
   navigator.clipboard.writeText(text).then(() => {
     document.querySelectorAll('.btn-copy, [onclick="copyPayload()"]').forEach(b => {
       const o = b.textContent; b.textContent = '✓ Copied';
@@ -1400,6 +1476,9 @@ function onApiKeyChange() {
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+function escAttr(s) {
+  return esc(s).replace(/"/g,'&quot;');
+}
 
 // ─── Proxy ────────────────────────────────────────────────────────────────
 let proxyCaptures = [];
@@ -1541,11 +1620,9 @@ function renderProxyDetail() {
     return;
   }
 
-  const json = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-  detail.innerHTML = '<pre style="margin:0;padding:16px;font-size:12px;line-height:1.65"><code class="language-json" id="proxyDetailCode"></code></pre>';
+  detail.innerHTML = '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
   const code = document.getElementById('proxyDetailCode');
-  code.textContent = json;
-  hljs.highlightElement(code);
+  renderJsonTree(code, data);
 }
 
 // ─── Proxy Analysis ────────────────────────────────────────────────────────
@@ -1657,27 +1734,30 @@ function renderProxyAnalysis(entry, container) {
 
   // Skills
   for (const sk of det.skills) {
-    const inputStr = JSON.stringify(sk.input, null, 2);
     html += `<div class="analysis-section">
       <div class="analysis-section-title" style="color:var(--purple)">Skill — tool_use/tool_result</div>
       <div class="analysis-kv"><span class="ak">id</span><span class="av">${esc(sk.id)}</span></div>
-      <div class="analysis-block highlight-purple">${esc(inputStr)}</div>
+      <div class="analysis-block highlight-purple jt-json-block" data-json="${escAttr(JSON.stringify(sk.input))}"></div>
       ${sk.result ? `<div class="analysis-kv"><span class="ak">result (tool_result)</span></div><div class="analysis-block highlight-purple">${esc(sk.result)}</div>` : '<div class="analysis-kv"><span class="ak" style="color:var(--dim)">tool_result 없음 (다음 메시지에 있거나 아직 수신 전)</span></div>'}
     </div>`;
   }
 
   // Sub-Agents
   for (const sa of det.subAgents) {
-    const inputStr = JSON.stringify(sa.input, null, 2);
+    const isJson = sa.input && typeof sa.input === 'object';
     html += `<div class="analysis-section">
       <div class="analysis-section-title" style="color:var(--orange)">${esc(sa.name)} — Sub-Agent 호출</div>
       <div class="analysis-kv"><span class="ak">subagent_type</span><span class="av" style="color:var(--orange)">${esc(sa.input?.subagent_type || sa.input?.type || '?')}</span></div>
-      <div class="analysis-block highlight-orange">${esc(sa.input?.prompt || inputStr)}</div>
+      <div class="analysis-block highlight-orange ${isJson ? 'jt-json-block' : ''}" ${isJson ? `data-json="${escAttr(JSON.stringify(sa.input))}"` : ''}>${isJson ? '' : esc(sa.input?.prompt || '')}</div>
     </div>`;
   }
 
   html += '</div>';
   container.innerHTML = html;
+  container.querySelectorAll('.jt-json-block').forEach(el => {
+    try { renderJsonTree(el, JSON.parse(el.dataset.json)); }
+    catch (e) { el.textContent = el.dataset.json; }
+  });
 }
 
 function showDetailTab(tab) {
