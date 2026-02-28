@@ -555,6 +555,11 @@
     .mech-chip.btn { cursor: pointer; transition: filter .1s; }
     .mech-chip.btn:hover { filter: brightness(1.3); }
     .mech-chip.btn.active { outline: 2px solid currentColor; outline-offset: 1px; }
+    .mech-filter-desc {
+      padding: 4px 12px 6px; font-size: 11px; color: var(--dim);
+      border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px;
+    }
+    .mech-filter-desc-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
     .analysis-section { display: flex; flex-direction: column; gap: 6px; }
     .analysis-section-title {
       font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px;
@@ -1842,6 +1847,15 @@ function setProxyDetailMechFilter(key, pattern) {
   renderProxyDetail();
 }
 
+const CHIP_META = {
+  cm: { color: 'var(--green)',  desc: 'CLAUDE.md · 프로젝트 지침이 system-reminder로 주입된 블록' },
+  mn: { color: '#9cdcfe',       desc: 'MEMORY.md · 자동 메모가 system-reminder로 주입된 블록' },
+  st: { color: 'var(--blue)',   desc: 'system[] 추가 블록 · Claude Code 기본 프롬프트 외에 삽입된 커스텀 시스템 지침' },
+  sc: { color: 'var(--yellow)', desc: '슬래시 명령어 · user 메시지로 래핑되어 전달된 블록' },
+  sk: { color: 'var(--purple)', desc: '스킬 목록 · 사용 가능한 스킬이 system-reminder로 주입된 블록' },
+  sa: { color: 'var(--orange)', desc: '서브에이전트 · Task tool을 통해 별도 API 호출로 실행되는 블록' },
+};
+
 function buildMechFilterChips(body) {
   const det = detectMechanisms(body);
   // Check both messages[] and system[] for memory markers
@@ -1855,28 +1869,36 @@ function buildMechFilterChips(body) {
   const memoryPattern = /currentDate/.test(allText) ? 'currentDate'
                       : /MEMORY\.md/.test(allText) ? 'MEMORY.md' : 'auto-memory';
 
-  const styleSnippet = det.outputStyle?.[1]?.trim().slice(0, 40) || '';
-  const styleTitle = det.outputStyle
-    ? 'system[] 추가 블록 (사용자 정의 System Prompt):\n' + det.outputStyle.slice(1).join('\n---\n').slice(0, 300)
-    : '';
+  // Use a unique long snippet from the custom system block (system[1+]) to avoid matching system[0]
+  const customSysText = det.outputStyle?.slice(1).join('\n') || '';
+  const styleSnippet = customSysText.trim().slice(20, 80); // skip leading whitespace artifacts, use middle portion
 
   const chips = [
     { key: 'cm', found: !!det.claudeMd,          label: '📋 CLAUDE.md',      pattern: 'claudeMd' },
     { key: 'mn', found: hasMemory,                label: '🧠 Memory',         pattern: memoryPattern },
-    { key: 'st', found: !!det.outputStyle,        label: '🎨 System Prompt',  pattern: styleSnippet, title: styleTitle },
+    { key: 'st', found: !!det.outputStyle,        label: '🎨 System Prompt',  pattern: styleSnippet },
     { key: 'sc', found: !!det.slashCommand,       label: '⌨ Slash Cmd',      pattern: 'command-message' },
     { key: 'sk', found: det.skills.length > 0,   label: '🔧 Skill',          pattern: 'skills are available' },
     { key: 'sa', found: det.subAgents.length > 0, label: '🤖 Sub-Agent',     pattern: det.subAgents[0]?.name || 'Agent' },
   ].filter(c => c.found && c.pattern);
 
   if (chips.length === 0) return '';
-  return '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:5px 10px 7px;flex-shrink:0;border-bottom:1px solid var(--border)">'
+
+  const activeChip = chips.find(c => c.key === proxyDetailMechFilter);
+  const meta = activeChip ? CHIP_META[activeChip.key] : null;
+  const descBanner = meta
+    ? `<div class="mech-filter-desc"><span class="mech-filter-desc-dot" style="background:${meta.color}"></span>${esc(meta.desc)}</div>`
+    : '';
+
+  return '<div style="flex-shrink:0;border-bottom:1px solid var(--border)">'
+    + '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:5px 10px 7px">'
     + chips.map(c => {
         const active = proxyDetailMechFilter === c.key ? ' active' : '';
         const safePattern = c.pattern.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const titleAttr = c.title ? ` title="${c.title.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"` : '';
-        return `<span class="mech-chip ${c.key} found btn${active}"${titleAttr} onclick="setProxyDetailMechFilter('${c.key}','${safePattern}')">${c.label}</span>`;
+        return `<span class="mech-chip ${c.key} found btn${active}" onclick="setProxyDetailMechFilter('${c.key}','${safePattern}')">${c.label}</span>`;
       }).join('')
+    + '</div>'
+    + descBanner
     + '</div>';
 }
 
