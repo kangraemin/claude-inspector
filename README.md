@@ -14,8 +14,11 @@ and visualizes all 5 prompt augmentation mechanisms.
 ---
 
 <p align="center">
-  <img src="public/screenshots/proxy-request.png" width="49%" alt="Proxy Request View" />
-  <img src="public/screenshots/proxy-analysis.png" width="49%" alt="Proxy Analysis View" />
+  <img src="public/screenshots/proxy-request.png" width="100%" alt="Proxy — Request view with mechanism filter chips and search" />
+</p>
+
+<p align="center">
+  <img src="public/screenshots/proxy-analysis.png" width="100%" alt="Proxy — Analysis view auto-detecting all 5 mechanisms" />
 </p>
 
 ## Getting Started
