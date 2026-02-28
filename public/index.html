@@ -98,6 +98,7 @@
     .tab[data-m="slash-command"].badge { background: var(--yellow); color: #000; }
     .tab[data-m="skill"]        .badge { background: var(--purple); color: #fff; }
     .tab[data-m="sub-agent"]    .badge { background: var(--orange); color: #000; }
+    .tab[data-m="proxy"]        .badge { background: var(--red);    color: #fff; }
 
     /* ── Layout ── */
     .main { display: flex; flex: 1; overflow: hidden; }
@@ -365,6 +366,60 @@
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+    /* ── Proxy panel ── */
+    #normalPanels { display: flex; flex: 1; overflow: hidden; }
+    .proxy-panel { flex: 1; display: flex; overflow: hidden; }
+    .proxy-ctrl {
+      width: 320px; flex-shrink: 0;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .proxy-stream { flex: 1; display: flex; overflow: hidden; }
+    .proxy-list {
+      width: 280px; flex-shrink: 0;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .proxy-detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .proxy-status {
+      display: flex; align-items: center; gap: 8px; font-size: 12px;
+      padding: 8px 12px; border-radius: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+    }
+    .proxy-status.running { border-color: rgba(78,201,176,.4); background: rgba(78,201,176,.07); }
+    .proxy-status .ps-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+    .proxy-status.running .ps-dot { background: var(--green); animation: pulse 1.5s infinite; }
+    .proxy-cmd {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 5px; padding: 8px 10px;
+      font-family: 'SF Mono', monospace; font-size: 11px;
+      line-height: 1.6; word-break: break-all;
+    }
+    .prx-entry {
+      padding: 9px 13px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background .12s;
+    }
+    .prx-entry:hover { background: var(--surface2); }
+    .prx-entry.selected { background: rgba(86,156,214,.12); border-left: 3px solid var(--blue); }
+    .prx-method { font-size: 10px; font-weight: 700; font-family: 'SF Mono', monospace; color: var(--green); margin-right: 5px; }
+    .prx-path { font-size: 11px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .prx-model { font-size: 10px; color: var(--dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .prx-ts { font-size: 10px; color: var(--dim); opacity: .6; flex-shrink: 0; margin-left: 6px; }
+    .dtabs {
+      display: flex; gap: 4px; padding: 7px 12px;
+      border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
+    }
+    .dtab {
+      padding: 3px 10px; font-size: 12px; border-radius: 4px; cursor: pointer;
+      background: none; border: 1px solid transparent; color: var(--dim); transition: all .15s;
+    }
+    .dtab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+    .proxy-empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      flex: 1; color: var(--dim); font-size: 13px; text-align: center; gap: 8px; padding: 20px;
+      line-height: 1.7;
+    }
   </style>
 </head>
 <body>
@@ -399,9 +454,11 @@
   <button class="tab"        data-m="slash-command" onclick="switchM('slash-command')"> <span class="badge">/</span>  Slash Command</button>
   <button class="tab"        data-m="skill"         onclick="switchM('skill')">         <span class="badge">SK</span> Skill</button>
   <button class="tab"        data-m="sub-agent"     onclick="switchM('sub-agent')">     <span class="badge">SA</span> Sub-Agent</button>
+  <button class="tab"        data-m="proxy"         onclick="switchM('proxy')">         <span class="badge">PX</span> Proxy</button>
 </nav>
 
 <div class="main">
+<div id="normalPanels">
   <div class="config-panel">
     <div class="panel-header">
       <span id="panelTitle">Configuration</span>
@@ -462,7 +519,79 @@
       <div class="hist-empty">아직 기록 없음<br><small>API 전송 후 여기 표시됩니다</small></div>
     </div>
   </div>
-</div>
+</div><!-- /#normalPanels -->
+
+<div id="proxyPanel" class="proxy-panel" style="display:none">
+  <!-- Control -->
+  <div class="proxy-ctrl">
+    <div class="panel-header">
+      <span>Proxy Control</span>
+      <span class="inject-chip" style="color:var(--red);border-color:rgba(244,135,113,.3);background:rgba(244,135,113,.08)">실시간 캡처</span>
+    </div>
+    <div class="config-body">
+      <div class="how-box" style="border-color:rgba(244,135,113,.25);background:rgba(244,135,113,.04)">
+        <div class="how-title" style="color:var(--red)">⚡ 실제 API 트래픽 인터셉트</div>
+        <div class="how-text">
+          Claude Code CLI의 실제 API 요청을 가로채 실시간으로 시각화합니다.<br>
+          프록시를 시작한 뒤 아래 명령으로 Claude Code를 실행하세요.
+        </div>
+        <div class="example-row">
+          <span class="ex-tag" style="background:rgba(244,135,113,.12);color:var(--red);border-color:rgba(244,135,113,.25)">원리</span>
+          <span>Claude Code → localhost:PORT (HTTP) → Anthropic API (HTTPS)</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>포트</label>
+        <input type="number" id="proxyPort" value="9090" min="1024" max="65535" style="width:120px" oninput="updateProxyCmd()">
+      </div>
+      <div class="proxy-status" id="proxyStatus">
+        <span class="ps-dot"></span>
+        <span id="proxyStatusText">중지됨</span>
+      </div>
+      <div class="field">
+        <label>
+          <span>실행 명령</span>
+          <button class="copy-small" onclick="copyProxyCmd()" style="text-transform:none;letter-spacing:0;font-weight:normal">Copy</button>
+        </label>
+        <div class="proxy-cmd" id="proxyCmdBox">
+          <span id="proxyCmdText" style="color:var(--dim)">프록시를 먼저 시작하세요</span>
+        </div>
+      </div>
+    </div>
+    <div class="config-footer">
+      <button class="btn btn-send" id="proxyStartBtn" style="flex:1;justify-content:center" onclick="toggleProxy()">Start Proxy</button>
+      <button class="btn btn-copy" onclick="clearProxyCaptures()">Clear</button>
+    </div>
+  </div>
+
+  <!-- Stream -->
+  <div class="proxy-stream">
+    <div class="proxy-list">
+      <div class="panel-header">
+        <span>캡처된 요청</span>
+        <span style="font-size:10px;color:var(--dim)" id="proxyCount">0</span>
+      </div>
+      <div class="hist-list" id="proxyList">
+        <div class="hist-empty">캡처된 요청 없음<br><small>프록시를 시작하고<br>Claude Code를 실행하세요</small></div>
+      </div>
+    </div>
+    <div class="proxy-detail">
+      <div class="dtabs">
+        <button class="dtab active" data-dtab="request" onclick="showDetailTab('request')">Request</button>
+        <button class="dtab" data-dtab="response" onclick="showDetailTab('response')">Response</button>
+        <button class="copy-small" style="margin-left:auto" onclick="copyProxyDetail()">Copy</button>
+      </div>
+      <div id="proxyDetailView" style="flex:1;overflow:auto">
+        <div class="proxy-empty">
+          <span style="font-size:28px">🔍</span>
+          <span>요청을 선택하면<br>페이로드가 표시됩니다</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /#proxyPanel -->
+
+</div><!-- /.main -->
 
 <script>
 // ─── Mechanism definitions ─────────────────────────────────────────────────
@@ -793,8 +922,15 @@ function renderForm(mech) {
 
 // ─── Switch mechanism ────────────────────────────────────────────────────────
 function switchM(mech) {
-  current = mech;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.m === mech));
+  if (mech === 'proxy') {
+    document.getElementById('normalPanels').style.display = 'none';
+    document.getElementById('proxyPanel').style.display = 'flex';
+    return;
+  }
+  document.getElementById('normalPanels').style.display = 'flex';
+  document.getElementById('proxyPanel').style.display = 'none';
+  current = mech;
   renderForm(mech);
   updatePreview();
   showPTab('payload');
@@ -1116,6 +1252,179 @@ function onApiKeyChange() {
 // ─── Util ─────────────────────────────────────────────────────────────────
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Proxy ────────────────────────────────────────────────────────────────
+let proxyCaptures = [];
+let selectedProxyId = null;
+let proxyDetailTab = 'request';
+let proxyRunning = false;
+let proxyActualPort = 9090;
+
+function updateProxyCmd() {
+  const port = document.getElementById('proxyPort').value || '9090';
+  const cmdEl = document.getElementById('proxyCmdText');
+  if (cmdEl && proxyRunning) {
+    cmdEl.style.color = 'var(--green)';
+    cmdEl.textContent = `ANTHROPIC_BASE_URL=http://localhost:${port} claude`;
+  }
+}
+
+function renderProxyStatus() {
+  const status = document.getElementById('proxyStatus');
+  const statusText = document.getElementById('proxyStatusText');
+  const startBtn = document.getElementById('proxyStartBtn');
+  const cmdEl = document.getElementById('proxyCmdText');
+  if (!status || !startBtn) return;
+
+  if (proxyRunning) {
+    status.className = 'proxy-status running';
+    if (statusText) statusText.textContent = `포트 ${proxyActualPort}에서 실행 중`;
+    startBtn.textContent = 'Stop Proxy';
+    startBtn.style.background = 'var(--red)';
+    if (cmdEl) {
+      cmdEl.style.color = 'var(--green)';
+      cmdEl.textContent = `ANTHROPIC_BASE_URL=http://localhost:${proxyActualPort} claude`;
+    }
+  } else {
+    status.className = 'proxy-status';
+    if (statusText) statusText.textContent = '중지됨';
+    startBtn.textContent = 'Start Proxy';
+    startBtn.style.background = 'var(--blue)';
+    if (cmdEl) {
+      cmdEl.style.color = 'var(--dim)';
+      cmdEl.textContent = '프록시를 먼저 시작하세요';
+    }
+  }
+}
+
+async function toggleProxy() {
+  const btn = document.getElementById('proxyStartBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
+
+  if (proxyRunning) {
+    await window.electronAPI.proxyStop();
+    window.electronAPI.offProxy();
+    proxyRunning = false;
+  } else {
+    const port = parseInt(document.getElementById('proxyPort').value) || 9090;
+    const result = await window.electronAPI.proxyStart(port);
+    if (result.error) {
+      alert('프록시 시작 실패: ' + result.error);
+      if (btn) { btn.disabled = false; btn.textContent = 'Start Proxy'; }
+      return;
+    }
+    proxyRunning = true;
+    proxyActualPort = result.port;
+    document.getElementById('proxyPort').value = result.port;
+
+    window.electronAPI.onProxyRequest((data) => {
+      proxyCaptures.unshift(data);
+      if (proxyCaptures.length > 50) proxyCaptures.pop();
+      renderProxyList();
+    });
+    window.electronAPI.onProxyResponse((data) => {
+      const entry = proxyCaptures.find(e => e.id === data.id);
+      if (entry) {
+        entry.response = data;
+        renderProxyList();
+        if (selectedProxyId === data.id) renderProxyDetail();
+      }
+    });
+  }
+
+  if (btn) btn.disabled = false;
+  renderProxyStatus();
+}
+
+function renderProxyList() {
+  const list = document.getElementById('proxyList');
+  const countEl = document.getElementById('proxyCount');
+  if (!list) return;
+  if (countEl) countEl.textContent = proxyCaptures.length;
+
+  if (proxyCaptures.length === 0) {
+    list.innerHTML = '<div class="hist-empty">캡처된 요청 없음<br><small>프록시를 시작하고<br>Claude Code를 실행하세요</small></div>';
+    return;
+  }
+
+  list.innerHTML = proxyCaptures.map(e => {
+    const model = e.body?.model ? `<div class="prx-model">${esc(e.body.model)}</div>` : '';
+    const sel = e.id === selectedProxyId ? ' selected' : '';
+    const statusBadge = e.response
+      ? `<span style="font-size:10px;font-family:'SF Mono',monospace;flex-shrink:0;color:${e.response.status < 400 ? 'var(--green)' : 'var(--red)'}">${e.response.status || 'ERR'}</span>`
+      : `<span style="font-size:10px;color:var(--dim);flex-shrink:0">…</span>`;
+    return `<div class="prx-entry${sel}" onclick="selectProxyEntry(${e.id})">
+      <div style="display:flex;align-items:center;overflow:hidden">
+        <span class="prx-method">${esc(e.method)}</span>
+        <span class="prx-path">${esc(e.path)}</span>
+        ${statusBadge}
+        <span class="prx-ts">${e.ts}</span>
+      </div>
+      ${model}
+    </div>`;
+  }).join('');
+}
+
+function selectProxyEntry(id) {
+  selectedProxyId = id;
+  renderProxyList();
+  renderProxyDetail();
+}
+
+function renderProxyDetail() {
+  const entry = proxyCaptures.find(e => e.id === selectedProxyId);
+  const detail = document.getElementById('proxyDetailView');
+  if (!detail) return;
+
+  if (!entry) {
+    detail.innerHTML = '<div class="proxy-empty"><span style="font-size:28px">🔍</span><span>요청을 선택하면<br>페이로드가 표시됩니다</span></div>';
+    return;
+  }
+
+  const data = proxyDetailTab === 'request' ? entry.body : (entry.response?.body ?? null);
+
+  if (data === null || data === undefined) {
+    detail.innerHTML = `<div style="color:var(--dim);padding:16px;font-size:12px">${proxyDetailTab === 'response' ? '응답 대기 중…' : '바디 없음'}</div>`;
+    return;
+  }
+
+  const json = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  detail.innerHTML = '<pre style="margin:0;padding:16px;font-size:12px;line-height:1.65"><code class="language-json" id="proxyDetailCode"></code></pre>';
+  const code = document.getElementById('proxyDetailCode');
+  code.textContent = json;
+  hljs.highlightElement(code);
+}
+
+function showDetailTab(tab) {
+  proxyDetailTab = tab;
+  document.querySelectorAll('.dtab').forEach(b => b.classList.toggle('active', b.dataset.dtab === tab));
+  renderProxyDetail();
+}
+
+function clearProxyCaptures() {
+  proxyCaptures = [];
+  selectedProxyId = null;
+  renderProxyList();
+  renderProxyDetail();
+}
+
+function copyProxyCmd() {
+  const el = document.getElementById('proxyCmdText');
+  if (!el || !proxyRunning) return;
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    const btn = document.querySelector('[onclick="copyProxyCmd()"]');
+    if (btn) { const o = btn.textContent; btn.textContent = '✓'; setTimeout(() => btn.textContent = o, 1500); }
+  });
+}
+
+function copyProxyDetail() {
+  const code = document.getElementById('proxyDetailCode');
+  if (!code) return;
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    const btn = document.querySelector('[onclick="copyProxyDetail()"]');
+    if (btn) { const o = btn.textContent; btn.textContent = '✓'; setTimeout(() => btn.textContent = o, 1500); }
+  });
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────

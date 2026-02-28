@@ -1,7 +1,12 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const http = require('node:http');
+const https = require('node:https');
 const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk');
+
+let mainWin = null;
+let proxyServer = null;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -23,6 +28,7 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'public/index.html'));
 
   win.once('ready-to-show', () => win.show());
+  mainWin = win;
 
   // Open external links in browser, not Electron
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -68,3 +74,79 @@ ipcMain.handle('get-token-estimate', (_event, text) => {
   // Rough approximation: ~4 chars per token
   return Math.ceil((text || '').length / 4);
 });
+
+ipcMain.handle('proxy-start', (_event, port = 9090) => {
+  if (proxyServer) return { running: true, port: proxyServer.address().port };
+
+  return new Promise((resolve) => {
+    const server = http.createServer((req, res) => {
+      const chunks = [];
+      req.on('data', chunk => chunks.push(chunk));
+      req.on('end', () => {
+        const bodyBuf = Buffer.concat(chunks);
+        let bodyObj = null;
+        try { bodyObj = JSON.parse(bodyBuf.toString()); } catch {}
+
+        const reqId = Date.now();
+        const reqData = {
+          id: reqId,
+          ts: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          method: req.method,
+          path: req.url,
+          body: bodyObj,
+        };
+        if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('proxy-request', reqData);
+
+        const headers = Object.assign({}, req.headers, { host: 'api.anthropic.com' });
+        const options = { hostname: 'api.anthropic.com', port: 443, path: req.url, method: req.method, headers };
+
+        const proxyReq = https.request(options, (proxyRes) => {
+          res.writeHead(proxyRes.statusCode, proxyRes.headers);
+          const respChunks = [];
+          proxyRes.on('data', chunk => { respChunks.push(chunk); res.write(chunk); });
+          proxyRes.on('end', () => {
+            res.end();
+            const respStr = Buffer.concat(respChunks).toString('utf8');
+            let respObj = null;
+            try { respObj = JSON.parse(respStr); } catch {}
+            if (mainWin && !mainWin.isDestroyed()) {
+              mainWin.webContents.send('proxy-response', {
+                id: reqId, status: proxyRes.statusCode,
+                body: respObj || respStr.slice(0, 4000),
+              });
+            }
+          });
+        });
+
+        proxyReq.on('error', (err) => {
+          if (!res.headersSent) res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+          if (mainWin && !mainWin.isDestroyed()) {
+            mainWin.webContents.send('proxy-response', { id: reqId, error: err.message });
+          }
+        });
+
+        proxyReq.end(bodyBuf);
+      });
+    });
+
+    server.on('listening', () => {
+      proxyServer = server;
+      resolve({ running: true, port: server.address().port });
+    });
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') server.listen(0, '127.0.0.1');
+      else resolve({ error: err.message });
+    });
+    server.listen(port, '127.0.0.1');
+  });
+});
+
+ipcMain.handle('proxy-stop', () => {
+  if (!proxyServer) return { stopped: true };
+  return new Promise((resolve) => {
+    proxyServer.close(() => { proxyServer = null; resolve({ stopped: true }); });
+  });
+});
+
+app.on('before-quit', () => { if (proxyServer) proxyServer.close(); });
