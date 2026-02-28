@@ -699,8 +699,7 @@
 
     <div class="pview hidden" id="pv-response">
       <div class="resp-toolbar" id="respToolbar" style="display:none">
-        <span class="resp-md-label">응답 렌더링</span>
-        <button class="resp-md-btn" id="mdToggleBtn" onclick="toggleMd()">MD</button>
+        <button class="copy-small" onclick="copyResponse()">Copy Text</button>
       </div>
       <div class="resp-scroll">
         <div id="resp-view"></div>
@@ -1283,21 +1282,10 @@ async function callApi(payload, loadingMsg = 'Sending…') {
         `<div class="resp-err">Error: ${esc(data.error)}</div>`;
     } else if (data.response) {
       const r = data.response;
-      const text = r.content?.filter(c => c.type === 'text').map(c => c.text).join('\n') || '(no text)';
-      lastResponseText = text;
-      const u = r.usage;
-      const meta = u ? `
-        <div class="resp-meta">
-          <div class="resp-stat"><span>Model </span><b>${r.model}</b></div>
-          <div class="resp-stat"><span>Input </span><b>${u.input_tokens.toLocaleString()} tok</b></div>
-          <div class="resp-stat"><span>Output </span><b>${u.output_tokens.toLocaleString()} tok</b></div>
-          <div class="resp-stat"><span>Stop </span><b>${r.stop_reason}</b></div>
-        </div>` : '';
+      lastResponseText = r.content?.filter(c => c.type === 'text').map(c => c.text).join('\n') || '';
       document.getElementById('resp-view').innerHTML =
-        `<div class="resp-text" id="respText"></div>
-         <button class="resp-copy" onclick="copyResponse()">Copy Response</button>
-         ${meta}`;
-      renderResponseContent(text);
+        `<div class="json-tree-view" id="respJsonTree" style="flex:1;overflow:auto"></div>`;
+      renderJsonTree(document.getElementById('respJsonTree'), r);
       document.getElementById('respToolbar').style.display = 'flex';
       document.getElementById('livePill').style.display = 'flex';
       saveHistory(current, collectCfg());
