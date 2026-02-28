@@ -4,10 +4,10 @@
 
 **See what Claude Code actually sends to the API.**
 
-MITM proxy that intercepts Claude Code CLI traffic in real-time,<br>
-plus a simulator to hand-craft and test all 5 prompt augmentation mechanisms.
+MITM proxy that intercepts Claude Code CLI traffic in real-time<br>
+and visualizes all 5 prompt augmentation mechanisms.
 
-[Getting Started](#getting-started) · [Proxy Mode](#-proxy-mode) · [Simulator Mode](#-simulator-mode) · [How It Works](#how-it-works)
+[Getting Started](#getting-started) · [Proxy Mode](#-proxy-mode) · [How It Works](#how-it-works)
 
 </div>
 
@@ -53,26 +53,19 @@ ANTHROPIC_BASE_URL=http://localhost:9090 claude
 | **Response** | Full response including SSE stream auto-reassembly |
 | **Analysis** | Auto-detects which of the 5 mechanisms are present and explains each one |
 
-## Simulator Mode
-
-Build API payloads by hand and send them to Claude — great for understanding how each mechanism actually works at the API level.
-
-| Mechanism | Injection Point | Sendable |
-|-----------|----------------|----------|
-| **CLAUDE.md** | `messages[].content` → `<system-reminder>` | Yes |
-| **Output Style** | `system[]` additional block | Yes |
-| **Slash Command** | `messages[].content` → `<command-message>` | Yes |
-| **Skill** | `tool_result` after `tool_use` | Inspect only |
-| **Sub-Agent** | Separate isolated API call | Inspect only |
-
-Features: live JSON preview, **Send to Claude** with real API calls, **Export** to cURL / Python / TypeScript, session history (last 10 requests).
-
 ## How It Works
 
-Claude Code enhances every API call with up to **5 prompt augmentation mechanisms**. These are invisible during normal usage. Claude Inspector makes them visible by:
+Claude Code enhances every API call with up to **5 prompt augmentation mechanisms** — but these are invisible during normal usage.
 
-1. **Proxy Mode** — sits between Claude Code and the Anthropic API, capturing the full request/response payload before it leaves your machine
-2. **Simulator Mode** — lets you construct the same payload structures manually to understand exactly what each mechanism adds
+| Mechanism | Injection Point |
+|-----------|----------------|
+| **CLAUDE.md** | `messages[].content` → `<system-reminder>` |
+| **Output Style** | `system[]` additional block |
+| **Slash Command** | `messages[].content` → `<command-message>` |
+| **Skill** | `tool_result` after Skill `tool_use` |
+| **Sub-Agent** | Separate isolated API call via Task tool |
+
+Claude Inspector sits between Claude Code and the Anthropic API, capturing the full request/response payload — so you can see exactly what gets injected and where.
 
 > **Privacy**: All traffic stays on your machine. The proxy runs on `localhost` only. No data is sent anywhere except directly to `api.anthropic.com`.
 
@@ -80,8 +73,7 @@ Claude Code enhances every API call with up to **5 prompt augmentation mechanism
 
 - **Electron** — cross-platform desktop (macOS `hiddenInset` titlebar)
 - **Vanilla JS** — zero frameworks, zero build steps
-- **Node `http`/`https`** — lightweight MITM proxy
-- **@anthropic-ai/sdk** — API calls in main process via IPC
+- **Node `http`/`https`** — lightweight MITM proxy with SSE stream reassembly
 - **highlight.js** + **marked** — syntax highlighting & markdown rendering
 
 ## Build
