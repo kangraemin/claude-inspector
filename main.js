@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk');
 
@@ -49,4 +50,21 @@ ipcMain.handle('send-to-claude', async (_event, { payload, apiKey }) => {
   } catch (e) {
     return { error: e.message };
   }
+});
+
+ipcMain.handle('open-file', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: 'Markdown', extensions: ['md'] },
+      { name: 'All Files', extensions: ['*'] }
+    ],
+  });
+  if (canceled || !filePaths.length) return null;
+  return { path: filePaths[0], content: fs.readFileSync(filePaths[0], 'utf-8') };
+});
+
+ipcMain.handle('get-token-estimate', (_event, text) => {
+  // Rough approximation: ~4 chars per token
+  return Math.ceil((text || '').length / 4);
 });

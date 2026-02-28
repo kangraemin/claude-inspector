@@ -6,7 +6,6 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --enable-logging",
-    "web": "npx tsx server.ts",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win"
@@ -34,8 +33,6 @@
   },
   "devDependencies": {
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8",
-    "tsx": "^4.19.0",
-    "@types/node": "^22.0.0"
+    "electron-builder": "^25.1.8"
   }
 }

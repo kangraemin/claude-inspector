@@ -6,20 +6,13 @@
   <title>Claude Inspector</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
   <style>
     :root {
-      --bg: #1e1e1e;
-      --surface: #252526;
-      --surface2: #2d2d2d;
-      --border: #3e3e42;
-      --text: #d4d4d4;
-      --dim: #858585;
-      --blue: #569cd6;
-      --green: #4ec9b0;
-      --yellow: #dcdcaa;
-      --red: #f48771;
-      --purple: #c586c0;
-      --orange: #ce9178;
+      --bg: #1e1e1e; --surface: #252526; --surface2: #2d2d2d;
+      --border: #3e3e42; --text: #d4d4d4; --dim: #858585;
+      --blue: #569cd6; --green: #4ec9b0; --yellow: #dcdcaa;
+      --red: #f48771; --purple: #c586c0; --orange: #ce9178;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -63,11 +56,18 @@
       background: var(--bg); border: 1px solid var(--border);
       border-radius: 5px; color: var(--text);
       padding: 5px 10px; font-size: 12px; width: 240px;
-      font-family: 'SF Mono', monospace; outline: none;
-      transition: border-color .15s;
+      font-family: 'SF Mono', monospace; outline: none; transition: border-color .15s;
     }
     .api-input:focus { border-color: var(--blue); }
-    .api-hint { font-size: 10px; color: var(--dim); white-space: nowrap; }
+
+    /* ── History toggle button ── */
+    .hist-btn {
+      padding: 4px 10px; border-radius: 5px; font-size: 11px;
+      background: none; border: 1px solid var(--border);
+      color: var(--dim); cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    .hist-btn:hover { color: var(--text); border-color: var(--blue); }
+    .hist-btn.active { color: var(--blue); border-color: var(--blue); background: rgba(86,156,214,.08); }
 
     /* ── Tabs ── */
     .tabs {
@@ -120,7 +120,11 @@
       display: flex; flex-direction: column; gap: 11px;
     }
     .field { display: flex; flex-direction: column; gap: 5px; }
-    .field label { font-size: 11px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+    .field label {
+      font-size: 11px; color: var(--dim); font-weight: 600;
+      text-transform: uppercase; letter-spacing: .5px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
     .field input, .field textarea, .field select {
       background: var(--bg); border: 1px solid var(--border);
       border-radius: 5px; color: var(--text);
@@ -132,36 +136,34 @@
     .field textarea { min-height: 80px; }
     .field textarea.tall { min-height: 120px; }
 
+    /* ── File button ── */
+    .file-btn {
+      padding: 2px 8px; border-radius: 4px; font-size: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--dim); cursor: pointer; transition: all .15s;
+      text-transform: none; letter-spacing: 0; font-weight: normal;
+    }
+    .file-btn:hover { color: var(--text); border-color: var(--blue); }
+
     /* ── How-it-works box ── */
     .how-box {
-      background: rgba(86,156,214,.05);
-      border: 1px solid rgba(86,156,214,.18);
+      background: rgba(86,156,214,.05); border: 1px solid rgba(86,156,214,.18);
       border-radius: 7px; padding: 11px 13px;
       display: flex; flex-direction: column; gap: 8px;
     }
-    .how-title {
-      font-size: 10px; font-weight: 700; color: var(--blue);
-      text-transform: uppercase; letter-spacing: .7px;
-    }
+    .how-title { font-size: 10px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .7px; }
     .how-text { font-size: 12px; color: var(--dim); line-height: 1.55; }
     .how-text code {
       background: var(--surface2); padding: 1px 4px; border-radius: 3px;
       font-family: 'SF Mono', monospace; font-size: 11px; color: var(--text);
     }
-    .example-row {
-      display: flex; align-items: flex-start; gap: 6px;
-      font-size: 11px; color: var(--dim); line-height: 1.45;
-    }
+    .example-row { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--dim); line-height: 1.45; }
     .example-row .ex-tag {
-      flex-shrink: 0; background: rgba(78,201,176,.12);
-      color: var(--green); border: 1px solid rgba(78,201,176,.25);
-      border-radius: 4px; font-size: 10px; font-weight: 700;
-      padding: 1px 5px;
+      flex-shrink: 0; background: rgba(78,201,176,.12); color: var(--green);
+      border: 1px solid rgba(78,201,176,.25); border-radius: 4px;
+      font-size: 10px; font-weight: 700; padding: 1px 5px;
     }
-    .warn-row {
-      display: flex; align-items: flex-start; gap: 6px;
-      font-size: 11px; color: var(--yellow); line-height: 1.45;
-    }
+    .warn-row { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--yellow); line-height: 1.45; }
     .warn-row .w-icon { flex-shrink: 0; }
 
     /* ── Flow diagram ── */
@@ -175,17 +177,13 @@
     .flow-step {
       background: var(--surface2); border: 1px solid var(--border);
       border-radius: 4px; padding: 6px 10px;
-      font-size: 11px; font-family: 'SF Mono', monospace; line-height: 1.4;
-      color: var(--text);
+      font-size: 11px; font-family: 'SF Mono', monospace; line-height: 1.4; color: var(--text);
     }
     .flow-step.hi-purple { border-color: var(--purple); color: var(--purple); background: rgba(197,134,192,.07); }
     .flow-step.hi-orange { border-color: var(--orange); color: var(--orange); background: rgba(206,145,120,.07); }
     .flow-step.hi-yellow { border-color: var(--yellow); color: var(--yellow); background: rgba(220,220,170,.07); }
     .flow-arrow { text-align: center; color: var(--dim); font-size: 11px; padding: 3px 0; }
-    .flow-divider {
-      border: none; border-top: 1px dashed var(--border);
-      margin: 7px 0;
-    }
+    .flow-divider { border: none; border-top: 1px dashed var(--border); margin: 7px 0; }
 
     /* ── Buttons ── */
     .config-footer {
@@ -193,21 +191,19 @@
       display: flex; gap: 8px; flex-shrink: 0; align-items: center;
     }
     .btn {
-      padding: 7px 14px; border-radius: 5px;
-      font-size: 12px; font-weight: 600; cursor: pointer; border: none;
-      transition: opacity .15s; display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 5px; font-size: 12px; font-weight: 600;
+      cursor: pointer; border: none; transition: opacity .15s;
+      display: flex; align-items: center; gap: 6px;
     }
     .btn:disabled { opacity: .4; cursor: not-allowed; }
     .btn-send { background: var(--blue); color: #fff; flex: 1; justify-content: center; }
     .btn-sim  { background: var(--purple); color: #fff; flex: 1; justify-content: center; }
     .btn-sa   { background: var(--orange); color: #000; flex: 1; justify-content: center; }
-    .btn-send:not(:disabled):hover,
-    .btn-sim:not(:disabled):hover,
-    .btn-sa:not(:disabled):hover  { opacity: .82; }
+    .btn-send:not(:disabled):hover, .btn-sim:not(:disabled):hover, .btn-sa:not(:disabled):hover { opacity: .82; }
     .btn-copy { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
     .btn-copy:hover { border-color: var(--blue); }
 
-    /* ── Right: Preview ── */
+    /* ── Right: Preview panel ── */
     .preview-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     .preview-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -217,16 +213,21 @@
     .ptabs { display: flex; gap: 4px; }
     .ptab {
       padding: 4px 12px; font-size: 12px; border-radius: 4px; cursor: pointer;
-      background: none; border: 1px solid transparent;
-      color: var(--dim); transition: all .15s;
+      background: none; border: 1px solid transparent; color: var(--dim); transition: all .15s;
     }
     .ptab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
     .pactions { display: flex; align-items: center; gap: 8px; }
+
+    /* ── Size/Token pill ── */
+    .size-pill {
+      font-size: 10px; padding: 2px 8px; border-radius: 10px;
+      background: rgba(133,133,133,.1); color: var(--dim); border: 1px solid var(--border);
+      font-family: 'SF Mono', monospace; white-space: nowrap;
+    }
     .live-pill {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 11px; padding: 3px 8px; border-radius: 10px;
-      background: rgba(78,201,176,.1); color: var(--green);
-      border: 1px solid rgba(78,201,176,.22);
+      display: flex; align-items: center; gap: 5px; font-size: 11px;
+      padding: 3px 8px; border-radius: 10px;
+      background: rgba(78,201,176,.1); color: var(--green); border: 1px solid rgba(78,201,176,.22);
     }
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
@@ -236,31 +237,116 @@
       border-radius: 4px; color: var(--dim); cursor: pointer; transition: all .15s;
     }
     .copy-small:hover { color: var(--text); border-color: var(--blue); }
+
+    /* ── pview base ── */
     .pview { flex: 1; overflow: auto; }
     .pview pre { margin: 0; padding: 16px; font-size: 12px; line-height: 1.65; min-height: 100%; }
     .pview code { font-family: 'SF Mono', 'Fira Code', monospace !important; }
     .pview.hidden { display: none; }
 
-    /* ── Response ── */
+    /* ── Response pane (flex override) ── */
+    #pv-response { display: flex; flex-direction: column; overflow: hidden; }
+    #pv-response.hidden { display: none; }
+    .resp-toolbar {
+      padding: 6px 14px; background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: flex-end;
+      flex-shrink: 0; gap: 8px;
+    }
+    .resp-md-label { font-size: 11px; color: var(--dim); }
+    .resp-md-btn {
+      padding: 3px 9px; font-size: 10px; border-radius: 4px; cursor: pointer;
+      background: none; border: 1px solid var(--border);
+      color: var(--dim); transition: all .15s; font-weight: 700; font-family: 'SF Mono', monospace;
+    }
+    .resp-md-btn:hover, .resp-md-btn.active { border-color: var(--blue); color: var(--blue); }
+    .resp-scroll { flex: 1; overflow: auto; }
     #resp-view { padding: 16px; }
-    .resp-body { font-size: 13px; line-height: 1.75; white-space: pre-wrap; color: var(--text); }
+    .resp-text { font-size: 13px; line-height: 1.75; color: var(--text); }
+    .resp-text:not(.md-rendered) { white-space: pre-wrap; }
     .resp-err { color: var(--red); font-family: monospace; font-size: 12px; }
     .resp-meta {
-      margin-top: 14px; padding-top: 10px;
-      border-top: 1px solid var(--border);
+      margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border);
       display: flex; gap: 16px; flex-wrap: wrap;
     }
     .resp-stat { font-size: 11px; }
     .resp-stat span { color: var(--dim); }
     .resp-stat b { color: var(--text); }
     .resp-copy {
-      margin-top: 10px;
-      padding: 5px 12px; font-size: 11px;
+      margin-top: 10px; padding: 5px 12px; font-size: 11px;
       background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 4px; color: var(--dim); cursor: pointer; transition: all .15s;
-      display: inline-block;
+      border-radius: 4px; color: var(--dim); cursor: pointer; transition: all .15s; display: inline-block;
     }
     .resp-copy:hover { color: var(--text); border-color: var(--blue); }
+
+    /* ── Markdown rendered ── */
+    .md-rendered h1, .md-rendered h2, .md-rendered h3 { color: var(--text); margin: 14px 0 6px; font-weight: 600; }
+    .md-rendered h1 { font-size: 17px; }
+    .md-rendered h2 { font-size: 15px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+    .md-rendered h3 { font-size: 13px; color: var(--blue); }
+    .md-rendered p { margin-bottom: 10px; line-height: 1.7; }
+    .md-rendered ul, .md-rendered ol { padding-left: 22px; margin-bottom: 10px; }
+    .md-rendered li { margin-bottom: 5px; line-height: 1.6; }
+    .md-rendered code {
+      background: var(--surface2); padding: 1px 5px; border-radius: 3px;
+      font-family: 'SF Mono', monospace; font-size: 11.5px; color: var(--green);
+    }
+    .md-rendered pre {
+      background: var(--surface2); padding: 10px 14px; border-radius: 6px;
+      overflow-x: auto; margin: 10px 0; border: 1px solid var(--border);
+    }
+    .md-rendered pre code { background: none; padding: 0; color: var(--text); font-size: 12px; }
+    .md-rendered blockquote {
+      border-left: 3px solid var(--blue); padding-left: 14px;
+      color: var(--dim); margin: 10px 0; font-style: italic;
+    }
+    .md-rendered strong { color: var(--text); }
+    .md-rendered a { color: var(--blue); text-decoration: none; }
+    .md-rendered a:hover { text-decoration: underline; }
+    .md-rendered hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+    .md-rendered table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12px; }
+    .md-rendered th, .md-rendered td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+    .md-rendered th { background: var(--surface2); color: var(--blue); }
+
+    /* ── Export pane ── */
+    #pv-export { display: flex; flex-direction: column; overflow: hidden; }
+    #pv-export.hidden { display: none; }
+    .exp-toolbar {
+      padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+    }
+    .exp-tab {
+      padding: 4px 11px; font-size: 11px; border-radius: 4px; cursor: pointer;
+      background: none; border: 1px solid transparent; color: var(--dim); transition: all .15s;
+    }
+    .exp-tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+    .exp-tab:hover { color: var(--text); }
+    .exp-note {
+      padding: 7px 14px; font-size: 11px; color: var(--yellow); line-height: 1.5;
+      background: rgba(220,220,170,.05); border-bottom: 1px solid rgba(220,220,170,.15);
+      flex-shrink: 0;
+    }
+    .exp-scroll { flex: 1; overflow: auto; }
+    .exp-scroll pre { margin: 0; padding: 16px; min-height: 100%; }
+    .exp-scroll code { font-family: 'SF Mono', 'Fira Code', monospace !important; font-size: 12px; line-height: 1.65; }
+
+    /* ── History panel ── */
+    .hist-panel {
+      width: 260px; flex-shrink: 0;
+      background: var(--surface); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .hist-panel.hidden { display: none; }
+    .hist-list { flex: 1; overflow-y: auto; }
+    .hist-entry {
+      padding: 10px 13px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background .12s;
+    }
+    .hist-entry:hover { background: var(--surface2); }
+    .hist-entry:last-child { border-bottom: none; }
+    .hist-mech { display: flex; align-items: center; font-size: 11px; color: var(--text); margin-bottom: 3px; }
+    .hist-msg { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+    .hist-time { font-size: 10px; color: var(--dim); opacity: .6; }
+    .hist-empty { padding: 20px 16px; color: var(--dim); font-size: 12px; text-align: center; line-height: 1.7; }
 
     /* ── Spinner ── */
     .spin {
@@ -285,6 +371,7 @@
     <span class="logo-sub">Prompt Mechanism Visualizer</span>
   </div>
   <div class="header-right">
+    <button class="hist-btn" id="histToggleBtn" onclick="toggleHistory()" title="요청 히스토리 (최근 10개)">History</button>
     <select class="model-select" id="modelSel">
       <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
       <option value="claude-opus-4-6">claude-opus-4-6</option>
@@ -324,17 +411,50 @@
       <div class="ptabs">
         <button class="ptab active" id="ptab-payload"  onclick="showPTab('payload')">Payload</button>
         <button class="ptab"        id="ptab-response" onclick="showPTab('response')">Response</button>
+        <button class="ptab"        id="ptab-export"   onclick="showPTab('export')">Export</button>
       </div>
       <div class="pactions">
+        <span class="size-pill" id="sizePill">— KB</span>
         <span class="live-pill" id="livePill" style="display:none"><span class="live-dot"></span>Live</span>
         <button class="copy-small" onclick="copyPayload()">Copy JSON</button>
       </div>
     </div>
+
     <div class="pview" id="pv-payload">
       <pre><code class="language-json" id="payloadCode">{}</code></pre>
     </div>
+
     <div class="pview hidden" id="pv-response">
-      <div id="resp-view"></div>
+      <div class="resp-toolbar" id="respToolbar" style="display:none">
+        <span class="resp-md-label">응답 렌더링</span>
+        <button class="resp-md-btn" id="mdToggleBtn" onclick="toggleMd()">MD</button>
+      </div>
+      <div class="resp-scroll">
+        <div id="resp-view"></div>
+      </div>
+    </div>
+
+    <div class="pview hidden" id="pv-export">
+      <div class="exp-toolbar">
+        <button class="exp-tab active" data-lang="curl"       onclick="showExportLang('curl')">cURL</button>
+        <button class="exp-tab"        data-lang="python"     onclick="showExportLang('python')">Python</button>
+        <button class="exp-tab"        data-lang="typescript" onclick="showExportLang('typescript')">TypeScript</button>
+        <button class="copy-small" style="margin-left:auto" onclick="copyExport()">Copy</button>
+      </div>
+      <div id="expNote" class="exp-note" style="display:none"></div>
+      <div class="exp-scroll">
+        <pre><code id="exportCode" class="language-bash"></code></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="hist-panel hidden" id="histPanel">
+    <div class="panel-header">
+      <span>요청 히스토리</span>
+      <span style="font-size:10px;color:var(--dim)" id="histCount">0 / 10</span>
+    </div>
+    <div class="hist-list" id="histList">
+      <div class="hist-empty">아직 기록 없음<br><small>API 전송 후 여기 표시됩니다</small></div>
     </div>
   </div>
 </div>
@@ -362,7 +482,7 @@ const M = {
         <span>메시지 레벨 (system 아님) — 프로젝트 <em>컨텍스트</em>지 Claude의 <em>정체성</em>이 아님</span>
       </div>`,
     fields: [
-      { id:'content', label:'CLAUDE.md 내용', type:'textarea', tall:true,
+      { id:'content', label:'CLAUDE.md 내용', type:'textarea', tall:true, fileBtn:true,
         val:`# Project Standards\n\n## Tech Stack\n- TypeScript (strict mode)\n- Bun runtime\n- React + Vite frontend\n\n## Conventions\n- Named exports only\n- File naming: kebab-case\n- Write tests for all features\n- No console.log in production` },
       { id:'userMessage', label:'User Message', type:'textarea',
         val:'How should I structure my TypeScript project?' }
@@ -428,8 +548,7 @@ const M = {
   'skill': {
     label: 'Skill',
     inject: 'tool_result (Skill tool_use 이후)',
-    sendable: false,
-    simulatable: true,
+    sendable: false, simulatable: true,
     howHtml: `
       <div class="how-title">⚡ Claude Code에서 실제 동작 (2단계)</div>
       <div class="flow">
@@ -453,7 +572,7 @@ const M = {
       { id:'name', label:'스킬 이름', type:'input', val:'git-helper' },
       { id:'description', label:'매칭에 사용할 description', type:'input',
         val:'Git workflows, commits, branches, rebasing, squashing, version control' },
-      { id:'content', label:'스킬 내용 (SKILL.md 본문)', type:'textarea', tall:true,
+      { id:'content', label:'스킬 내용 (SKILL.md 본문)', type:'textarea', tall:true, fileBtn:true,
         val:`# Git Helper\n\nWhen invoked:\n1. Analyze the git-related request\n2. Provide exact commands with explanations\n3. Warn about destructive operations (reset --hard, force push)\n4. Suggest safe alternatives\n\nAlways include:\n- The exact git command(s)\n- What each command does\n- Any potential risks` },
       { id:'userMessage', label:'User Message (스킬 트리거)', type:'textarea',
         val:'How do I squash my last 3 commits?' }
@@ -463,8 +582,7 @@ const M = {
   'sub-agent': {
     label: 'Sub-Agent',
     inject: '격리된 별도 API 호출 (Task 도구)',
-    sendable: false,
-    simulatable: true,
+    sendable: false, simulatable: true,
     howHtml: `
       <div class="how-title">⚡ Claude Code에서 실제 동작 (API 2번 호출)</div>
       <div class="flow">
@@ -484,7 +602,7 @@ const M = {
       </div>
       <div class="warn-row" style="margin-top:6px">
         <span class="w-icon">⚠️</span>
-        <span><strong>컨텍스트 브리징 없음.</strong> delegation prompt에 필요한 모든 정보를 명시해야 함. "우리가 이전에 얘기한…" 은 sub-agent가 모름.</span>
+        <span><strong>컨텍스트 브리징 없음.</strong> delegation prompt에 필요한 모든 정보를 명시해야 함.</span>
       </div>
       <div class="example-row">
         <span class="ex-tag">▶ Run</span>
@@ -504,6 +622,9 @@ const M = {
 // ─── State ─────────────────────────────────────────────────────────────────
 let current = 'claude-md';
 let lastResponseText = '';
+let mdEnabled = false;
+let exportLang = 'curl';
+let sessionHistory = [];
 
 // ─── Payload builder ───────────────────────────────────────────────────────
 function buildPayload(mech, cfg) {
@@ -568,6 +689,29 @@ function buildPayload(mech, cfg) {
   return {};
 }
 
+// ─── Sendable payload (for Export + simulate calls) ───────────────────────
+function buildSendablePayload(mech, cfg) {
+  const model = document.getElementById('modelSel').value;
+  if (mech === 'skill') {
+    return {
+      model, max_tokens: 1024,
+      system: [
+        { type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." },
+        { type: 'text', text: `# Active Skill: ${cfg.name}\n\nDescription: ${cfg.description}\n\n${cfg.content}` }
+      ],
+      messages: [{ role: 'user', content: cfg.userMessage || '' }]
+    };
+  }
+  if (mech === 'sub-agent') {
+    return {
+      model, max_tokens: 1024,
+      system: `You are a ${cfg.type || 'general-purpose'} sub-agent. You operate in an isolated conversation with no access to the main conversation history.`,
+      messages: [{ role: 'user', content: cfg.prompt || '' }]
+    };
+  }
+  return buildPayload(mech, cfg);
+}
+
 // ─── Collect config ─────────────────────────────────────────────────────────
 function collectCfg() {
   const cfg = {};
@@ -582,9 +726,21 @@ function collectCfg() {
 function updatePreview() {
   const cfg = collectCfg();
   const payload = buildPayload(current, cfg);
+  const json = JSON.stringify(payload, null, 2);
   const code = document.getElementById('payloadCode');
-  code.textContent = JSON.stringify(payload, null, 2);
+  code.textContent = json;
   hljs.highlightElement(code);
+
+  // Size + token estimate
+  const bytes = new TextEncoder().encode(JSON.stringify(payload)).length;
+  const kb = (bytes / 1024).toFixed(1);
+  const tokens = Math.ceil(bytes / 3.5);
+  document.getElementById('sizePill').textContent = `${kb} KB · ~${tokens.toLocaleString()} tok`;
+
+  // Update export tab if visible
+  if (!document.getElementById('pv-export').classList.contains('hidden')) {
+    updateExport(current, cfg);
+  }
 }
 
 // ─── Render form ────────────────────────────────────────────────────────────
@@ -596,15 +752,19 @@ function renderForm(mech) {
   let html = `<div class="how-box">${def.howHtml}</div>`;
 
   for (const f of def.fields) {
+    const fileBtnHtml = f.fileBtn
+      ? `<button class="file-btn" onclick="openFilePicker('f-${f.id}')">📂 파일 열기</button>`
+      : '';
+
     if (f.type === 'textarea') {
-      html += `<div class="field"><label>${f.label}</label>
+      html += `<div class="field"><label><span>${f.label}</span>${fileBtnHtml}</label>
         <textarea id="f-${f.id}" class="${f.tall?'tall':''}" oninput="updatePreview()">${esc(f.val||'')}</textarea></div>`;
     } else if (f.type === 'input') {
-      html += `<div class="field"><label>${f.label}</label>
+      html += `<div class="field"><label><span>${f.label}</span>${fileBtnHtml}</label>
         <input type="text" id="f-${f.id}" value="${esc(f.val||'')}" oninput="updatePreview()"></div>`;
     } else if (f.type === 'select') {
       const opts = (f.options||[]).map(o=>`<option${o===f.val?' selected':''}>${o}</option>`).join('');
-      html += `<div class="field"><label>${f.label}</label>
+      html += `<div class="field"><label><span>${f.label}</span></label>
         <select id="f-${f.id}" onchange="updatePreview()">${opts}</select></div>`;
     }
   }
@@ -634,21 +794,27 @@ function switchM(mech) {
   updatePreview();
   showPTab('payload');
   document.getElementById('livePill').style.display = 'none';
+  document.getElementById('respToolbar').style.display = 'none';
+  document.getElementById('resp-view').innerHTML = '';
 }
 
 // ─── Preview tabs ─────────────────────────────────────────────────────────
 function showPTab(tab) {
-  document.getElementById('pv-payload').classList.toggle('hidden', tab !== 'payload');
-  document.getElementById('pv-response').classList.toggle('hidden', tab !== 'response');
-  document.getElementById('ptab-payload').classList.toggle('active', tab === 'payload');
-  document.getElementById('ptab-response').classList.toggle('active', tab === 'response');
+  ['payload', 'response', 'export'].forEach(t => {
+    document.getElementById('pv-' + t).classList.toggle('hidden', t !== tab);
+    document.getElementById('ptab-' + t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'export') {
+    const cfg = collectCfg();
+    updateExport(current, cfg);
+  }
 }
 
 // ─── Copy payload ─────────────────────────────────────────────────────────
 function copyPayload() {
   const text = document.getElementById('payloadCode').textContent;
   navigator.clipboard.writeText(text).then(() => {
-    document.querySelectorAll('.btn-copy, .copy-small').forEach(b => {
+    document.querySelectorAll('.btn-copy, [onclick="copyPayload()"]').forEach(b => {
       const o = b.textContent; b.textContent = '✓ Copied';
       setTimeout(() => { b.textContent = o; }, 1500);
     });
@@ -670,19 +836,11 @@ async function callApi(payload, loadingMsg = 'Sending…') {
 
   document.getElementById('resp-view').innerHTML =
     `<div style="color:var(--dim);padding-top:4px"><span class="spin"></span> ${loadingMsg}</div>`;
+  document.getElementById('respToolbar').style.display = 'none';
   showPTab('response');
 
   try {
-    let data;
-    if (window.electronAPI) {
-      data = await window.electronAPI.sendToClaude(payload, apiKey);
-    } else {
-      const res = await fetch('/api/send', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload, apiKey })
-      });
-      data = await res.json();
-    }
+    const data = await window.electronAPI.sendToClaude(payload, apiKey);
 
     if (data.error) {
       document.getElementById('resp-view').innerHTML =
@@ -695,15 +853,18 @@ async function callApi(payload, loadingMsg = 'Sending…') {
       const meta = u ? `
         <div class="resp-meta">
           <div class="resp-stat"><span>Model </span><b>${r.model}</b></div>
-          <div class="resp-stat"><span>Input </span><b>${u.input_tokens.toLocaleString()} tokens</b></div>
-          <div class="resp-stat"><span>Output </span><b>${u.output_tokens.toLocaleString()} tokens</b></div>
+          <div class="resp-stat"><span>Input </span><b>${u.input_tokens.toLocaleString()} tok</b></div>
+          <div class="resp-stat"><span>Output </span><b>${u.output_tokens.toLocaleString()} tok</b></div>
           <div class="resp-stat"><span>Stop </span><b>${r.stop_reason}</b></div>
         </div>` : '';
       document.getElementById('resp-view').innerHTML =
-        `<div class="resp-body">${esc(text)}</div>
+        `<div class="resp-text" id="respText"></div>
          <button class="resp-copy" onclick="copyResponse()">Copy Response</button>
          ${meta}`;
+      renderResponseContent(text);
+      document.getElementById('respToolbar').style.display = 'flex';
       document.getElementById('livePill').style.display = 'flex';
+      saveHistory(current, collectCfg());
     }
     return true;
   } catch (e) {
@@ -729,30 +890,13 @@ function sendToApi() {
 // ─── Simulate Skill ───────────────────────────────────────────────────────
 function simulateSkill() {
   const cfg = collectCfg();
-  const model = document.getElementById('modelSel').value;
-  // Inject skill content via system (simplified — real flow uses tool_result)
-  const payload = {
-    model, max_tokens: 1024,
-    system: [
-      { type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." },
-      { type: 'text', text: `# Active Skill: ${cfg.name}\n\nDescription: ${cfg.description}\n\n${cfg.content}` }
-    ],
-    messages: [{ role: 'user', content: cfg.userMessage || '' }]
-  };
-  callApi(payload, 'Simulating skill…');
+  callApi(buildSendablePayload('skill', cfg), 'Simulating skill…');
 }
 
 // ─── Simulate Sub-Agent ───────────────────────────────────────────────────
 function simulateSubAgent() {
   const cfg = collectCfg();
-  const model = document.getElementById('modelSel').value;
-  // Send just the sub-agent conversation (API Call #2)
-  const payload = {
-    model, max_tokens: 1024,
-    system: `You are a ${cfg.type || 'general-purpose'} sub-agent. You operate in an isolated conversation with no access to the main conversation history.`,
-    messages: [{ role: 'user', content: cfg.prompt || '' }]
-  };
-  callApi(payload, `Running ${cfg.type || 'Explore'} sub-agent…`);
+  callApi(buildSendablePayload('sub-agent', cfg), `Running ${cfg.type || 'Explore'} sub-agent…`);
 }
 
 // ─── Copy response ────────────────────────────────────────────────────────
@@ -761,6 +905,198 @@ function copyResponse() {
     const btn = document.querySelector('.resp-copy');
     if (btn) { btn.textContent = '✓ Copied'; setTimeout(() => { btn.textContent = 'Copy Response'; }, 1500); }
   });
+}
+
+// ─── Markdown toggle ──────────────────────────────────────────────────────
+function renderResponseContent(text) {
+  const container = document.getElementById('respText');
+  if (!container) return;
+  if (mdEnabled && typeof marked !== 'undefined') {
+    container.innerHTML = marked.parse(text);
+    container.className = 'resp-text md-rendered';
+  } else {
+    container.textContent = text;
+    container.className = 'resp-text';
+  }
+}
+
+function toggleMd() {
+  mdEnabled = !mdEnabled;
+  const btn = document.getElementById('mdToggleBtn');
+  if (btn) btn.classList.toggle('active', mdEnabled);
+  renderResponseContent(lastResponseText);
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────
+function generateCurl(payload) {
+  const body = JSON.stringify(payload, null, 2).replace(/'/g, "'\\''");
+  return `curl https://api.anthropic.com/v1/messages \\
+  -H "x-api-key: $ANTHROPIC_API_KEY" \\
+  -H "anthropic-version: 2023-06-01" \\
+  -H "content-type: application/json" \\
+  -d '${body}'`;
+}
+
+function generatePython(payload) {
+  const json = JSON.stringify(payload, null, 2);
+  return `import json, anthropic
+
+client = anthropic.Anthropic()
+
+payload = json.loads("""
+${json}
+""")
+
+response = client.messages.create(**payload)
+print(response.content[0].text)`;
+}
+
+function generateTypeScript(payload) {
+  const obj = JSON.stringify(payload, null, 2);
+  return `import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic();
+
+const response = await client.messages.create(${obj});
+
+console.log(response.content[0].text);`;
+}
+
+function updateExport(mech, cfg) {
+  const code = document.getElementById('exportCode');
+  if (!code) return;
+
+  const payload = buildSendablePayload(mech, cfg);
+
+  // Note for skill/sub-agent
+  const note = document.getElementById('expNote');
+  if (note) {
+    if (mech === 'skill') {
+      note.style.display = 'block';
+      note.textContent = '⚠️  Skill은 tool_use 플로우가 필요합니다. 아래는 Simulate Effect (system 주입 버전)의 실행 가능한 페이로드입니다.';
+    } else if (mech === 'sub-agent') {
+      note.style.display = 'block';
+      note.textContent = '⚠️  Sub-Agent는 2개의 API 호출을 생성합니다. 아래는 API Call #2 (격리된 서브에이전트)의 단독 실행 페이로드입니다.';
+    } else {
+      note.style.display = 'none';
+    }
+  }
+
+  let text = '';
+  if (exportLang === 'curl') {
+    text = generateCurl(payload);
+    code.className = 'language-bash';
+  } else if (exportLang === 'python') {
+    text = generatePython(payload);
+    code.className = 'language-python';
+  } else {
+    text = generateTypeScript(payload);
+    code.className = 'language-typescript';
+  }
+
+  code.textContent = text;
+  hljs.highlightElement(code);
+}
+
+function showExportLang(lang) {
+  exportLang = lang;
+  document.querySelectorAll('.exp-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.lang === lang);
+  });
+  const cfg = collectCfg();
+  updateExport(current, cfg);
+}
+
+function copyExport() {
+  const code = document.getElementById('exportCode');
+  if (!code) return;
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    const btns = document.querySelectorAll('[onclick="copyExport()"]');
+    btns.forEach(b => {
+      const o = b.textContent; b.textContent = '✓';
+      setTimeout(() => { b.textContent = o; }, 1500);
+    });
+  });
+}
+
+// ─── History ──────────────────────────────────────────────────────────────
+const BADGE_STYLES = {
+  'claude-md':    { bg: 'var(--green)',  color: '#000', label: 'MD' },
+  'output-style': { bg: 'var(--blue)',   color: '#000', label: 'ST' },
+  'slash-command':{ bg: 'var(--yellow)', color: '#000', label: '/'  },
+  'skill':        { bg: 'var(--purple)', color: '#fff', label: 'SK' },
+  'sub-agent':    { bg: 'var(--orange)', color: '#000', label: 'SA' },
+};
+
+function mechBadge(mech) {
+  const s = BADGE_STYLES[mech] || { bg: 'var(--border)', color: 'var(--text)', label: '?' };
+  return `<span style="background:${s.bg};color:${s.color};border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;margin-right:5px;font-family:'SF Mono',monospace">${s.label}</span>`;
+}
+
+function saveHistory(mech, cfg) {
+  const def = M[mech];
+  const userMsg = (cfg.userMessage || cfg.prompt || '').trim();
+  const entry = {
+    id: Date.now(),
+    ts: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+    mech,
+    mechLabel: def.label,
+    userMsg: userMsg.slice(0, 60) + (userMsg.length > 60 ? '…' : ''),
+    cfg: JSON.parse(JSON.stringify(cfg)),
+  };
+  sessionHistory.unshift(entry);
+  if (sessionHistory.length > 10) sessionHistory.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = document.getElementById('histList');
+  const countEl = document.getElementById('histCount');
+  if (!list) return;
+  if (countEl) countEl.textContent = `${sessionHistory.length} / 10`;
+  if (sessionHistory.length === 0) {
+    list.innerHTML = '<div class="hist-empty">아직 기록 없음<br><small>API 전송 후 여기 표시됩니다</small></div>';
+    return;
+  }
+  list.innerHTML = sessionHistory.map(e => `
+    <div class="hist-entry" onclick="restoreHistory(${e.id})">
+      <div class="hist-mech">${mechBadge(e.mech)}<span>${esc(e.mechLabel)}</span></div>
+      <div class="hist-msg">${e.userMsg ? esc(e.userMsg) : '<em style="opacity:.5">메시지 없음</em>'}</div>
+      <div class="hist-time">${e.ts}</div>
+    </div>
+  `).join('');
+}
+
+function restoreHistory(id) {
+  const entry = sessionHistory.find(e => e.id === id);
+  if (!entry) return;
+  switchM(entry.mech);
+  for (const [k, v] of Object.entries(entry.cfg)) {
+    const el = document.getElementById('f-' + k);
+    if (el) el.value = v;
+  }
+  updatePreview();
+}
+
+function toggleHistory() {
+  const panel = document.getElementById('histPanel');
+  const btn = document.getElementById('histToggleBtn');
+  const isHidden = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !isHidden);
+  btn.classList.toggle('active', isHidden);
+}
+
+// ─── File picker ──────────────────────────────────────────────────────────
+async function openFilePicker(fieldId) {
+  if (!window.electronAPI || !window.electronAPI.openFile) {
+    alert('파일 열기는 Electron 앱에서만 지원됩니다.');
+    return;
+  }
+  const content = await window.electronAPI.openFile();
+  if (content !== null && content !== undefined) {
+    const el = document.getElementById(fieldId);
+    if (el) { el.value = content; updatePreview(); }
+  }
 }
 
 // ─── API key (with localStorage) ─────────────────────────────────────────
@@ -780,7 +1116,6 @@ function esc(s) {
 // ─── Init ─────────────────────────────────────────────────────────────────
 document.getElementById('modelSel').addEventListener('change', updatePreview);
 
-// Load saved API key
 const savedKey = localStorage.getItem('ci-api-key');
 if (savedKey) {
   document.getElementById('apiKey').value = savedKey;
