@@ -1772,7 +1772,7 @@ function renderProxyMessages(entry, container) {
     <input type="text" id="msgSearchInput" class="msg-search-input"
       placeholder="🔍 검색... (⌘F)" value="${esc(q)}"
       oninput="setMsgSearch(this.value)">
-    ${q ? `<button class="msg-search-clear" onclick="setMsgSearch('')" title="검색 초기화">✕</button>` : ''}
+    ${q ? `<button class="msg-search-clear" onclick="setMsgSearch('');document.getElementById('msgSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
   </div>`;
 
   const cards = [];
@@ -1998,10 +1998,10 @@ function renderProxyDetail() {
   </div>` : '';
   const searchBar = `<div class="msg-search-bar" style="flex-shrink:0">
     <input type="text" class="msg-search-input" id="proxyDetailSearchInput"
-      placeholder="🔍 검색..." value="${esc(q)}"
+      placeholder="🔍 검색... (⌘F, Enter=다음)" value="${esc(q)}"
       oninput="setProxyDetailSearch(this.value)">
     ${searchNav}
-    ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('')" title="검색 초기화">✕</button>` : ''}
+    ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('');document.getElementById('proxyDetailSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
   </div>`;
   const mechChips = proxyDetailTab === 'request' ? buildMechFilterChips(entry.body) : '';
   const header = `<div style="flex-shrink:0">${searchBar}${mechChips}</div>`;
@@ -2095,9 +2095,9 @@ function renderProxyAnalysis(entry, container) {
   const aq = proxyDetailSearch;
   const analysisSearchBar = `<div class="msg-search-bar" style="flex-shrink:0">
     <input type="text" class="msg-search-input" id="proxyDetailSearchInput"
-      placeholder="🔍 검색..." value="${esc(aq)}"
+      placeholder="🔍 검색... (⌘F, Enter=다음)" value="${esc(aq)}"
       oninput="setProxyDetailSearch(this.value)">
-    ${aq ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('')" title="검색 초기화">✕</button>` : ''}
+    ${aq ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('');document.getElementById('proxyDetailSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
   </div>`;
 
   let html = '<div style="flex:1;overflow:auto"><div class="analysis-view">';
@@ -2213,18 +2213,33 @@ function copyProxyDetail() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
+  // Cmd+F / Ctrl+F: 현재 탭에 맞는 검색창 포커스
   if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
-    const inp = document.getElementById('msgSearchInput');
-    if (inp) {
+    const proxyInp = document.getElementById('proxyDetailSearchInput');
+    const msgInp = document.getElementById('msgSearchInput');
+    const target = proxyInp || msgInp;
+    if (target) {
       e.preventDefault();
-      inp.focus();
-      inp.select();
+      target.focus();
+      target.select();
     }
   }
+  // Escape: 검색 초기화
   if (e.key === 'Escape') {
-    const inp = document.getElementById('msgSearchInput');
-    if (inp && document.activeElement === inp && msgSearchQuery) {
+    const proxyInp = document.getElementById('proxyDetailSearchInput');
+    const msgInp = document.getElementById('msgSearchInput');
+    if (proxyInp && document.activeElement === proxyInp && proxyDetailSearch) {
+      setProxyDetailSearch('');
+    } else if (msgInp && document.activeElement === msgInp && msgSearchQuery) {
       setMsgSearch('');
+    }
+  }
+  // Enter / Shift+Enter: 검색 매칭 이전/다음 이동
+  if (e.key === 'Enter') {
+    const proxyInp = document.getElementById('proxyDetailSearchInput');
+    if (proxyInp && document.activeElement === proxyInp) {
+      e.preventDefault();
+      navigateSearchMatch(e.shiftKey ? -1 : 1);
     }
   }
 });
