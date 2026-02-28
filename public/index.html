@@ -1869,7 +1869,7 @@ function buildMechFilterChips(body) {
   const det = detectMechanisms(body);
 
   const chips = [
-    { key: 'cm', found: !!det.claudeMd,          label: '📋 CLAUDE.md',  pattern: 'CLAUDE.md' },
+    { key: 'cm', found: !!det.claudeMd,          label: '📋 CLAUDE.md',  pattern: 'system-reminder' },
     { key: 'sc', found: !!det.slashCommand,       label: '⌨ Slash Cmd',  pattern: 'command-message' },
     { key: 'sk', found: det.skills.length > 0,   label: '🔧 Skill',      pattern: 'skills are available' },
     { key: 'sa', found: det.subAgents.length > 0, label: '🤖 Sub-Agent', pattern: det.subAgents[0]?.name || 'Agent' },
