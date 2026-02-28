@@ -1772,7 +1772,9 @@ function renderProxyMessages(entry, container) {
   const searchHtml = `<div class="msg-search-bar">
     <input type="text" id="msgSearchInput" class="msg-search-input"
       placeholder="🔍 검색... (⌘F)" value="${esc(q)}"
-      oninput="setMsgSearch(this.value)">
+      oninput="setMsgSearch(this.value)"
+      oncompositionstart="_imeComposing=true"
+      oncompositionend="_imeComposing=false;setMsgSearch(this.value)">
     ${q ? `<button class="msg-search-clear" onclick="setMsgSearch('');document.getElementById('msgSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
   </div>`;
 
@@ -1833,9 +1835,9 @@ function renderProxyMessages(entry, container) {
   if (countEl) countEl.textContent = `${cards.length} / ${msgs.length}개`;
 
   // Restore focus on search input after re-render
-  if (q || document.activeElement?.id === 'msgSearchInput') {
+  {
     const inp = document.getElementById('msgSearchInput');
-    if (inp) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
+    if (inp && (q || _msgSearchWasFocused)) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
   }
 }
 
@@ -1846,8 +1848,13 @@ function setMsgFilter(f) {
   if (entry && detail) renderProxyMessages(entry, detail);
 }
 
+let _imeComposing = false;
+let _msgSearchWasFocused = false;
+
 function setMsgSearch(q) {
   msgSearchQuery = q;
+  if (_imeComposing) return;
+  _msgSearchWasFocused = document.activeElement?.id === 'msgSearchInput';
   const entry = proxyCaptures.find(e => e.id === selectedProxyId);
   const detail = document.getElementById('proxyDetailView');
   if (entry && detail && proxyDetailTab === 'messages') renderProxyMessages(entry, detail);
@@ -1855,12 +1862,16 @@ function setMsgSearch(q) {
 
 let searchCurrentIdx = -1;
 
+let _detailSearchWasFocused = false;
+
 function setProxyDetailSearch(q) {
   proxyDetailSearch = q;
+  if (_imeComposing) return;
+  _detailSearchWasFocused = document.activeElement?.id === 'proxyDetailSearchInput';
   searchCurrentIdx = -1;
   if (!q) proxyDetailMechFilter = null;
   renderProxyDetail();
-  if (q) navigateSearchMatch(0); // 첫 매칭으로 이동
+  if (q) navigateSearchMatch(0);
 }
 
 function navigateSearchMatch(delta) {
@@ -2000,7 +2011,7 @@ function renderProxyDetail() {
         updateSearchCounter(marks.length);
       }
     }
-    if (proxyDetailSearch || document.activeElement?.id === 'proxyDetailSearchInput') {
+    if (proxyDetailSearch || _detailSearchWasFocused) {
       const inp = document.getElementById('proxyDetailSearchInput');
       if (inp) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
     }
@@ -2018,7 +2029,9 @@ function renderProxyDetail() {
   const searchBar = `<div class="msg-search-bar" style="flex-shrink:0">
     <input type="text" class="msg-search-input" id="proxyDetailSearchInput"
       placeholder="🔍 검색... (⌘F, Enter=다음)" value="${esc(q)}"
-      oninput="setProxyDetailSearch(this.value)">
+      oninput="setProxyDetailSearch(this.value)"
+      oncompositionstart="_imeComposing=true"
+      oncompositionend="_imeComposing=false;setProxyDetailSearch(this.value)">
     ${searchNav}
     ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('');document.getElementById('proxyDetailSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
   </div>`;
@@ -2045,7 +2058,7 @@ function renderProxyDetail() {
     }
   }
 
-  if (q || document.activeElement?.id === 'proxyDetailSearchInput') {
+  if (q || _detailSearchWasFocused) {
     const inp = document.getElementById('proxyDetailSearchInput');
     if (inp) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
   }
@@ -2115,7 +2128,9 @@ function renderProxyAnalysis(entry, container) {
   const analysisSearchBar = `<div class="msg-search-bar" style="flex-shrink:0">
     <input type="text" class="msg-search-input" id="proxyDetailSearchInput"
       placeholder="🔍 검색... (⌘F, Enter=다음)" value="${esc(aq)}"
-      oninput="setProxyDetailSearch(this.value)">
+      oninput="setProxyDetailSearch(this.value)"
+      oncompositionstart="_imeComposing=true"
+      oncompositionend="_imeComposing=false;setProxyDetailSearch(this.value)">
     ${aq ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('');document.getElementById('proxyDetailSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
   </div>`;
 
