@@ -1654,10 +1654,13 @@ function renderProxyMessages(entry, container) {
     container.innerHTML = '<div class="proxy-empty"><span>messages 배열 없음</span></div>';
     return;
   }
-  const filtered = msgFilter === 'user' ? msgs.filter(m => m.role === 'user') : msgs;
+  const filtered = msgFilter === 'user' ? msgs.filter(m => m.role === 'user')
+    : msgFilter === 'assistant' ? msgs.filter(m => m.role === 'assistant')
+    : msgs;
 
   const filterHtml = `<div class="msg-filter">
-    <button class="mf-btn${msgFilter==='user'?' active':''}" onclick="setMsgFilter('user')">User 만</button>
+    <button class="mf-btn${msgFilter==='user'?' active':''}" onclick="setMsgFilter('user')">내가 보낸 것</button>
+    <button class="mf-btn${msgFilter==='assistant'?' active':''}" onclick="setMsgFilter('assistant')">클로드가 보낸 것</button>
     <button class="mf-btn${msgFilter==='all'?' active':''}" onclick="setMsgFilter('all')">전체</button>
     <span class="msg-count">${filtered.length} / ${msgs.length}개</span>
   </div>`;
