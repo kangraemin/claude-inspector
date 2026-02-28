@@ -1881,7 +1881,8 @@ function buildMechFilterChips(body) {
     .filter(c => c.type === 'text').map(c => c.text || '').join('\n');
   const allText = sysText + '\n' + msgText;
   const hasMemory = /auto-memory|currentDate|MEMORY\.md/i.test(allText);
-  const memoryPattern = /currentDate/.test(allText) ? 'currentDate'
+  // 메모리 섹션 시작 지점("...MEMORY.md (user's auto memory...")을 하이라이트
+  const memoryPattern = /user's auto memory/i.test(allText) ? "user's auto memory"
                       : /MEMORY\.md/.test(allText) ? 'MEMORY.md' : 'auto-memory';
 
   // Use a unique long snippet from the custom system block (system[1+]) to avoid matching system[0]
