@@ -461,6 +461,47 @@
       flex: 1; color: var(--dim); font-size: 13px; text-align: center; gap: 8px; padding: 20px;
       line-height: 1.7;
     }
+
+    /* ── Analysis view ── */
+    .analysis-view { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+    .analysis-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .mech-chip {
+      display: flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;
+      font-family: 'SF Mono', monospace;
+    }
+    .mech-chip.found { opacity: 1; }
+    .mech-chip.not-found { opacity: .25; }
+    .mech-chip.cm  { background: rgba(78,201,176,.15);  color: var(--green);  border: 1px solid rgba(78,201,176,.35); }
+    .mech-chip.st  { background: rgba(86,156,214,.15);  color: var(--blue);   border: 1px solid rgba(86,156,214,.35); }
+    .mech-chip.sc  { background: rgba(220,220,170,.12); color: var(--yellow); border: 1px solid rgba(220,220,170,.3); }
+    .mech-chip.sk  { background: rgba(197,134,192,.15); color: var(--purple); border: 1px solid rgba(197,134,192,.35); }
+    .mech-chip.sa  { background: rgba(206,145,120,.15); color: var(--orange); border: 1px solid rgba(206,145,120,.35); }
+    .analysis-section { display: flex; flex-direction: column; gap: 6px; }
+    .analysis-section-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .analysis-block {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 5px; padding: 9px 11px;
+      font-size: 11px; font-family: 'SF Mono', monospace;
+      line-height: 1.6; color: var(--text);
+      white-space: pre-wrap; word-break: break-all;
+      max-height: 180px; overflow-y: auto;
+    }
+    .analysis-block.highlight-green { border-color: rgba(78,201,176,.4); }
+    .analysis-block.highlight-blue  { border-color: rgba(86,156,214,.4); }
+    .analysis-block.highlight-yellow{ border-color: rgba(220,220,170,.35); }
+    .analysis-block.highlight-purple{ border-color: rgba(197,134,192,.4); }
+    .analysis-block.highlight-orange{ border-color: rgba(206,145,120,.4); }
+    .analysis-kv { display: flex; gap: 8px; font-size: 11px; font-family: 'SF Mono', monospace; }
+    .analysis-kv .ak { color: var(--dim); flex-shrink: 0; }
+    .analysis-kv .av { color: var(--text); }
+    .analysis-none {
+      color: var(--dim); font-size: 12px; text-align: center; padding: 24px 0;
+      line-height: 1.8;
+    }
   </style>
 </head>
 <body>
@@ -648,8 +689,9 @@
     </div>
     <div class="proxy-detail">
       <div class="dtabs">
-        <button class="dtab active" data-dtab="request" onclick="showDetailTab('request')">Request</button>
-        <button class="dtab" data-dtab="response" onclick="showDetailTab('response')">Response</button>
+        <button class="dtab active" data-dtab="request"  onclick="showDetailTab('request')">Request</button>
+        <button class="dtab"        data-dtab="response" onclick="showDetailTab('response')">Response</button>
+        <button class="dtab"        data-dtab="analysis" onclick="showDetailTab('analysis')" style="color:var(--purple)">Analysis</button>
         <button class="copy-small" style="margin-left:auto" onclick="copyProxyDetail()">Copy</button>
       </div>
       <div id="proxyDetailView" style="flex:1;overflow:auto">
@@ -1484,6 +1526,11 @@ function renderProxyDetail() {
     return;
   }
 
+  if (proxyDetailTab === 'analysis') {
+    renderProxyAnalysis(entry, detail);
+    return;
+  }
+
   const data = proxyDetailTab === 'request' ? entry.body : (entry.response?.body ?? null);
 
   if (data === null || data === undefined) {
@@ -1498,9 +1545,144 @@ function renderProxyDetail() {
   hljs.highlightElement(code);
 }
 
+// ─── Proxy Analysis ────────────────────────────────────────────────────────
+function detectMechanisms(body) {
+  const found = { claudeMd: null, outputStyle: null, slashCommand: null, skills: [], subAgents: [] };
+  if (!body) return found;
+
+  // Output Style: system is array with 2+ items
+  if (Array.isArray(body.system) && body.system.length >= 2) {
+    found.outputStyle = body.system.filter(s => s.type === 'text').map(s => s.text);
+  }
+
+  // Scan messages
+  const msgs = body.messages || [];
+  for (const msg of msgs) {
+    const contents = Array.isArray(msg.content) ? msg.content
+                   : (typeof msg.content === 'string' ? [{ type: 'text', text: msg.content }] : []);
+
+    for (const c of contents) {
+      if (c.type === 'text' && typeof c.text === 'string') {
+        // CLAUDE.md: <system-reminder> tag
+        const srMatch = c.text.match(/<system-reminder>([\s\S]*?)<\/system-reminder>/);
+        if (srMatch && !found.claudeMd) {
+          found.claudeMd = srMatch[1].trim();
+        }
+        // Slash Command: <command-message> tag
+        const cmdMatch = c.text.match(/<command-message>([\s\S]*?)<\/command-message>/);
+        if (cmdMatch) {
+          found.slashCommand = { tag: cmdMatch[1].trim(), full: c.text };
+        }
+      }
+      // Skill tool_use
+      if (c.type === 'tool_use' && c.name === 'Skill') {
+        found.skills.push({ id: c.id, input: c.input });
+      }
+      // Sub-Agent (Task / Agent tool)
+      if (c.type === 'tool_use' && (c.name === 'Task' || c.name === 'Agent')) {
+        found.subAgents.push({ id: c.id, name: c.name, input: c.input });
+      }
+      // tool_result for Skill
+      if (c.type === 'tool_result') {
+        const skill = found.skills.find(s => s.id === c.tool_use_id);
+        if (skill) skill.result = typeof c.content === 'string' ? c.content : JSON.stringify(c.content, null, 2);
+      }
+    }
+  }
+  return found;
+}
+
+function renderProxyAnalysis(entry, container) {
+  const body = entry.body;
+  const det = detectMechanisms(body);
+  const hasAny = det.claudeMd || det.outputStyle || det.slashCommand || det.skills.length || det.subAgents.length;
+
+  const chips = [
+    { key: 'cm',  found: !!det.claudeMd,      label: 'CLAUDE.md' },
+    { key: 'st',  found: !!det.outputStyle,    label: 'Output Style' },
+    { key: 'sc',  found: !!det.slashCommand,   label: 'Slash Command' },
+    { key: 'sk',  found: det.skills.length > 0,label: `Skill${det.skills.length > 1 ? ' ×'+det.skills.length : ''}` },
+    { key: 'sa',  found: det.subAgents.length > 0, label: `Sub-Agent${det.subAgents.length > 1 ? ' ×'+det.subAgents.length : ''}` },
+  ];
+
+  let html = '<div class="analysis-view">';
+
+  // Chips row
+  html += '<div class="analysis-chips">';
+  for (const c of chips) {
+    html += `<span class="mech-chip ${c.key} ${c.found ? 'found' : 'not-found'}">${c.found ? '●' : '○'} ${c.label}</span>`;
+  }
+  html += '</div>';
+
+  if (!hasAny) {
+    html += '<div class="analysis-none">감지된 메커니즘 없음<br><small>일반 API 요청이거나 분석 지원 외 패턴입니다</small></div>';
+    html += '</div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  // Model info
+  if (body?.model) {
+    html += `<div class="analysis-kv"><span class="ak">model</span><span class="av">${esc(body.model)}</span></div>`;
+  }
+
+  // CLAUDE.md
+  if (det.claudeMd) {
+    html += `<div class="analysis-section">
+      <div class="analysis-section-title" style="color:var(--green)">CLAUDE.md — system-reminder 주입</div>
+      <div class="analysis-block highlight-green">${esc(det.claudeMd)}</div>
+    </div>`;
+  }
+
+  // Output Style
+  if (det.outputStyle) {
+    const extra = det.outputStyle.slice(1).join('\n\n---\n\n');
+    html += `<div class="analysis-section">
+      <div class="analysis-section-title" style="color:var(--blue)">Output Style — system[] 추가 블록</div>
+      <div class="analysis-block highlight-blue">${esc(extra)}</div>
+    </div>`;
+  }
+
+  // Slash Command
+  if (det.slashCommand) {
+    html += `<div class="analysis-section">
+      <div class="analysis-section-title" style="color:var(--yellow)">Slash Command</div>
+      <div class="analysis-kv"><span class="ak">command</span><span class="av" style="color:var(--yellow)">${esc(det.slashCommand.tag)}</span></div>
+      <div class="analysis-block highlight-yellow">${esc(det.slashCommand.full)}</div>
+    </div>`;
+  }
+
+  // Skills
+  for (const sk of det.skills) {
+    const inputStr = JSON.stringify(sk.input, null, 2);
+    html += `<div class="analysis-section">
+      <div class="analysis-section-title" style="color:var(--purple)">Skill — tool_use/tool_result</div>
+      <div class="analysis-kv"><span class="ak">id</span><span class="av">${esc(sk.id)}</span></div>
+      <div class="analysis-block highlight-purple">${esc(inputStr)}</div>
+      ${sk.result ? `<div class="analysis-kv"><span class="ak">result (tool_result)</span></div><div class="analysis-block highlight-purple">${esc(sk.result)}</div>` : '<div class="analysis-kv"><span class="ak" style="color:var(--dim)">tool_result 없음 (다음 메시지에 있거나 아직 수신 전)</span></div>'}
+    </div>`;
+  }
+
+  // Sub-Agents
+  for (const sa of det.subAgents) {
+    const inputStr = JSON.stringify(sa.input, null, 2);
+    html += `<div class="analysis-section">
+      <div class="analysis-section-title" style="color:var(--orange)">${esc(sa.name)} — Sub-Agent 호출</div>
+      <div class="analysis-kv"><span class="ak">subagent_type</span><span class="av" style="color:var(--orange)">${esc(sa.input?.subagent_type || sa.input?.type || '?')}</span></div>
+      <div class="analysis-block highlight-orange">${esc(sa.input?.prompt || inputStr)}</div>
+    </div>`;
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
 function showDetailTab(tab) {
   proxyDetailTab = tab;
   document.querySelectorAll('.dtab').forEach(b => b.classList.toggle('active', b.dataset.dtab === tab));
+  // Analysis tab copy button - hide it (analysis view는 copy가 의미없음)
+  const copyBtn = document.querySelector('[onclick="copyProxyDetail()"]');
+  if (copyBtn) copyBtn.style.display = tab === 'analysis' ? 'none' : '';
   renderProxyDetail();
 }
 
