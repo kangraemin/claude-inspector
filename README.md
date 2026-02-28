@@ -21,6 +21,16 @@ and visualizes all 5 prompt augmentation mechanisms.
   <img src="public/screenshots/proxy-analysis.png" width="100%" alt="Proxy — Analysis view auto-detecting all 5 mechanisms" />
 </p>
 
+## What You'll Learn
+
+Things you can't see from the Claude Code CLI, but become obvious once you inspect the raw traffic:
+
+- **Your CLAUDE.md, rules, and memory are injected into every single request** — bundled as `<system-reminder>` inside `messages[]`. The longer these files get, the more tokens you burn per turn.
+- **Slash Commands and Skills are a two-step dance** — typing `/commit` injects a `<command-message>` tag, then the model autonomously calls the matching Skill via `tool_use`. The slash command is the trigger; the skill is the execution.
+- **You can read Claude Code's full system prompt** — the entire "You are Claude Code, Anthropic's official CLI for Claude..." instruction set is visible in `system[]`.
+- **Cache tokens add up fast** — the same CLAUDE.md content is re-sent every turn, causing `cache_read_tokens` to skyrocket. Understanding this helps you keep instruction files lean.
+- **Sub-Agents run as completely separate API calls** — isolated from the main conversation, with their own system prompt and context window.
+
 ## Getting Started
 
 ```bash
