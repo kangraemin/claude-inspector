@@ -1844,19 +1844,29 @@ function setProxyDetailMechFilter(key, pattern) {
 
 function buildMechFilterChips(body) {
   const det = detectMechanisms(body);
-  const allText = (body?.messages || [])
+  // Check both messages[] and system[] for memory markers
+  const sysText = (Array.isArray(body?.system) ? body.system : [body?.system])
+    .map(s => (s && typeof s === 'object') ? (s.text || '') : String(s || '')).join('\n');
+  const msgText = (body?.messages || [])
     .flatMap(m => Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content || '') }])
     .filter(c => c.type === 'text').map(c => c.text || '').join('\n');
-  const hasMemory = /auto-memory|currentDate/i.test(allText);
+  const allText = sysText + '\n' + msgText;
+  const hasMemory = /auto-memory|currentDate|MEMORY\.md/i.test(allText);
+  const memoryPattern = /currentDate/.test(allText) ? 'currentDate'
+                      : /MEMORY\.md/.test(allText) ? 'MEMORY.md' : 'auto-memory';
+
   const styleSnippet = det.outputStyle?.[1]?.trim().slice(0, 40) || '';
+  const styleTitle = det.outputStyle
+    ? 'system[] 추가 블록 (사용자 정의 System Prompt):\n' + det.outputStyle.slice(1).join('\n---\n').slice(0, 300)
+    : '';
 
   const chips = [
-    { key: 'cm', found: !!det.claudeMd,          label: '📋 CLAUDE.md',    pattern: 'claudeMd' },
-    { key: 'mn', found: hasMemory,                label: '🧠 Memory',       pattern: 'auto-memory' },
-    { key: 'st', found: !!det.outputStyle,        label: '🎨 Output Style', pattern: styleSnippet },
-    { key: 'sc', found: !!det.slashCommand,       label: '⌨ Slash Cmd',    pattern: 'command-message' },
-    { key: 'sk', found: det.skills.length > 0,   label: '🔧 Skill',        pattern: 'skills are available' },
-    { key: 'sa', found: det.subAgents.length > 0, label: '🤖 Sub-Agent',   pattern: det.subAgents[0]?.name || 'Agent' },
+    { key: 'cm', found: !!det.claudeMd,          label: '📋 CLAUDE.md',      pattern: 'claudeMd' },
+    { key: 'mn', found: hasMemory,                label: '🧠 Memory',         pattern: memoryPattern },
+    { key: 'st', found: !!det.outputStyle,        label: '🎨 System Prompt',  pattern: styleSnippet, title: styleTitle },
+    { key: 'sc', found: !!det.slashCommand,       label: '⌨ Slash Cmd',      pattern: 'command-message' },
+    { key: 'sk', found: det.skills.length > 0,   label: '🔧 Skill',          pattern: 'skills are available' },
+    { key: 'sa', found: det.subAgents.length > 0, label: '🤖 Sub-Agent',     pattern: det.subAgents[0]?.name || 'Agent' },
   ].filter(c => c.found && c.pattern);
 
   if (chips.length === 0) return '';
@@ -1864,7 +1874,8 @@ function buildMechFilterChips(body) {
     + chips.map(c => {
         const active = proxyDetailMechFilter === c.key ? ' active' : '';
         const safePattern = c.pattern.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return `<span class="mech-chip ${c.key} found btn${active}" onclick="setProxyDetailMechFilter('${c.key}','${safePattern}')">${c.label}</span>`;
+        const titleAttr = c.title ? ` title="${c.title.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"` : '';
+        return `<span class="mech-chip ${c.key} found btn${active}"${titleAttr} onclick="setProxyDetailMechFilter('${c.key}','${safePattern}')">${c.label}</span>`;
       }).join('')
     + '</div>';
 }
