@@ -1832,10 +1832,18 @@ function applyDetailHighlight(container, query) {
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
   for (const node of nodes) {
-    if (!re.test(node.textContent)) continue;
+    const text = node.textContent;
+    if (!re.test(text)) continue;
     re.lastIndex = 0;
+    let html = '', last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      html += esc(text.slice(last, m.index));
+      html += `<mark class="search-hl">${esc(m[0])}</mark>`;
+      last = m.index + m[0].length;
+    }
+    html += esc(text.slice(last));
     const span = document.createElement('span');
-    span.innerHTML = node.textContent.replace(re, m => `<mark class="search-hl">${m}</mark>`);
+    span.innerHTML = html;
     node.parentNode.replaceChild(span, node);
   }
 }
