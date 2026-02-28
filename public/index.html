@@ -556,10 +556,13 @@
     .mech-chip.btn:hover { filter: brightness(1.3); }
     .mech-chip.btn.active { outline: 2px solid currentColor; outline-offset: 1px; }
     .mech-filter-desc {
-      padding: 4px 12px 6px; font-size: 11px; color: var(--dim);
-      border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px 8px; font-size: 11px;
+      border-top: 1px solid var(--border); display: flex; align-items: flex-start; gap: 8px;
     }
-    .mech-filter-desc-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .mech-filter-desc-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+    .mech-filter-desc-body { display: flex; flex-direction: column; gap: 2px; }
+    .mech-filter-desc-who { font-size: 10px; color: var(--dim); opacity: .7; }
+    .mech-filter-desc-what { color: var(--fg); line-height: 1.5; }
     .analysis-section { display: flex; flex-direction: column; gap: 6px; }
     .analysis-section-title {
       font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px;
@@ -1848,12 +1851,24 @@ function setProxyDetailMechFilter(key, pattern) {
 }
 
 const CHIP_META = {
-  cm: { color: 'var(--green)',  desc: 'CLAUDE.md · 프로젝트 지침이 system-reminder로 주입된 블록' },
-  mn: { color: '#9cdcfe',       desc: 'MEMORY.md · 자동 메모가 system-reminder로 주입된 블록' },
-  st: { color: 'var(--blue)',   desc: 'system[] 추가 블록 · Claude Code 기본 프롬프트 외에 삽입된 커스텀 시스템 지침' },
-  sc: { color: 'var(--yellow)', desc: '슬래시 명령어 · user 메시지로 래핑되어 전달된 블록' },
-  sk: { color: 'var(--purple)', desc: '스킬 목록 · 사용 가능한 스킬이 system-reminder로 주입된 블록' },
-  sa: { color: 'var(--orange)', desc: '서브에이전트 · Task tool을 통해 별도 API 호출로 실행되는 블록' },
+  cm: { color: 'var(--green)',
+        who:  'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
+        what: 'CLAUDE.md 파일 내용을 <system-reminder> 태그로 감싸 messages[] 안에 삽입합니다.' },
+  mn: { color: '#9cdcfe',
+        who:  'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
+        what: 'MEMORY.md 자동 메모를 <system-reminder> 태그로 감싸 messages[] 안에 삽입합니다.' },
+  st: { color: 'var(--blue)',
+        who:  'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
+        what: 'system[] 배열에 기본 프롬프트("You are Claude Code...") 외 추가 블록을 삽입합니다. 사용자가 Output Style 등을 설정한 경우 나타납니다.' },
+  sc: { color: 'var(--yellow)',
+        who:  'Claude Code CLI가 자동 래핑 (우리 앱은 표시만 함)',
+        what: '/명령어 입력 시 해당 내용을 <command-message> 태그로 감싸 user 메시지에 삽입합니다.' },
+  sk: { color: 'var(--purple)',
+        who:  'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
+        what: '스킬이 설정되어 있으면 "The following skills are available..." 목록을 <system-reminder>로 주입합니다.' },
+  sa: { color: 'var(--orange)',
+        who:  'Claude Code CLI가 별도 API 호출 생성 (우리 앱은 표시만 함)',
+        what: 'Task tool 호출 시 Claude Code가 독립적인 두 번째 API 요청을 만들어 서브에이전트를 실행합니다.' },
 };
 
 function buildMechFilterChips(body) {
@@ -1887,7 +1902,13 @@ function buildMechFilterChips(body) {
   const activeChip = chips.find(c => c.key === proxyDetailMechFilter);
   const meta = activeChip ? CHIP_META[activeChip.key] : null;
   const descBanner = meta
-    ? `<div class="mech-filter-desc"><span class="mech-filter-desc-dot" style="background:${meta.color}"></span>${esc(meta.desc)}</div>`
+    ? `<div class="mech-filter-desc">
+        <span class="mech-filter-desc-dot" style="background:${meta.color}"></span>
+        <div class="mech-filter-desc-body">
+          <span class="mech-filter-desc-who">${esc(meta.who)}</span>
+          <span class="mech-filter-desc-what">${esc(meta.what)}</span>
+        </div>
+       </div>`
     : '';
 
   return '<div style="flex-shrink:0;border-bottom:1px solid var(--border)">'
