@@ -1854,12 +1854,6 @@ const CHIP_META = {
   cm: { color: 'var(--green)',
         who:  'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
         what: 'CLAUDE.md 파일 내용을 <system-reminder> 태그로 감싸 messages[] 안에 삽입합니다.' },
-  mn: { color: '#9cdcfe',
-        who:  'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
-        what: 'CLAUDE.md system-reminder 안에 MEMORY.md 내용이 함께 번들됩니다. 📋 CLAUDE.md 블록 안에서 메모 부분을 하이라이트합니다.' },
-  st: { color: 'var(--blue)',
-        who:  'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
-        what: 'system[] 배열에 기본 프롬프트("You are Claude Code...") 외 추가 블록을 삽입합니다. 사용자가 Output Style 등을 설정한 경우 나타납니다.' },
   sc: { color: 'var(--yellow)',
         who:  'Claude Code CLI가 자동 래핑 (우리 앱은 표시만 함)',
         what: '/명령어 입력 시 해당 내용을 <command-message> 태그로 감싸 user 메시지에 삽입합니다.' },
@@ -1873,29 +1867,12 @@ const CHIP_META = {
 
 function buildMechFilterChips(body) {
   const det = detectMechanisms(body);
-  // Check both messages[] and system[] for memory markers
-  const sysText = (Array.isArray(body?.system) ? body.system : [body?.system])
-    .map(s => (s && typeof s === 'object') ? (s.text || '') : String(s || '')).join('\n');
-  const msgText = (body?.messages || [])
-    .flatMap(m => Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content || '') }])
-    .filter(c => c.type === 'text').map(c => c.text || '').join('\n');
-  const allText = sysText + '\n' + msgText;
-  const hasMemory = /auto-memory|currentDate|MEMORY\.md/i.test(allText);
-  // 메모리 섹션 시작 지점("...MEMORY.md (user's auto memory...")을 하이라이트
-  const memoryPattern = /user's auto memory/i.test(allText) ? "user's auto memory"
-                      : /MEMORY\.md/.test(allText) ? 'MEMORY.md' : 'auto-memory';
-
-  // Use a unique long snippet from the custom system block (system[1+]) to avoid matching system[0]
-  const customSysText = det.outputStyle?.slice(1).join('\n') || '';
-  const styleSnippet = customSysText.trim().slice(20, 80); // skip leading whitespace artifacts, use middle portion
 
   const chips = [
-    { key: 'cm', found: !!det.claudeMd,          label: '📋 CLAUDE.md',      pattern: 'claudeMd' },
-    { key: 'mn', found: hasMemory,                label: '🧠 Memory',         pattern: memoryPattern },
-    { key: 'st', found: !!det.outputStyle,        label: '🎨 System Prompt',  pattern: styleSnippet },
-    { key: 'sc', found: !!det.slashCommand,       label: '⌨ Slash Cmd',      pattern: 'command-message' },
-    { key: 'sk', found: det.skills.length > 0,   label: '🔧 Skill',          pattern: 'skills are available' },
-    { key: 'sa', found: det.subAgents.length > 0, label: '🤖 Sub-Agent',     pattern: det.subAgents[0]?.name || 'Agent' },
+    { key: 'cm', found: !!det.claudeMd,          label: '📋 CLAUDE.md',  pattern: 'claudeMd' },
+    { key: 'sc', found: !!det.slashCommand,       label: '⌨ Slash Cmd',  pattern: 'command-message' },
+    { key: 'sk', found: det.skills.length > 0,   label: '🔧 Skill',      pattern: 'skills are available' },
+    { key: 'sa', found: det.subAgents.length > 0, label: '🤖 Sub-Agent', pattern: det.subAgents[0]?.name || 'Agent' },
   ].filter(c => c.found && c.pattern);
 
   if (chips.length === 0) return '';
