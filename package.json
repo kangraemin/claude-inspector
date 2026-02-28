@@ -1,0 +1,41 @@
+{
+  "name": "claude-inspector",
+  "version": "1.0.0",
+  "description": "Claude Code Prompt Mechanism Visualizer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "web": "npx tsx server.ts",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.claudeinspector.app",
+    "productName": "Claude Inspector",
+    "directories": { "output": "release" },
+    "files": [
+      "main.js",
+      "preload.js",
+      "public/**",
+      "node_modules/@anthropic-ai/sdk/**"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }]
+    },
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  }
+}

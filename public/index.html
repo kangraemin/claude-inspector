@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Inspector</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <style>
+    :root {
+      --bg: #1e1e1e;
+      --surface: #252526;
+      --surface2: #2d2d2d;
+      --border: #3e3e42;
+      --text: #d4d4d4;
+      --dim: #858585;
+      --blue: #569cd6;
+      --green: #4ec9b0;
+      --yellow: #dcdcaa;
+      --red: #f48771;
+      --purple: #c586c0;
+      --orange: #ce9178;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 50px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 16px;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, #569cd6 0%, #c586c0 100%);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 800; color: #fff;
+    }
+    .logo-text { font-size: 15px; font-weight: 700; }
+    .logo-sub { font-size: 12px; color: var(--dim); font-weight: 400; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .api-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background .2s; flex-shrink: 0; }
+    .api-dot.ok { background: var(--green); }
+    .api-input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      padding: 5px 10px;
+      font-size: 12px;
+      width: 260px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      outline: none;
+    }
+    .api-input:focus { border-color: var(--blue); }
+    .model-select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      padding: 5px 8px;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 12px;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .tab {
+      display: flex; align-items: center; gap: 7px;
+      padding: 10px 18px;
+      cursor: pointer;
+      background: none; border: none;
+      color: var(--dim); font-size: 13px;
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--text); border-bottom-color: var(--blue); }
+    .badge {
+      font-size: 10px; font-weight: 700;
+      padding: 2px 6px; border-radius: 3px;
+      font-family: 'SF Mono', monospace;
+    }
+    .tab[data-m="claude-md"] .badge    { background: var(--green); color: #000; }
+    .tab[data-m="output-style"] .badge { background: var(--blue); color: #000; }
+    .tab[data-m="slash-command"] .badge { background: var(--yellow); color: #000; }
+    .tab[data-m="skill"] .badge        { background: var(--purple); color: #fff; }
+    .tab[data-m="sub-agent"] .badge    { background: var(--orange); color: #000; }
+
+    /* Layout */
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* Left: Config */
+    .config-panel {
+      width: 380px; flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 10px 16px;
+      font-size: 11px; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--dim);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .inject-chip {
+      font-size: 10px; padding: 2px 7px;
+      border-radius: 10px;
+      background: rgba(86,156,214,.15);
+      color: var(--blue);
+      border: 1px solid rgba(86,156,214,.3);
+      text-transform: none; letter-spacing: 0;
+      font-family: 'SF Mono', monospace;
+    }
+    .config-body {
+      flex: 1; overflow-y: auto;
+      padding: 14px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .desc-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 12px; color: var(--dim);
+      line-height: 1.55;
+    }
+    .desc-box b { color: var(--text); display: block; margin-bottom: 3px; font-size: 13px; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 11px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+    .field input, .field textarea, .field select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px; color: var(--text);
+      padding: 7px 10px; font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      outline: none; transition: border-color .15s;
+      resize: vertical;
+    }
+    .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); }
+    .field textarea { min-height: 80px; }
+    .field textarea.tall { min-height: 130px; }
+
+    /* Buttons */
+    .config-footer {
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 8px; flex-shrink: 0;
+    }
+    .btn {
+      padding: 8px 16px; border-radius: 5px;
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; border: none;
+      transition: opacity .15s, background .15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-send { background: var(--blue); color: #fff; flex: 1; justify-content: center; }
+    .btn-send:not(:disabled):hover { opacity: .85; }
+    .btn-copy { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-copy:hover { border-color: var(--blue); }
+    .inspect-note {
+      font-size: 11px; color: var(--yellow);
+      display: flex; align-items: center; gap: 5px;
+    }
+
+    /* Right: Preview */
+    .preview-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .preview-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 14px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .ptabs { display: flex; gap: 4px; }
+    .ptab {
+      padding: 4px 12px; font-size: 12px;
+      border-radius: 4px; cursor: pointer;
+      background: none; border: 1px solid transparent;
+      color: var(--dim); transition: all .15s;
+    }
+    .ptab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
+    .pactions { display: flex; align-items: center; gap: 8px; }
+    .live-pill {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; padding: 3px 8px; border-radius: 10px;
+      background: rgba(78,201,176,.12);
+      color: var(--green);
+      border: 1px solid rgba(78,201,176,.25);
+    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .copy-small {
+      padding: 4px 10px; font-size: 11px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--dim);
+      cursor: pointer; transition: all .15s;
+    }
+    .copy-small:hover { color: var(--text); border-color: var(--blue); }
+
+    .pview { flex: 1; overflow: auto; }
+    .pview pre { margin: 0; padding: 16px; font-size: 12px; line-height: 1.65; min-height: 100%; }
+    .pview code { font-family: 'SF Mono', 'Fira Code', monospace !important; }
+    .pview.hidden { display: none; }
+
+    /* Response */
+    #resp-view { padding: 16px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+    .resp-err { color: var(--red); font-family: monospace; font-size: 12px; }
+    .resp-meta {
+      margin-top: 14px; font-size: 11px; color: var(--dim);
+      border-top: 1px solid var(--border); padding-top: 10px;
+    }
+
+    /* Spinner */
+    .spin {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid var(--border); border-top-color: var(--blue);
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">CI</div>
+    <span class="logo-text">Claude Inspector</span>
+    <span class="logo-sub">— Prompt Mechanism Visualizer</span>
+  </div>
+  <div class="header-right">
+    <select class="model-select" id="modelSel">
+      <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+      <option value="claude-opus-4-6">claude-opus-4-6</option>
+      <option value="claude-haiku-4-5-20251001">claude-haiku-4-5</option>
+    </select>
+    <div class="api-dot" id="apiDot"></div>
+    <input type="password" class="api-input" id="apiKey" placeholder="sk-ant-api03-..." oninput="onApiKeyChange()">
+  </div>
+</header>
+
+<nav class="tabs" id="tabNav">
+  <button class="tab active" data-m="claude-md"     onclick="switchM('claude-md')">    <span class="badge">MD</span> CLAUDE.md</button>
+  <button class="tab"        data-m="output-style"  onclick="switchM('output-style')">  <span class="badge">ST</span> Output Style</button>
+  <button class="tab"        data-m="slash-command" onclick="switchM('slash-command')"> <span class="badge">/</span>  Slash Command</button>
+  <button class="tab"        data-m="skill"         onclick="switchM('skill')">         <span class="badge">SK</span> Skill</button>
+  <button class="tab"        data-m="sub-agent"     onclick="switchM('sub-agent')">     <span class="badge">SA</span> Sub-Agent</button>
+</nav>
+
+<div class="main">
+  <!-- Left: Config -->
+  <div class="config-panel">
+    <div class="panel-header">
+      <span id="panelTitle">Configuration</span>
+      <span class="inject-chip" id="injectChip">—</span>
+    </div>
+    <div class="config-body" id="configBody"></div>
+    <div class="config-footer" id="configFooter">
+      <button class="btn btn-copy" onclick="copyPayload()">Copy JSON</button>
+      <button class="btn btn-send" id="sendBtn" onclick="sendToApi()">Send to Claude →</button>
+    </div>
+  </div>
+
+  <!-- Right: Preview -->
+  <div class="preview-panel">
+    <div class="preview-header">
+      <div class="ptabs">
+        <button class="ptab active" id="ptab-payload"  onclick="showPTab('payload')">Payload</button>
+        <button class="ptab"        id="ptab-response" onclick="showPTab('response')">Response</button>
+      </div>
+      <div class="pactions">
+        <span class="live-pill" id="livePill" style="display:none"><span class="live-dot"></span>Live</span>
+        <button class="copy-small" onclick="copyPayload()">Copy</button>
+      </div>
+    </div>
+
+    <div class="pview" id="pv-payload">
+      <pre><code class="language-json" id="payloadCode">{}</code></pre>
+    </div>
+    <div class="pview hidden" id="pv-response">
+      <div id="resp-view"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Mechanism definitions ────────────────────────────────────────────────
+const M = {
+  'claude-md': {
+    label: 'CLAUDE.md',
+    inject: 'messages[].content → system-reminder',
+    desc: 'Injected as &lt;system-reminder&gt; in every user message. Automatic and persistent once the file exists. Project-level context, not identity.',
+    sendable: true,
+    fields: [
+      { id:'content', label:'CLAUDE.md Content', type:'textarea', tall:true,
+        val:`# Project Standards\n\n## Tech Stack\n- TypeScript (strict mode)\n- Bun runtime\n- React + Vite frontend\n\n## Conventions\n- Named exports only (no default exports)\n- File naming: kebab-case\n- Write tests for all features\n- No console.log in production` },
+      { id:'userMessage', label:'User Message', type:'textarea',
+        val:'How should I structure my TypeScript project?' }
+    ]
+  },
+  'output-style': {
+    label: 'Output Style',
+    inject: 'system[] → additional text block',
+    desc: 'Appended to the system array. Modifies Claude\'s identity/behavior for the entire session. Persists until explicitly changed or session ends.',
+    sendable: true,
+    fields: [
+      { id:'name', label:'Style Name', type:'input', val:'software-architect' },
+      { id:'content', label:'Style Instructions', type:'textarea', tall:true,
+        val:`You are operating as a senior software architect.\n\n## Response Guidelines\n- Lead with architectural decisions, not implementation details\n- Highlight trade-offs explicitly\n- Reference design patterns by name (Factory, Observer, CQRS)\n- Keep responses concise but precise\n- Assume deep technical knowledge` },
+      { id:'userMessage', label:'User Message', type:'textarea',
+        val:'Should I use Redux or React Context for state management?' }
+    ]
+  },
+  'slash-command': {
+    label: 'Slash Command',
+    inject: 'messages[].content → command-message wrapper',
+    desc: 'Deterministic template substitution. Activated explicitly by the user with /command-name. No model decision-making — pure string replacement.',
+    sendable: true,
+    fields: [
+      { id:'name', label:'Command Name', type:'input', val:'review' },
+      { id:'template', label:'Command Template ({arg1} placeholder)', type:'textarea', tall:true,
+        val:`Perform a thorough code review of the following code:\n\n{arg1}\n\nFocus on:\n1. Logic errors and off-by-one bugs\n2. Security vulnerabilities\n3. Performance issues\n4. Code clarity and naming` },
+      { id:'args', label:'Arguments (replaces {arg1})', type:'textarea',
+        val:`function calculateTotal(items) {\n  let total = 0;\n  for (var i = 0; i <= items.length; i++) {\n    total += items[i].price;\n  }\n  return total;\n}` }
+    ]
+  },
+  'skill': {
+    label: 'Skill',
+    inject: 'tool_result (after Skill tool_use)',
+    desc: 'Model-invoked via tool calling. Claude autonomously decides to use the skill based on semantic matching with the description. Two-step: tool_use decision → tool_result injection.',
+    sendable: false,
+    inspectNote: 'Skill invocation requires Claude Code runtime (tool calling flow). Use the payload below for inspection.',
+    fields: [
+      { id:'name', label:'Skill Name', type:'input', val:'git-helper' },
+      { id:'description', label:'Skill Description (used for matching)', type:'input',
+        val:'Git workflows, commits, branches, rebasing, squashing, version control' },
+      { id:'content', label:'Skill Content (SKILL.md body)', type:'textarea', tall:true,
+        val:`# Git Helper\n\nWhen invoked:\n1. Analyze the user's git-related request\n2. Provide exact commands with explanations\n3. Warn about destructive operations (reset --hard, force push)\n4. Suggest safe alternatives when available\n\nAlways include:\n- The exact git command(s) to run\n- What each command does\n- Any potential risks` },
+      { id:'userMessage', label:'User Message (triggers skill)', type:'textarea',
+        val:'How do I squash my last 3 commits?' }
+    ]
+  },
+  'sub-agent': {
+    label: 'Sub-Agent',
+    inject: 'Separate isolated API call (Task tool)',
+    desc: 'Spawns a completely isolated conversation via the Task tool. Sub-agent has zero access to main conversation history. CLAUDE.md is still injected.',
+    sendable: false,
+    inspectNote: 'Sub-agents require two separate API calls. Both payloads are shown for inspection.',
+    fields: [
+      { id:'type', label:'Sub-Agent Type', type:'select',
+        options:['Explore','general-purpose','Plan','software-architect'],
+        val:'Explore' },
+      { id:'prompt', label:'Delegation Prompt', type:'textarea', tall:true,
+        val:`Analyze the authentication flow in this codebase.\n\nContext: OAuth 2.0 with PKCE, Next.js application.\n\nFocus on:\n1. Token storage mechanisms\n2. Refresh token rotation logic\n3. Background token refresh handling\n\nReport back with a structured summary.` },
+      { id:'userMessage', label:'User Message (main conversation)', type:'textarea',
+        val:'Analyze our authentication implementation for security issues.' }
+    ]
+  }
+};
+
+// ─── State ────────────────────────────────────────────────────────────────
+let current = 'claude-md';
+
+// ─── Payload builder ──────────────────────────────────────────────────────
+function buildPayload(mech, cfg) {
+  const sys = "You are Claude Code, Anthropic's official CLI for Claude.";
+  const model = document.getElementById('modelSel').value;
+  const msg = cfg.userMessage || '';
+
+  if (mech === 'claude-md') {
+    return {
+      model, max_tokens: 1024, system: sys,
+      messages: [{
+        role: 'user',
+        content: [{
+          type: 'text',
+          text: `<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\nCodebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n\nContents of /path/to/CLAUDE.md (project instructions, checked into the codebase):\n\n${cfg.content || ''}\n</system-reminder>\n\n${msg}`
+        }]
+      }]
+    };
+  }
+
+  if (mech === 'output-style') {
+    return {
+      model, max_tokens: 1024,
+      system: [
+        { type: 'text', text: sys },
+        { type: 'text', text: `# Output Style: ${cfg.name || 'custom'}\n\n${cfg.content || ''}` }
+      ],
+      messages: [{ role: 'user', content: msg }]
+    };
+  }
+
+  if (mech === 'slash-command') {
+    const expanded = (cfg.template || '').replace(/\{arg1\}/g, cfg.args || '');
+    return {
+      model, max_tokens: 1024, system: sys,
+      messages: [{
+        role: 'user',
+        content: [{
+          type: 'text',
+          text: `<command-message>${cfg.name || 'command'} is running…</command-message>\n\n${expanded}${cfg.args ? `\n\nARGUMENTS: ${cfg.args}` : ''}`
+        }]
+      }]
+    };
+  }
+
+  if (mech === 'skill') {
+    return {
+      model, max_tokens: 1024, system: sys,
+      messages: [
+        { role: 'user', content: msg },
+        {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'toolu_skill_01', name: 'Skill', input: { command: cfg.name || 'skill-name' } }]
+        },
+        {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'toolu_skill_01', content: cfg.content || '' }]
+        }
+      ]
+    };
+  }
+
+  if (mech === 'sub-agent') {
+    return {
+      '⚡ STEP 1 — Main Conversation (API Call #1)': {
+        model, max_tokens: 1024, system: sys,
+        messages: [
+          { role: 'user', content: msg },
+          {
+            role: 'assistant',
+            content: [{
+              type: 'tool_use', id: 'toolu_task_01', name: 'Task',
+              input: { subagent_type: cfg.type || 'Explore', prompt: cfg.prompt || '' }
+            }]
+          }
+        ]
+      },
+      '🤖 STEP 2 — Sub-Agent Conversation (API Call #2 — Isolated)': {
+        model, max_tokens: 2048,
+        system: `[${cfg.type || 'Explore'} specialized system prompt]\n[⚠️  No access to main conversation history]\n[✅ CLAUDE.md still injected here]`,
+        messages: [{ role: 'user', content: cfg.prompt || '' }]
+      }
+    };
+  }
+
+  return {};
+}
+
+// ─── Config collector ─────────────────────────────────────────────────────
+function collectCfg() {
+  const cfg = {};
+  const fields = M[current].fields;
+  for (const f of fields) {
+    const el = document.getElementById('f-' + f.id);
+    cfg[f.id] = el ? el.value : (f.val || '');
+  }
+  return cfg;
+}
+
+// ─── Update preview ───────────────────────────────────────────────────────
+function updatePreview() {
+  const cfg = collectCfg();
+  const payload = buildPayload(current, cfg);
+  const json = JSON.stringify(payload, null, 2);
+  const code = document.getElementById('payloadCode');
+  code.textContent = json;
+  hljs.highlightElement(code);
+}
+
+// ─── Render config form ───────────────────────────────────────────────────
+function renderForm(mech) {
+  const def = M[mech];
+  document.getElementById('panelTitle').textContent = def.label;
+  document.getElementById('injectChip').textContent = def.inject;
+
+  let html = `<div class="desc-box"><b>${def.label}</b>${def.desc}</div>`;
+
+  for (const f of def.fields) {
+    if (f.type === 'textarea') {
+      html += `<div class="field"><label>${f.label}</label>
+        <textarea id="f-${f.id}" class="${f.tall ? 'tall' : ''}" oninput="updatePreview()">${esc(f.val || '')}</textarea></div>`;
+    } else if (f.type === 'input') {
+      html += `<div class="field"><label>${f.label}</label>
+        <input type="text" id="f-${f.id}" value="${esc(f.val || '')}" oninput="updatePreview()"></div>`;
+    } else if (f.type === 'select') {
+      const opts = (f.options || []).map(o => `<option${o === f.val ? ' selected' : ''}>${o}</option>`).join('');
+      html += `<div class="field"><label>${f.label}</label>
+        <select id="f-${f.id}" onchange="updatePreview()">${opts}</select></div>`;
+    }
+  }
+
+  document.getElementById('configBody').innerHTML = html;
+
+  // Footer
+  const footer = document.getElementById('configFooter');
+  const sendBtn = document.getElementById('sendBtn');
+  if (def.sendable) {
+    sendBtn.textContent = 'Send to Claude →';
+    sendBtn.disabled = false;
+    sendBtn.title = '';
+    footer.querySelector('.inspect-note')?.remove();
+  } else {
+    sendBtn.innerHTML = '🔒 Inspect Only';
+    sendBtn.disabled = true;
+    sendBtn.title = def.inspectNote || '';
+    if (!footer.querySelector('.inspect-note')) {
+      const note = document.createElement('span');
+      note.className = 'inspect-note';
+      note.textContent = '⚠ ' + (def.inspectNote || 'Cannot send directly to API');
+      footer.insertBefore(note, footer.firstChild);
+    }
+  }
+}
+
+// ─── Switch mechanism ─────────────────────────────────────────────────────
+function switchM(mech) {
+  current = mech;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.m === mech));
+  renderForm(mech);
+  updatePreview();
+  showPTab('payload');
+  document.getElementById('livePill').style.display = 'none';
+}
+
+// ─── Preview tabs ─────────────────────────────────────────────────────────
+function showPTab(tab) {
+  document.getElementById('pv-payload').classList.toggle('hidden', tab !== 'payload');
+  document.getElementById('pv-response').classList.toggle('hidden', tab !== 'response');
+  document.getElementById('ptab-payload').classList.toggle('active', tab === 'payload');
+  document.getElementById('ptab-response').classList.toggle('active', tab === 'response');
+}
+
+// ─── Copy ─────────────────────────────────────────────────────────────────
+function copyPayload() {
+  const text = document.getElementById('payloadCode').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    document.querySelectorAll('.btn-copy, .copy-small').forEach(b => {
+      const orig = b.textContent;
+      b.textContent = '✓ Copied';
+      setTimeout(() => { b.textContent = orig; }, 1500);
+    });
+  });
+}
+
+// ─── Send to API ──────────────────────────────────────────────────────────
+async function sendToApi() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) {
+    document.getElementById('apiKey').focus();
+    document.getElementById('apiKey').style.borderColor = 'var(--red)';
+    setTimeout(() => { document.getElementById('apiKey').style.borderColor = ''; }, 2000);
+    return;
+  }
+
+  const cfg = collectCfg();
+  const payload = buildPayload(current, cfg);
+  const sendBtn = document.getElementById('sendBtn');
+  sendBtn.disabled = true;
+  sendBtn.innerHTML = '<span class="spin"></span> Sending…';
+
+  const respEl = document.getElementById('resp-view');
+  respEl.innerHTML = '<span class="spin"></span> Waiting for response…';
+  showPTab('response');
+
+  try {
+    let data;
+    if (window.electronAPI) {
+      // Electron IPC (desktop app)
+      data = await window.electronAPI.sendToClaude(payload, apiKey);
+    } else {
+      // Web server fallback
+      const res = await fetch('/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payload, apiKey })
+      });
+      data = await res.json();
+    }
+
+    if (data.error) {
+      respEl.innerHTML = `<div class="resp-err">Error: ${esc(data.error)}</div>`;
+    } else if (data.response) {
+      const r = data.response;
+      const text = r.content?.filter(c => c.type === 'text').map(c => c.text).join('\n') || '(no text)';
+      const u = r.usage;
+      const meta = u
+        ? `<div class="resp-meta">Model: ${r.model} · Input: ${u.input_tokens} tokens · Output: ${u.output_tokens} tokens · Stop: ${r.stop_reason}</div>`
+        : '';
+      respEl.innerHTML = `<div>${esc(text)}</div>${meta}`;
+      document.getElementById('livePill').style.display = 'flex';
+    }
+  } catch (e) {
+    respEl.innerHTML = `<div class="resp-err">Network error: ${esc(e.message)}</div>`;
+  } finally {
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send to Claude →';
+  }
+}
+
+// ─── API key indicator ────────────────────────────────────────────────────
+function onApiKeyChange() {
+  const v = document.getElementById('apiKey').value.trim();
+  document.getElementById('apiDot').className = 'api-dot' + (v.startsWith('sk-ant') ? ' ok' : '');
+}
+
+// ─── Utils ────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Model change ─────────────────────────────────────────────────────────
+document.getElementById('modelSel').addEventListener('change', updatePreview);
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+switchM('claude-md');
+</script>
+</body>
+</html>
