@@ -16,11 +16,11 @@ and visualizes all 5 prompt augmentation mechanisms.
 ---
 
 <p align="center">
-  <img src="public/screenshots/proxy-request.png" width="100%" alt="Proxy — Request view showing CLAUDE.md Global/Local section chips with inline text highlight" />
+  <img src="public/screenshots/proxy-request-en.png" width="100%" alt="Proxy — Request view showing CLAUDE.md Global/Local section chips with inline text highlight" />
 </p>
 
 <p align="center">
-  <img src="public/screenshots/proxy-analysis.png" width="100%" alt="Proxy — Analysis view auto-detecting all 5 mechanisms with section content" />
+  <img src="public/screenshots/proxy-analysis-en.png" width="100%" alt="Proxy — Analysis view auto-detecting all 5 mechanisms with section content" />
 </p>
 
 ## What You'll Learn
