@@ -566,6 +566,7 @@
     .mech-chip.btn:hover { filter: brightness(1.3); }
     .mech-chip.btn.active { outline: 2px solid currentColor; outline-offset: 1px; }
     .mech-section-active { box-shadow: 0 0 0 2px rgba(255,255,255,.2); border-radius: 6px; }
+    .mech-hl-row { background: rgba(80,200,120,.08); border-left: 2px solid var(--green); border-radius: 2px; }
     .mech-filter-desc {
       padding: 6px 12px 8px; font-size: 11px;
       border-top: 1px solid var(--border); display: flex; align-items: flex-start; gap: 8px;
@@ -1968,13 +1969,8 @@ function updateSearchCounter(total) {
 function setProxyDetailMechFilter(key, pattern) {
   if (proxyDetailMechFilter === key) {
     proxyDetailMechFilter = null;
-    proxyDetailSearch = '';
   } else {
     proxyDetailMechFilter = key;
-    proxyDetailSearch = pattern;
-    // Analysis 탭으로 전환해서 해당 섹션이 보이도록
-    proxyDetailTab = 'analysis';
-    document.querySelectorAll('.dtab').forEach(b => b.classList.toggle('active', b.dataset.dtab === 'analysis'));
   }
   renderProxyDetail();
 }
@@ -2043,6 +2039,23 @@ function buildMechFilterChips(body) {
     + '</div>'
     + descBanner
     + '</div>';
+}
+
+function highlightMechInJsonTree(container, mechKey) {
+  if (!mechKey || !mechKey.startsWith('cm')) return;
+  container.querySelectorAll('.mech-hl-row').forEach(r => r.classList.remove('mech-hl-row'));
+  const strEls = container.querySelectorAll('.jt-str');
+  for (const el of strEls) {
+    const txt = el.textContent;
+    if (txt.includes('<system-reminder>') && txt.includes('Contents of ')) {
+      const row = el.closest('.jt-row');
+      if (row) {
+        row.classList.add('mech-hl-row');
+        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      break;
+    }
+  }
 }
 
 function applyDetailHighlight(container, query) {
@@ -2140,6 +2153,9 @@ function renderProxyDetail() {
   detail.innerHTML = header + '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
   const code = document.getElementById('proxyDetailCode');
   renderJsonTree(code, data);
+  if (proxyDetailMechFilter) {
+    highlightMechInJsonTree(code, proxyDetailMechFilter);
+  }
   if (q) {
     applyDetailHighlight(code, q);
     const marks = code.querySelectorAll('mark.search-hl');
@@ -2176,10 +2192,12 @@ function detectMechanisms(body) {
 
     for (const c of contents) {
       if (c.type === 'text' && typeof c.text === 'string') {
-        // CLAUDE.md: <system-reminder> tag
-        const srMatch = c.text.match(/<system-reminder>([\s\S]*?)<\/system-reminder>/);
-        if (srMatch && !found.claudeMd) {
-          found.claudeMd = srMatch[1].trim();
+        // CLAUDE.md: 여러 <system-reminder> 블록에서 Contents of 패턴이 있는 것 모두 수집
+        for (const m of c.text.matchAll(/<system-reminder>([\s\S]*?)<\/system-reminder>/g)) {
+          const inner = m[1].trim();
+          if (/Contents of /i.test(inner)) {
+            found.claudeMd = found.claudeMd ? found.claudeMd + '\n\n' + inner : inner;
+          }
         }
         // Slash Command: <command-message> tag
         const cmdMatch = c.text.match(/<command-message>([\s\S]*?)<\/command-message>/);
