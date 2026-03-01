@@ -4,6 +4,6 @@ dist/
 .DS_Store
 *.env
 .env*
-.worklogs/.snapshot
+.worklogs/
 .idea/
 request_test.json
