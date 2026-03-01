@@ -9,12 +9,17 @@
     "dev": "electron . --enable-logging",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win"
+    "dist:win": "electron-builder --win",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test tests/unit/*.mjs",
+    "test:e2e": "playwright test"
   },
   "build": {
     "appId": "com.claudeinspector.app",
     "productName": "Claude Inspector",
-    "directories": { "output": "release" },
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "main.js",
       "preload.js",
@@ -23,7 +28,15 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }]
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
     },
     "win": {
       "target": "nsis"
@@ -33,6 +46,7 @@
     "@anthropic-ai/sdk": "^0.36.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8"
   }
