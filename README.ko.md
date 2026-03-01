@@ -29,47 +29,53 @@ Claude Code CLI 트래픽을 실시간으로 가로채<br>
 
 ### 1. "hello"라고 입력하면 — Claude는 이 전체 JSON을 받는다
 
-한 단어를 보내도 API는 64개 이상의 메시지, 3개의 system 블록, 27개의 도구 스키마, 숨겨진 메타데이터가 담긴 JSON 페이로드를 받습니다:
+한 단어를 보내도 API는 64개 이상의 메시지, 3개의 system 블록, 27개 이상의 도구 스키마, 숨겨진 메타데이터가 담긴 JSON 페이로드를 받습니다. 이것은 **실제 Claude Code 세션에서 캡처한 데이터**입니다:
 
 ```json
 {
   "model": "claude-sonnet-4-6",
   "max_tokens": 32000,
-  "thinking": { "type": "adaptive" },  // Opus는 "enabled" + budget_tokens 사용
+  "thinking": { "type": "adaptive" },
   "stream": true,
-  "context_management": 1,             // Claude Code가 추가하는 비공개 필드
+  "context_management": {
+    "edits": [{ "type": "clear_thinking_20251015", "keep": "all" }]
+  },
   "metadata": {
-    "user_id": "user_003619f3...account_e4008a49...session_cdc418a2..."
+    "user_id": "user_003619f3...9c_account_e4008a49-..._session_cdc418a2-..."
   },
   "system": [ ...3 blocks... ],        // #4 참조
-  "tools": [ ...27 schemas... ],       // 빌트인 도구 + MCP 지연 로드 (#5 참조)
+  "tools": [ ...29 schemas... ],       // 빌트인 27개 + 이미 로드된 MCP 2개 (#5 참조)
   "messages": [ ...64 items... ]       // 전체 대화가 매 턴마다 재전송됨
 }
 ```
 
-- **`messages[]`에 64개 항목** — 모든 이전 턴이 API 호출마다 재전송됩니다. 메시지가 늘수록 토큰 비용이 증가합니다.
-- **`metadata.user_id`** — 한 문자열에 세 ID가 인코딩됩니다: `user_`, `account_`, `session_`
-- **`thinking.type: "adaptive"`** (Sonnet) vs `"enabled" + budget_tokens: 31999` (Opus) — 모델마다 동작이 다릅니다
-- **`context_management: 1`** — 공개 API 스펙에 없는 비공개 필드
+**각 필드가 보여주는 것:**
+
+- **`messages[]`에 64개 항목** — 전체 대화 히스토리가 매 API 호출마다 재전송됩니다. 1턴이면 1개, 10턴이면 10개, 64턴이면 64개 전부. 대화가 길어질수록 토큰 비용이 기하급수적으로 증가합니다.
+- **`metadata.user_id`** — 한 문자열에 세 ID가 인코딩됩니다: `user_<64자 hex>` + `account_<UUID>` + `session_<UUID>`. Anthropic은 이 하나의 필드로 개별 메시지, 계정, 세션을 모두 추적할 수 있습니다.
+- **`thinking.type: "adaptive"`** (Sonnet) — 요청마다 동적으로 thinking 사용 여부를 결정합니다. **Opus**는 `"enabled" + budget_tokens: 31999`로 항상 최대 예산을 할당합니다.
+- **`context_management`** — 공개 API 스펙에 없는 비공개 객체입니다. `clear_thinking_20251015` 편집 지시는 컨텍스트가 길어질 때 thinking 블록을 어떻게 처리할지 API에 알려줍니다.
+- **`tools[]`에 29개** — 빌트인 27개 + 이 세션에서 이미 지연 로드된 MCP 2개. MCP 도구를 사용할수록 이 숫자가 늘어납니다.
 
 ### 2. CLAUDE.md는 매 턴마다 여러 개의 이름 붙은 섹션으로 주입된다
 
-`"hello"`라고 입력하면, 첫 번째 `user` 메시지에는 각 파일이 개별적으로 나열된 `<system-reminder>` 블록이 포함됩니다:
+모든 user 메시지는 실제로 3개의 content 블록으로 구성됩니다. 직접 입력한 텍스트는 `content[2]`뿐이고, 나머지 두 개는 Claude Code가 자동으로 앞에 붙입니다:
 
 ```json
 {
   "role": "user",
   "content": [
-    // [0] 주입: 사용 가능한 스킬 목록
-    { "type": "text", "text": "<system-reminder> The following skills are available... </system-reminder>" },
+    // [0] Claude Code가 주입하는 스킬 목록
+    { "type": "text", "text": "<system-reminder>\nThe following skills are available...\n</system-reminder>" },
 
-    // [1] 주입: CLAUDE.md + rules + memory + currentDate
-    { "type": "text", "text": "<system-reminder>
-        Contents of /Users/you/.claude/CLAUDE.md (user's private global instructions): ...
-        Contents of /Users/you/.claude/rules/git-rules.md (user's private global instructions): ...
-        Contents of /Users/you/project/.claude/CLAUDE.md (project instructions): ...
+    // [1] 모든 CLAUDE.md + rules + memory + 날짜 — 이 캡처에서 8,528자
+    { "type": "text", "text": "<system-reminder>\n
+        Contents of /Users/you/.claude/CLAUDE.md (user's private global instructions):\n...
+        Contents of /Users/you/.claude/rules/git-rules.md (user's private global instructions):\n...
+        Contents of /Users/you/project/.claude/CLAUDE.md (project instructions):\n...
+        Contents of /Users/you/project/.claude/memory/MEMORY.md (auto-memory):\n...
         currentDate: 2026-03-01
-      </system-reminder>" },
+      \n</system-reminder>" },
 
     // [2] 실제로 입력한 내용
     { "type": "text", "text": "hello" }
@@ -77,67 +83,77 @@ Claude Code CLI 트래픽을 실시간으로 가로채<br>
 }
 ```
 
-**중요한 이유:** 글로벌 CLAUDE.md, 프로젝트별 CLAUDE.md, rules 파일, memory가 모두 **매 요청마다** 번들로 묶여 전송됩니다. API는 매 턴마다 `messages[]` 배열 전체를 재전송하므로, 이 주입 내용들도 매번 반복됩니다. 500줄짜리 CLAUDE.md는 매 턴마다 그만큼의 토큰을 소모합니다 — 간결하게 유지하세요.
+**주입 순서는 항상 고정:** 글로벌 CLAUDE.md → 글로벌 rules 파일 → 로컬 CLAUDE.md → 자동 메모리 → `currentDate`.
+
+**왜 비용이 배가 되는가:** Claude Code는 매 API 호출마다 `messages[]` 배열 **전체**를 재전송합니다. 대화가 30턴이라면, 8,500자 분량의 CLAUDE.md가 페이로드 안에 30번 등장합니다 — `messages[0]`에 한 번씩 포함되어서요. 500줄짜리 CLAUDE.md는 모든 요청마다, 영원히, 토큰을 소모합니다. 간결하게 유지하세요.
 
 ### 3. 32,000 토큰 중 31,999개가 thinking에 할당된다
 
-모든 assistant 응답에는 CLI에서 볼 수 없는 숨겨진 `thinking` 블록이 포함됩니다:
+모든 assistant 응답에는 CLI에서 볼 수 없는 숨겨진 `thinking` 블록이 포함됩니다. 64개 메시지 캡처에서 **31개의 assistant 턴 중 16개**에 thinking 블록이 있었습니다:
 
 ```json
 {
   "role": "assistant",
   "content": [
     { "type": "thinking",
-      "thinking": "The user is greeting me in Korean. I'll respond briefly and friendly.",
+      "thinking": "The user wants to start inspection using the dev skill. Let me invoke the dev skill.",
       "signature": "Eu0BCkYICxgCKkDLtz8rLXrByzrD..." },
-    { "type": "text",
-      "text": "안녕하세요! 무엇을 도와드릴까요?" }
+    { "type": "tool_use",
+      "name": "Skill",
+      "input": { "skill": "dev" } }
   ]
 }
 ```
 
-- **`budget_tokens: 31999`** / `max_tokens: 32000` — 출력 예산의 거의 전부가 thinking에 사용됩니다
-- **`signature`** — 암호화 서명으로 thinking 내용 위변조를 방지합니다
-- 이것이 Claude Code가 짧은 응답으로도 깊이 있는 답변을 낼 수 있는 이유입니다
+- **Opus**: `budget_tokens: 31999` / `max_tokens: 32000` — 출력 예산의 거의 전부가 thinking에 할당됩니다. 사람 눈에 보이는 응답엔 토큰이 1개만 남습니다.
+- **Sonnet**: `"type": "adaptive"` — 요청의 복잡도에 따라 thinking 예산을 동적으로 조절합니다.
+- **`signature`** — thinking 내용에 대한 암호화 서명입니다. 악의적인 콘텐츠가 thinking 블록을 위조하거나 수정하려는 프롬프트 인젝션 공격을 방지합니다.
+- **터미널에서는 보이지 않지만** 캡처된 트래픽에는 그대로 기록됩니다 — Claude Inspector의 Messages 탭에서 확인할 수 있습니다. 복잡한 지시에도 정확한 도구 호출이 가능한 이유가 바로 이것입니다.
 
 ### 4. 시스템 프롬프트: 캐싱되는 3개의 블록
 
-`system` 필드는 단순 문자열이 아니라 **3개 블록의 배열**입니다:
+`system` 필드는 단순 문자열이 아니라 **3개 블록의 배열**이며, 각 블록마다 캐싱 전략이 다릅니다:
 
 ```json
 "system": [
-  // [0] 빌링 — 버전 추적
-  { "text": "x-anthropic-billing-header: cc_version=2.1.63.a43; cc_entrypoint=cli; cch=9fa5e;" },
+  // [0] 80자 — cache_control 없음 (항상 새로 계산 — CLI 버전마다 변경됨)
+  { "text": "x-anthropic-billing-header: cc_version=2.1.63.a43; cc_entrypoint=cli; cch=edd82;" },
 
-  // [1] 정체성 — 한 줄 설명
+  // [1] 57자 — 1시간 캐시
   { "text": "You are Claude Code, Anthropic's official CLI for Claude.",
     "cache_control": { "type": "ephemeral", "ttl": "1h" } },
 
-  // [2] 나머지 전부 — 수천 줄
+  // [2] 15,359자 — 1시간 캐시
   { "text": "You are an interactive agent that helps users with software engineering tasks...",
     "cache_control": { "type": "ephemeral", "ttl": "1h" } }
 ]
 ```
 
-블록 `[2]`는 엄청나게 큽니다 (행동 규칙, 27개 도구 설명, 환경 정보, MCP 서버 설명). `cache_control`의 `ttl: "1h"` 덕분에 이 거대한 프롬프트가 **1시간 동안 캐시**됩니다 — 첫 번째 요청만 전체 처리 비용을 냅니다.
+**왜 3개로 나누는가?** 프롬프트 캐싱은 캐시 경계가 안정적이어야 작동합니다. CLI 버전마다 바뀌는 빌링 헤더를 블록 `[0]`으로 분리하면, 블록 `[1]`과 `[2]`가 독립적으로 캐시될 수 있습니다.
+
+**블록 `[2]`에는 모든 것이 들어 있습니다** — 전체 행동 규칙, 27개 도구 스키마 설명, 현재 환경 정보(OS, 쉘, 모델명, 날짜), git 상태, MCP 서버 설명까지. 15,359자 분량이지만 캐싱 덕분에 매 요청마다 전송되어도 **캐시 만료 후 첫 요청만** 전체 처리 비용을 냅니다. 이후 1시간 이내 요청은 캐시 읽기 할인이 적용됩니다.
 
 ### 5. MCP 도구는 토큰 절약을 위해 지연 로드된다
 
-27개의 빌트인 도구(`Read`, `Bash`, `Edit`, `Glob`, `Grep`, `Agent`...)는 매 요청마다 전체 JSON 스키마와 함께 전송됩니다. 하지만 **MCP 도구는 그렇지 않습니다.**
-
-MCP 도구는 `ToolSearch` 도구의 설명 안에 이름 목록으로만 나타납니다:
+27개의 빌트인 도구(`Read`, `Bash`, `Edit`, `Glob`, `Grep`, `Agent`...)는 매 요청마다 **전체 JSON 스키마**와 함께 전송됩니다. 하지만 **MCP 도구는 그렇지 않습니다** — 처음에는 이름 목록만 존재합니다:
 
 ```json
 {
   "name": "ToolSearch",
-  "description": "...Available deferred tools (must be loaded before use):
-    mcp__context7__resolve-library-id
-    mcp__context7__query-docs
-    mcp__til-server__create_til  ..."
+  "description": "...Available deferred tools (must be loaded before use):\nmcp__til-server__create_til\nmcp__til-server__update_til\n..."
 }
 ```
 
-**모델이 언제 사용해야 하는지 아는 방법:** `system[]` 블록에 각 서버의 목적을 설명하는 "MCP Server Instructions" 섹션이 있습니다 (예: *"Use context7 to retrieve up-to-date documentation"*). 모델이 설명을 읽고 → 사용 결정 → `ToolSearch`로 전체 스키마 로드 → 실제 도구 호출. 이 2단계 지연 로딩으로 매 요청에 모든 MCP 스키마를 보내지 않아 토큰을 절약합니다.
+**2단계 지연 로드 흐름:**
+
+1. `system[]` 블록의 "MCP Server Instructions" 섹션에서 각 서버의 목적을 설명합니다 (*"Use context7 to retrieve up-to-date documentation"*)
+2. 모델이 설명을 읽고 MCP 도구가 필요하다고 판단합니다
+3. 모델이 `ToolSearch`를 쿼리로 호출 → 전체 스키마가 반환되어 `tools[]`에 추가됩니다
+4. 모델이 실제 MCP 도구를 호출합니다
+
+**이 캡처에서의 전/후:** `ToolSearch`에 8개의 MCP 도구가 지연 도구로 등록되어 있습니다. 하지만 `mcp__context7__resolve-library-id`와 `mcp__context7__query-docs`는 세션 앞부분에서 이미 로드되어 `tools[]`에 포함됩니다 → 총 29개(빌트인 27개 + 로드된 MCP 2개). `til-server` 6개는 아직 필요하지 않아 지연 상태입니다.
+
+사용하지 않는 MCP 스키마는 토큰을 전혀 소비하지 않는 것이 핵심입니다.
 
 ## 시작하기
 
