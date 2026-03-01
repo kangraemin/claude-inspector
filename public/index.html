@@ -2474,41 +2474,80 @@ function buildMechFilterChips(body) {
 }
 
 function highlightMechInJsonTree(container, body, mechKey) {
-  if (!mechKey || !mechKey.startsWith('cm')) return;
-  const det = detectMechanisms(body);
-  if (!det.claudeMd) return;
-  const sections = parseClaudeMdSections(det.claudeMd);
-  const idx = parseInt(mechKey.replace('cm_', ''));
-  if (isNaN(idx) || !sections[idx]) return;
-  const section = sections[idx];
+  if (!mechKey) return;
 
-  const escapedPath = esc('Contents of ' + section.path);
-  const strEls = container.querySelectorAll('.jt-str');
-  for (const el of strEls) {
-    if (!el.textContent.includes('Contents of ' + section.path)) continue;
-    let html = el.innerHTML;
-    const start = html.indexOf(escapedPath);
-    if (start === -1) continue;
-
-    // 섹션 끝: 다음 "Contents of " 또는 </system-reminder>
-    const nextPos = html.indexOf('\n\nContents of ', start + escapedPath.length);
-    const srEndPos = html.indexOf(esc('</system-reminder>'), start);
-    let end;
-    if (nextPos !== -1 && (srEndPos === -1 || nextPos <= srEndPos)) {
-      end = nextPos;
-    } else if (srEndPos !== -1) {
-      end = srEndPos;
-      while (end > start && html[end - 1] === '\n') end--;
-    } else {
-      end = html.length;
-    }
-
+  function hlRange(el, start, end) {
+    const html = el.innerHTML;
     el.innerHTML = html.slice(0, start)
       + '<span class="mech-hl-text">' + html.slice(start, end) + '</span>'
       + html.slice(end);
     const hl = el.querySelector('.mech-hl-text');
-    if (hl) hl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    break;
+    if (hl) hl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  if (mechKey.startsWith('cm')) {
+    const det = detectMechanisms(body);
+    if (!det.claudeMd) return;
+    const sections = parseClaudeMdSections(det.claudeMd);
+    const idx = parseInt(mechKey.replace('cm_', ''));
+    if (isNaN(idx) || !sections[idx]) return;
+    const section = sections[idx];
+
+    const escapedPath = esc('Contents of ' + section.path);
+    const strEls = container.querySelectorAll('.jt-str');
+    for (const el of strEls) {
+      if (!el.textContent.includes('Contents of ' + section.path)) continue;
+      const html = el.innerHTML;
+      const start = html.indexOf(escapedPath);
+      if (start === -1) continue;
+
+      // 섹션 끝: 다음 "Contents of " 또는 </system-reminder>
+      const nextPos = html.indexOf('\n\nContents of ', start + escapedPath.length);
+      const srEndPos = html.indexOf(esc('</system-reminder>'), start);
+      let end;
+      if (nextPos !== -1 && (srEndPos === -1 || nextPos <= srEndPos)) {
+        end = nextPos;
+      } else if (srEndPos !== -1) {
+        end = srEndPos;
+        while (end > start && html[end - 1] === '\n') end--;
+      } else {
+        end = html.length;
+      }
+      hlRange(el, start, end);
+      break;
+    }
+
+  } else if (mechKey === 'sc') {
+    const strEls = container.querySelectorAll('.jt-str');
+    for (const el of strEls) {
+      if (!el.textContent.includes('<command-message>')) continue;
+      const html = el.innerHTML;
+      const cmOpen = esc('<command-message>');
+      const cmClose = esc('</command-message>');
+      const start = html.indexOf(cmOpen);
+      if (start === -1) continue;
+      const endPos = html.indexOf(cmClose, start);
+      const end = endPos !== -1 ? endPos + cmClose.length : html.length;
+      hlRange(el, start, end);
+      break;
+    }
+
+  } else if (mechKey === 'sk') {
+    const strEls = container.querySelectorAll('.jt-str');
+    for (const el of strEls) {
+      if (!el.textContent.includes('skills are available')) continue;
+      const html = el.innerHTML;
+      const srOpen = esc('<system-reminder>');
+      const srClose = esc('</system-reminder>');
+      const matchPos = html.indexOf(esc('skills are available'));
+      if (matchPos === -1) continue;
+      const p = html.lastIndexOf(srOpen, matchPos);
+      const start = p !== -1 ? p : matchPos;
+      const endPos = html.indexOf(srClose, matchPos);
+      const end = endPos !== -1 ? endPos + srClose.length : html.length;
+      hlRange(el, start, end);
+      break;
+    }
   }
 }
 
@@ -2556,11 +2595,13 @@ function renderProxyDetail() {
   if (proxyDetailTab === 'analysis') {
     renderProxyAnalysis(entry, detail);
     if (proxyDetailMechFilter) {
-      const activeSection = detail.querySelector(`[data-mech-key="${proxyDetailMechFilter}"]`);
-      if (activeSection) {
-        activeSection.classList.add('mech-section-active');
-        activeSection.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
+      requestAnimationFrame(() => {
+        const activeSection = detail.querySelector(`[data-mech-key="${proxyDetailMechFilter}"]`);
+        if (activeSection) {
+          activeSection.classList.add('mech-section-active');
+          activeSection.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        }
+      });
     }
     if (proxyDetailSearch) {
       applyDetailHighlight(detail, proxyDetailSearch);
@@ -2682,13 +2723,7 @@ function renderProxyAnalysis(entry, container) {
   const det = detectMechanisms(body);
   const hasAny = det.claudeMd || det.outputStyle || det.slashCommand || det.skills.length || det.subAgents.length;
 
-  const chips = [
-    { key: 'cm',  found: !!det.claudeMd,      label: 'CLAUDE.md' },
-    { key: 'st',  found: !!det.outputStyle,    label: 'Output Style' },
-    { key: 'sc',  found: !!det.slashCommand,   label: 'Slash Command' },
-    { key: 'sk',  found: det.skills.length > 0,label: `Skill${det.skills.length > 1 ? ' ×'+det.skills.length : ''}` },
-    { key: 'sa',  found: det.subAgents.length > 0, label: `Sub-Agent${det.subAgents.length > 1 ? ' ×'+det.subAgents.length : ''}` },
-  ];
+  const mechChipsHtml = buildMechFilterChips(body);
 
   const aq = proxyDetailSearch;
   const analysisSearchBar = `<div class="msg-search-bar" style="flex-shrink:0">
@@ -2702,21 +2737,10 @@ function renderProxyAnalysis(entry, container) {
 
   let html = '<div style="flex:1;overflow:auto"><div class="analysis-view">';
 
-  // Chips row
-  html += '<div class="analysis-chips">';
-  for (const c of chips) {
-    const isActive = proxyDetailMechFilter === c.key;
-    const btnCls = c.found ? 'found btn' : 'not-found';
-    const activeCls = isActive ? ' active' : '';
-    const onclick = c.found ? ` onclick="setProxyDetailMechFilter('${c.key}','')"` : '';
-    html += `<span class="mech-chip ${c.key} ${btnCls}${activeCls}"${onclick}>${c.found ? '●' : '○'} ${c.label}</span>`;
-  }
-  html += '</div>';
-
   if (!hasAny) {
     html += `<div class="analysis-none">${i18n.t('analysis.noMechanisms')}</div>`;
     html += '</div></div>';
-    container.innerHTML = `<div style="flex-shrink:0">${analysisSearchBar}</div>` + html;
+    container.innerHTML = `<div style="flex-shrink:0">${analysisSearchBar}${mechChipsHtml}</div>` + html;
     return;
   }
 
@@ -2795,7 +2819,7 @@ function renderProxyAnalysis(entry, container) {
   }
 
   html += '</div></div>';
-  container.innerHTML = `<div style="flex-shrink:0">${analysisSearchBar}</div>` + html;
+  container.innerHTML = `<div style="flex-shrink:0">${analysisSearchBar}${mechChipsHtml}</div>` + html;
   container.querySelectorAll('.jt-json-block').forEach(el => {
     try { renderJsonTree(el, JSON.parse(el.dataset.json)); }
     catch (e) { el.textContent = el.dataset.json; }
