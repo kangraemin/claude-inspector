@@ -2572,6 +2572,7 @@ function highlightMechInJsonTree(container, body, mechKey) {
     for (const el of container.querySelectorAll('.jt-str')) {
       if (!el.textContent.includes('<command-message>')) continue;
       if (count === idx) {
+        expandAncestors(el);
         const html = el.innerHTML;
         const cmOpen = esc('<command-message>');
         const cmClose = esc('</command-message>');
@@ -2778,7 +2779,8 @@ function detectMechanisms(body) {
         // Slash Command: <command-message> tag (multiple per conversation)
         for (const cmdMatch of c.text.matchAll(/<command-message>([\s\S]*?)<\/command-message>/g)) {
           const tag = cmdMatch[1].trim();
-          const nameMatch = tag.match(/^#\s*\/(\S+)/);
+          const nameMatch = tag.match(/^#\s*\/(\S+)/)       // # /commit (real CLI)
+                         || tag.match(/^(\S+)\s+is running/); // commit is running… (demo)
           const name = nameMatch ? nameMatch[1] : `Cmd ${found.slashCommands.length + 1}`;
           found.slashCommands.push({ name, tag, full: c.text });
         }
