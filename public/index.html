@@ -561,6 +561,7 @@
     .mech-chip.sc  { background: rgba(220,220,170,.12); color: var(--yellow); border: 1px solid rgba(220,220,170,.3); }
     .mech-chip.sk  { background: rgba(197,134,192,.15); color: var(--purple); border: 1px solid rgba(197,134,192,.35); }
     .mech-chip.sa  { background: rgba(206,145,120,.15); color: var(--orange); border: 1px solid rgba(206,145,120,.35); }
+    .mech-chip.mc  { background: rgba(78,201,220,.12);  color: #4ec9dc;       border: 1px solid rgba(78,201,220,.3); }
     .mech-chip.mn  { background: rgba(156,220,254,.12); color: #9cdcfe;       border: 1px solid rgba(156,220,254,.3); }
     .mech-chip.btn { cursor: pointer; transition: filter .1s; }
     .mech-chip.btn:hover { filter: brightness(1.3); }
@@ -918,6 +919,10 @@ const LOCALES = {
         who: 'Claude Code CLI가 별도 API 호출 생성 (우리 앱은 표시만 함)',
         what: 'Task tool 호출 시 Claude Code가 독립적인 두 번째 API 요청을 만들어 서브에이전트를 실행합니다.',
       },
+      mc: {
+        who: 'Claude가 MCP 도구 호출 (tool_use)',
+        what: 'Model Context Protocol 도구를 tool_use로 호출합니다.',
+      },
     },
     export: {
       skillNote: '⚠️  Skill은 tool_use 플로우가 필요합니다. 아래는 Simulate Effect (system 주입 버전)의 실행 가능한 페이로드입니다.',
@@ -1116,6 +1121,10 @@ const LOCALES = {
       sa: {
         who: 'Claude Code CLI creates a separate API call (this app only displays)',
         what: 'When Task tool is called, Claude Code creates an independent second API request to run the sub-agent.',
+      },
+      mc: {
+        who: 'Claude calls MCP tool (tool_use)',
+        what: 'Calls a Model Context Protocol tool via tool_use.',
       },
     },
     export: {
@@ -2444,6 +2453,9 @@ function getChipMeta() {
     sa: { color: 'var(--orange)',
           who:  i18n.t('mechDesc.sa.who'),
           what: i18n.t('mechDesc.sa.what') },
+    mc: { color: '#4ec9dc',
+          who:  i18n.t('mechDesc.mc.who'),
+          what: i18n.t('mechDesc.mc.what') },
   };
 }
 
@@ -2474,6 +2486,11 @@ function buildMechFilterChips(body) {
     chips.push({ key: 'sk_' + i, found: true, label: `🔧 ${skName}`, cls: 'sk', metaKey: 'sk' });
   }
   if (det.subAgents.length > 0) chips.push({ key: 'sa', found: true, label: '🤖 Sub-Agent', pattern: det.subAgents[0]?.name || 'Agent', cls: 'sa', metaKey: 'sa' });
+  for (let i = 0; i < det.mcpTools.length; i++) {
+    const parts = det.mcpTools[i].name.split('__');
+    const toolName = parts.slice(2).join('__') || det.mcpTools[i].name;
+    chips.push({ key: 'mc_' + i, found: true, label: `🔌 ${toolName}`, cls: 'mc', metaKey: 'mc' });
+  }
 
   if (chips.length === 0) return '';
 
@@ -2570,6 +2587,12 @@ function highlightMechInJsonTree(container, body, mechKey) {
     const det = detectMechanisms(body);
     if (!det.subAgents.length) return;
     highlightToolUseById(container, det.subAgents[0].id);
+  } else if (mechKey.startsWith('mc')) {
+    const det = detectMechanisms(body);
+    if (!det.mcpTools.length) return;
+    const idx = mechKey.includes('_') ? parseInt(mechKey.split('_')[1]) : 0;
+    const mc = det.mcpTools[idx] || det.mcpTools[0];
+    if (mc) highlightToolUseById(container, mc.id);
   }
 }
 
@@ -2639,9 +2662,12 @@ function renderProxyDetail() {
   }
 
   if (proxyDetailTab === 'analysis') {
+    const prevAnalysisScroll = detail.querySelector('[style*="overflow:auto"]')?.scrollTop ?? 0;
     renderProxyAnalysis(entry, detail);
     if (proxyDetailMechFilter) {
       requestAnimationFrame(() => {
+        const scrollEl = detail.querySelector('[style*="overflow:auto"]');
+        if (scrollEl) scrollEl.scrollTop = prevAnalysisScroll;
         const activeSection = detail.querySelector(`[data-mech-key="${proxyDetailMechFilter}"]`);
         if (activeSection) {
           activeSection.classList.add('mech-section-active');
@@ -2719,7 +2745,7 @@ function renderProxyDetail() {
 
 // ─── Proxy Analysis ────────────────────────────────────────────────────────
 function detectMechanisms(body) {
-  const found = { claudeMd: null, outputStyle: null, slashCommand: null, skills: [], subAgents: [] };
+  const found = { claudeMd: null, outputStyle: null, slashCommand: null, skills: [], subAgents: [], mcpTools: [] };
   if (!body) return found;
 
   // Output Style: system is array with 2+ items
@@ -2756,10 +2782,16 @@ function detectMechanisms(body) {
       if (c.type === 'tool_use' && (c.name === 'Task' || c.name === 'Agent')) {
         found.subAgents.push({ id: c.id, name: c.name, input: c.input });
       }
-      // tool_result for Skill
+      // MCP tool_use
+      if (c.type === 'tool_use' && c.name && c.name.startsWith('mcp__')) {
+        found.mcpTools.push({ id: c.id, name: c.name, input: c.input });
+      }
+      // tool_result for Skill / MCP
       if (c.type === 'tool_result') {
         const skill = found.skills.find(s => s.id === c.tool_use_id);
         if (skill) skill.result = typeof c.content === 'string' ? c.content : JSON.stringify(c.content, null, 2);
+        const mcp = found.mcpTools.find(m => m.id === c.tool_use_id);
+        if (mcp) mcp.result = typeof c.content === 'string' ? c.content : JSON.stringify(c.content, null, 2);
       }
     }
   }
@@ -2769,7 +2801,7 @@ function detectMechanisms(body) {
 function renderProxyAnalysis(entry, container) {
   const body = entry.body;
   const det = detectMechanisms(body);
-  const hasAny = det.claudeMd || det.outputStyle || det.slashCommand || det.skills.length || det.subAgents.length;
+  const hasAny = det.claudeMd || det.outputStyle || det.slashCommand || det.skills.length || det.subAgents.length || det.mcpTools.length;
 
   const mechChipsHtml = buildMechFilterChips(body);
 
@@ -2865,6 +2897,21 @@ function renderProxyAnalysis(entry, container) {
       <div class="analysis-block highlight-orange ${isJson ? 'jt-json-block' : ''}" ${isJson ? `data-json="${escAttr(JSON.stringify(sa.input))}"` : ''}>${isJson ? '' : esc(sa.input?.prompt || '')}</div>
     </div>`;
   }
+
+  // MCP Tools
+  det.mcpTools.forEach((mc, i) => {
+    const parts = mc.name.split('__');
+    const serverName = parts[1] || '?';
+    const toolName = parts.slice(2).join('__') || mc.name;
+    const isJson = mc.input && typeof mc.input === 'object';
+    html += `<div class="analysis-section" data-mech-key="mc_${i}">
+      <div class="analysis-section-title" style="color:#4ec9dc">🔌 ${esc(toolName)} <span style="font-weight:400;opacity:.7">(${esc(serverName)})</span></div>
+      <div class="analysis-desc">${i18n.t('mechDesc.mc.what')}</div>
+      <div class="analysis-kv"><span class="ak">id</span><span class="av">${esc(mc.id)}</span></div>
+      <div class="analysis-block ${isJson ? 'jt-json-block' : ''}" style="border-left:2px solid rgba(78,201,220,.4);background:rgba(78,201,220,.06)" ${isJson ? `data-json="${escAttr(JSON.stringify(mc.input))}"` : ''}>${isJson ? '' : esc(JSON.stringify(mc.input, null, 2))}</div>
+      ${mc.result ? `<div class="analysis-kv"><span class="ak">result (tool_result)</span></div><div class="analysis-block" style="border-left:2px solid rgba(78,201,220,.4);background:rgba(78,201,220,.06)">${esc(mc.result)}</div>` : ''}
+    </div>`;
+  });
 
   html += '</div></div>';
   container.innerHTML = `<div style="flex-shrink:0">${analysisSearchBar}${mechChipsHtml}</div>` + html;
