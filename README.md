@@ -27,7 +27,32 @@ and visualizes all 5 prompt augmentation mechanisms.
 
 Everything below was discovered by inspecting **real captured traffic** with Claude Inspector.
 
-### 1. Your CLAUDE.md is injected as multiple named sections every turn
+### 1. You type "hello" — Claude receives this entire JSON
+
+You send one word. The API receives a JSON payload with 64+ messages, 3 system blocks, 27 tool schemas, and hidden metadata:
+
+```json
+{
+  "model": "claude-sonnet-4-6",
+  "max_tokens": 32000,
+  "thinking": { "type": "adaptive" },  // Opus uses "enabled" + budget_tokens
+  "stream": true,
+  "context_management": 1,             // undocumented field Claude Code adds
+  "metadata": {
+    "user_id": "user_003619f3...account_e4008a49...session_cdc418a2..."
+  },
+  "system": [ ...3 blocks... ],        // see #4
+  "tools": [ ...27 schemas... ],       // built-in tools + MCP lazy-load (see #5)
+  "messages": [ ...64 items... ]       // entire conversation re-sent every turn
+}
+```
+
+- **`messages[]` has 64 items** — every previous turn is re-sent on every single API call. Your token cost grows with every message.
+- **`metadata.user_id`** encodes three IDs in one string: `user_`, `account_`, and `session_`
+- **`thinking.type: "adaptive"`** on Sonnet vs `"enabled" + budget_tokens: 31999` on Opus — models behave differently
+- **`context_management: 1`** — an undocumented field not in the public API spec
+
+### 2. Your CLAUDE.md is injected as multiple named sections every turn
 
 When you type `"hello"`, the first `user` message contains a `<system-reminder>` block with each file listed separately:
 
@@ -54,7 +79,7 @@ When you type `"hello"`, the first `user` message contains a `<system-reminder>`
 
 **Why this matters:** Global CLAUDE.md, per-project CLAUDE.md, rules files, and memory are all bundled into every single request. Since the API re-sends the **entire `messages[]` array** on every turn, these injections repeat on every call. A 500-line CLAUDE.md burns those tokens on every turn — keep it concise.
 
-### 2. 31,999 of 32,000 tokens go to thinking
+### 3. 31,999 of 32,000 tokens go to thinking
 
 Every assistant response includes a hidden `thinking` block you never see in the CLI:
 
@@ -75,7 +100,7 @@ Every assistant response includes a hidden `thinking` block you never see in the
 - **`signature`** — cryptographic signature prevents tampering with thinking content
 - This is why Claude Code can produce thoughtful answers even when the visible output is short
 
-### 3. The system prompt: 3 cached blocks
+### 4. The system prompt: 3 cached blocks
 
 The `system` field isn't a single string — it's an **array of 3 blocks**:
 
@@ -96,7 +121,7 @@ The `system` field isn't a single string — it's an **array of 3 blocks**:
 
 Block `[2]` is massive (behavior rules, all 27 tool instructions, environment info, MCP server descriptions, git status). The `cache_control` with `ttl: "1h"` means this giant prompt is **cached for 1 hour** — only the first request pays the full processing cost.
 
-### 4. MCP tools are lazy-loaded to save tokens
+### 5. MCP tools are lazy-loaded to save tokens
 
 27 built-in tools (`Read`, `Bash`, `Edit`, `Glob`, `Grep`, `Agent`...) are sent with full JSON schemas in every request. But **MCP tools are not.**
 
@@ -113,27 +138,6 @@ MCP tools only appear as a name list inside the `ToolSearch` tool description:
 ```
 
 **How the model knows when to use them:** The `system[]` block contains an "MCP Server Instructions" section describing each server's purpose (e.g., *"Use context7 to retrieve up-to-date documentation"*). The model reads the description → decides to use it → calls `ToolSearch` to load the full schema → then calls the actual tool. This two-step lazy-loading saves tokens by not sending all MCP schemas every request.
-
-### 5. The full request at a glance
-
-Every Claude Code API call sends this structure:
-
-```json
-{
-  "model": "claude-opus-4-6",
-  "system": [ ... ],              // 3 blocks (see #3)
-  "messages": [ ... ],            // Full conversation + injected CLAUDE.md/rules (see #1)
-  "tools": [ ... ],               // 27 built-in tool schemas (see #4)
-  "metadata": { "user_id": "..." },
-  "max_tokens": 32000,
-  "thinking": { "type": "enabled", "budget_tokens": 31999 },
-  "stream": true
-}
-```
-
-- **`messages[]`** carries the **entire conversation history** — every previous user/assistant turn is re-sent
-- **`metadata.user_id`** encodes your account and session ID
-- **`stream: true`** — responses are streamed via SSE, which is why you see text appear incrementally
 
 ## Getting Started
 
