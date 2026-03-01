@@ -716,7 +716,7 @@
       <div class="pactions">
         <span class="size-pill" id="sizePill">— KB</span>
         <span class="live-pill" id="livePill" style="display:none"><span class="live-dot"></span>Live</span>
-        <button class="copy-small" onclick="copyPayload()">Copy JSON</button>
+        <button class="copy-small" onclick="copyPayload()" data-i18n="copy.json">Copy JSON</button>
       </div>
     </div>
 
@@ -726,7 +726,7 @@
 
     <div class="pview hidden" id="pv-response">
       <div class="resp-toolbar" id="respToolbar" style="display:none">
-        <button class="copy-small" onclick="copyResponse()">Copy Text</button>
+        <button class="copy-small" onclick="copyResponse()" data-i18n="copy.text">Copy Text</button>
       </div>
       <div class="resp-scroll">
         <div id="resp-view"></div>
@@ -738,7 +738,7 @@
         <button class="exp-tab active" data-lang="curl"       onclick="showExportLang('curl')">cURL</button>
         <button class="exp-tab"        data-lang="python"     onclick="showExportLang('python')">Python</button>
         <button class="exp-tab"        data-lang="typescript" onclick="showExportLang('typescript')">TypeScript</button>
-        <button class="copy-small" style="margin-left:auto" onclick="copyExport()">Copy</button>
+        <button class="copy-small" style="margin-left:auto" onclick="copyExport()" data-i18n="copy.copy">Copy</button>
       </div>
       <div id="expNote" class="exp-note" style="display:none"></div>
       <div class="exp-scroll">
@@ -784,7 +784,7 @@
       <div class="field">
         <label>
           <span data-i18n="proxy.runCommand">실행 명령</span>
-          <button class="copy-small" onclick="copyProxyCmd()" style="text-transform:none;letter-spacing:0;font-weight:normal">Copy</button>
+          <button class="copy-small" onclick="copyProxyCmd()" style="text-transform:none;letter-spacing:0;font-weight:normal" data-i18n="copy.copy">Copy</button>
         </label>
         <div class="proxy-cmd" id="proxyCmdBox">
           <span id="proxyCmdText" style="color:var(--dim)" data-i18n="proxy.startFirst">프록시를 먼저 시작하세요</span>
@@ -814,7 +814,7 @@
         <button class="dtab"        data-dtab="request"  onclick="showDetailTab('request')">Request</button>
         <button class="dtab"        data-dtab="response" onclick="showDetailTab('response')">Response</button>
         <button class="dtab"        data-dtab="analysis" onclick="showDetailTab('analysis')" style="color:var(--purple)">Analysis</button>
-        <button class="copy-small" style="margin-left:auto" onclick="copyProxyDetail()">Copy</button>
+        <button class="copy-small" style="margin-left:auto" onclick="copyProxyDetail()" data-i18n="copy.copy">Copy</button>
       </div>
       <div id="proxyDetailView" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
         <div class="proxy-empty">
@@ -925,6 +925,18 @@ const LOCALES = {
     form: {
       fileOpen: '📂 파일 열기',
       fileElectronOnly: '파일 열기는 Electron 앱에서만 지원됩니다.',
+    },
+    copy: {
+      json: 'Copy JSON',
+      text: '텍스트 복사',
+      copy: '복사',
+      copied: '✓ 복사됨',
+      response: '응답 복사',
+    },
+    api: {
+      sending: '전송 중…',
+      simulatingSkill: '스킬 시뮬레이션 중…',
+      runningSubAgent: '{type} 서브 에이전트 실행 중…',
     },
     apiInput: {
       placeholder: 'sk-ant-api03-…  (입력하면 자동 저장)',
@@ -1112,6 +1124,18 @@ const LOCALES = {
     form: {
       fileOpen: '📂 Open File',
       fileElectronOnly: 'File open is only supported in the Electron app.',
+    },
+    copy: {
+      json: 'Copy JSON',
+      text: 'Copy Text',
+      copy: 'Copy',
+      copied: '✓ Copied',
+      response: 'Copy Response',
+    },
+    api: {
+      sending: 'Sending…',
+      simulatingSkill: 'Simulating skill…',
+      runningSubAgent: 'Running {type} sub-agent…',
     },
     apiInput: {
       placeholder: 'sk-ant-api03-…  (auto-saved on input)',
@@ -1623,7 +1647,7 @@ function renderForm(mech) {
 
   // Footer
   const footer = document.getElementById('configFooter');
-  const copyBtn = `<button class="btn btn-copy" onclick="copyPayload()">Copy JSON</button>`;
+  const copyBtn = `<button class="btn btn-copy" onclick="copyPayload()">${i18n.t('copy.json')}</button>`;
   if (def.sendable) {
     footer.innerHTML = copyBtn +
       `<button class="btn btn-send" id="actionBtn" onclick="sendToApi()">${i18n.t('mech.btn.send')}</button>`;
@@ -1704,14 +1728,14 @@ function copyPayload() {
   const text = JSON.stringify(currentPayload, null, 2);
   navigator.clipboard.writeText(text).then(() => {
     document.querySelectorAll('.btn-copy, [onclick="copyPayload()"]').forEach(b => {
-      const o = b.textContent; b.textContent = '✓ Copied';
+      const o = b.textContent; b.textContent = i18n.t('copy.copied');
       setTimeout(() => { b.textContent = o; }, 1500);
     });
   });
 }
 
 // ─── Core send function ───────────────────────────────────────────────────
-async function callApi(payload, loadingMsg = 'Sending…') {
+async function callApi(payload, loadingMsg = i18n.t('api.sending')) {
   const apiKey = document.getElementById('apiKey').value.trim();
   if (!apiKey) {
     const inp = document.getElementById('apiKey');
@@ -1768,20 +1792,20 @@ function sendToApi() {
 // ─── Simulate Skill ───────────────────────────────────────────────────────
 function simulateSkill() {
   const cfg = collectCfg();
-  callApi(buildSendablePayload('skill', cfg), 'Simulating skill…');
+  callApi(buildSendablePayload('skill', cfg), i18n.t('api.simulatingSkill'));
 }
 
 // ─── Simulate Sub-Agent ───────────────────────────────────────────────────
 function simulateSubAgent() {
   const cfg = collectCfg();
-  callApi(buildSendablePayload('sub-agent', cfg), `Running ${cfg.type || 'Explore'} sub-agent…`);
+  callApi(buildSendablePayload('sub-agent', cfg), i18n.t('api.runningSubAgent', { type: cfg.type || 'Explore' }));
 }
 
 // ─── Copy response ────────────────────────────────────────────────────────
 function copyResponse() {
   navigator.clipboard.writeText(lastResponseText).then(() => {
     const btn = document.querySelector('.resp-copy');
-    if (btn) { btn.textContent = '✓ Copied'; setTimeout(() => { btn.textContent = 'Copy Response'; }, 1500); }
+    if (btn) { btn.textContent = i18n.t('copy.copied'); setTimeout(() => { btn.textContent = i18n.t('copy.response'); }, 1500); }
   });
 }
 
