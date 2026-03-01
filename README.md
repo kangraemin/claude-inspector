@@ -9,6 +9,8 @@ and visualizes all 5 prompt augmentation mechanisms.
 
 [Getting Started](#getting-started) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#-proxy-mode) · [How It Works](#how-it-works)
 
+**English** | [한국어](README.ko.md)
+
 </div>
 
 ---
