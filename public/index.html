@@ -2567,11 +2567,18 @@ function highlightMechInJsonTree(container, body, mechKey) {
   } else if (mechKey.startsWith('sc')) {
     const det = detectMechanisms(body);
     const idx = mechKey.includes('_') ? parseInt(mechKey.split('_')[1]) : 0;
-    if (!det.slashCommands[idx]) return;
+    const target = det.slashCommands[idx];
+    if (!target) return;
+    // Count same-tag commands before this index to handle duplicates
+    let sameTagIdx = 0;
+    for (let i = 0; i < idx; i++) {
+      if (det.slashCommands[i].tag === target.tag) sameTagIdx++;
+    }
+    const specificText = `<command-message>${target.tag}</command-message>`;
     let count = 0;
     for (const el of container.querySelectorAll('.jt-str')) {
-      if (!el.textContent.includes('<command-message>')) continue;
-      if (count === idx) {
+      if (!el.textContent.includes(specificText)) continue;
+      if (count === sameTagIdx) {
         expandAncestors(el);
         const html = el.innerHTML;
         const cmOpen = esc('<command-message>');
@@ -2779,9 +2786,18 @@ function detectMechanisms(body) {
         // Slash Command: <command-message> tag (multiple per conversation)
         for (const cmdMatch of c.text.matchAll(/<command-message>([\s\S]*?)<\/command-message>/g)) {
           const tag = cmdMatch[1].trim();
-          const nameMatch = tag.match(/^#\s*\/(\S+)/)       // # /commit (real CLI)
-                         || tag.match(/^(\S+)\s+is running/); // commit is running… (demo)
-          const name = nameMatch ? nameMatch[1] : `Cmd ${found.slashCommands.length + 1}`;
+          // Try <command-name>/xxx</command-name> right after (real CLI format)
+          const nearby = c.text.slice(cmdMatch.index + cmdMatch[0].length, cmdMatch.index + cmdMatch[0].length + 200);
+          const cmdNameMatch = nearby.match(/^<command-name>\s*\/(\S+)\s*<\/command-name>/);
+          let name;
+          if (cmdNameMatch) {
+            name = cmdNameMatch[1];                          // /worklog → worklog
+          } else {
+            const nameMatch = tag.match(/^#\s*\/(\S+)/)     // # /commit
+                           || tag.match(/^(\S+)\s+is running/); // commit is running…
+            name = nameMatch ? nameMatch[1]
+                 : (/^\w[\w-]*$/.test(tag) ? tag : `Cmd ${found.slashCommands.length + 1}`);
+          }
           found.slashCommands.push({ name, tag, full: c.text });
         }
       }
