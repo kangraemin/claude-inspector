@@ -14,20 +14,20 @@ and visualizes all 5 prompt augmentation mechanisms.
 ---
 
 <p align="center">
-  <img src="public/screenshots/proxy-request.png" width="100%" alt="Proxy — Request view with mechanism filter chips and search" />
+  <img src="public/screenshots/proxy-request.png" width="100%" alt="Proxy — Request view showing CLAUDE.md Global/Local section chips with inline text highlight" />
 </p>
 
 <p align="center">
-  <img src="public/screenshots/proxy-analysis.png" width="100%" alt="Proxy — Analysis view auto-detecting all 5 mechanisms" />
+  <img src="public/screenshots/proxy-analysis.png" width="100%" alt="Proxy — Analysis view auto-detecting all 5 mechanisms with section content" />
 </p>
 
 ## What You'll Learn
 
 Everything below was discovered by inspecting **real captured traffic** with Claude Inspector.
 
-### 1. Your CLAUDE.md is re-sent every single turn
+### 1. Your CLAUDE.md is injected as multiple named sections every turn
 
-When you type `"hello"`, here's what actually gets sent as your first `user` message:
+When you type `"hello"`, the first `user` message contains a `<system-reminder>` block with each file listed separately:
 
 ```json
 {
@@ -37,7 +37,12 @@ When you type `"hello"`, here's what actually gets sent as your first `user` mes
     { "type": "text", "text": "<system-reminder> The following skills are available... </system-reminder>" },
 
     // [1] Injected: CLAUDE.md + rules + memory + currentDate
-    { "type": "text", "text": "<system-reminder> Contents of CLAUDE.md... Contents of git-rules.md... Contents of review-rules.md... currentDate: 2026-03-01 </system-reminder>" },
+    { "type": "text", "text": "<system-reminder>
+        Contents of /Users/you/.claude/CLAUDE.md (user's private global instructions): ...
+        Contents of /Users/you/.claude/rules/git-rules.md (user's private global instructions): ...
+        Contents of /Users/you/project/.claude/CLAUDE.md (project instructions): ...
+        currentDate: 2026-03-01
+      </system-reminder>" },
 
     // [2] What you actually typed
     { "type": "text", "text": "hello" }
@@ -45,7 +50,7 @@ When you type `"hello"`, here's what actually gets sent as your first `user` mes
 }
 ```
 
-**Why this matters:** Your CLAUDE.md, rules files, and memory are bundled into the first `user` message via `<system-reminder>` tags. Since the API re-sends the **entire `messages[]` array** every turn, these injections are included in every single request. A 500-line CLAUDE.md burns those tokens on every turn — keep it concise.
+**Why this matters:** Global CLAUDE.md, per-project CLAUDE.md, rules files, and memory are all bundled into every single request. Since the API re-sends the **entire `messages[]` array** on every turn, these injections repeat on every call. A 500-line CLAUDE.md burns those tokens on every turn — keep it concise.
 
 ### 2. 31,999 of 32,000 tokens go to thinking
 
@@ -159,21 +164,21 @@ ANTHROPIC_BASE_URL=http://localhost:9090 claude
 | Tab | Description |
 |-----|-------------|
 | **Messages** | Browse `messages[]` by role — filter by user/assistant/system, full-text search (`Cmd+F`) |
-| **Request** | Raw request JSON with collapsible tree, mechanism filter chips (CLAUDE.md, Slash Cmd, Skill...) |
+| **Request** | Raw request JSON with collapsible tree; CLAUDE.md chips broken down by file (Global CLAUDE.md, Global Rules, Local CLAUDE.md, Memory) — click any chip to highlight that section inline |
 | **Response** | Full response including SSE stream auto-reassembly |
-| **Analysis** | Auto-detects which of the 5 mechanisms are present and explains each one |
+| **Analysis** | Auto-detects which of the 5 mechanisms are present, shows each injected section's content with syntax highlighting — click a chip to jump to that section |
 
 ## How It Works
 
 Claude Code enhances every API call with up to **5 prompt augmentation mechanisms** — but these are invisible during normal usage.
 
-| Mechanism | Injection Point |
-|-----------|----------------|
-| **CLAUDE.md** | `messages[].content` → `<system-reminder>` |
-| **Output Style** | `system[]` additional block |
-| **Slash Command** | `messages[].content` → `<command-message>` |
-| **Skill** | `tool_result` after Skill `tool_use` |
-| **Sub-Agent** | Separate isolated API call via Task tool |
+| Mechanism | Injection Point | Detail |
+|-----------|----------------|--------|
+| **CLAUDE.md** | `messages[].content` → `<system-reminder>` | Global + Local CLAUDE.md, rules files, and memory — each listed as a named section |
+| **Output Style** | `system[]` additional block | Added when `/output` style is set |
+| **Slash Command** | `messages[].content` → `<command-message>` | Command prompt injected before your message |
+| **Skill** | `tool_result` after Skill `tool_use` | Skill content returned via tool result flow |
+| **Sub-Agent** | Separate isolated API call via Task tool | Spawns a fully independent API call |
 
 Claude Inspector sits between Claude Code and the Anthropic API, capturing the full request/response payload — so you can see exactly what gets injected and where.
 
