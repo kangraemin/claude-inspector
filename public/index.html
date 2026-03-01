@@ -2493,7 +2493,7 @@ function buildMechFilterChips(body) {
     + '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:5px 10px 7px">'
     + chips.map(c => {
         const active = proxyDetailMechFilter === c.key ? ' active' : '';
-        const safePattern = c.pattern.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const safePattern = (c.pattern || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         return `<span class="mech-chip ${c.cls} found btn${active}" onclick="setProxyDetailMechFilter('${c.key}','${safePattern}')">${c.label}</span>`;
       }).join('')
     + '</div>'
