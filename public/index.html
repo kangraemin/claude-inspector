@@ -2949,9 +2949,12 @@ function copyProxyCmd() {
 }
 
 function copyProxyDetail() {
-  const code = document.getElementById('proxyDetailCode');
-  if (!code) return;
-  navigator.clipboard.writeText(code.textContent).then(() => {
+  const entry = proxyCaptures.find(e => e.id === selectedProxyId);
+  if (!entry) return;
+  const data = proxyDetailTab === 'request' ? entry.body : (entry.response?.body ?? null);
+  if (data === null || data === undefined) return;
+  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  navigator.clipboard.writeText(text).then(() => {
     const btn = document.querySelector('[onclick="copyProxyDetail()"]');
     if (btn) { const o = btn.textContent; btn.textContent = '✓'; setTimeout(() => btn.textContent = o, 1500); }
   });
