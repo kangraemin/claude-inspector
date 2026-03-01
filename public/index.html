@@ -631,13 +631,15 @@
 <body>
 
 <header class="header">
-  <div class="logo" onclick="switchM('home')" title="홈으로">
+  <div class="logo" onclick="switchM('home')" title="홈으로" data-i18n-title="header.goHome">
     <div class="logo-icon">CI</div>
     <span class="logo-text">Claude Inspector</span>
-    <span class="logo-sub">Prompt Mechanism Visualizer</span>
+    <span class="logo-sub" data-i18n="header.logoSub">Prompt Mechanism Visualizer</span>
   </div>
   <div class="header-right">
-    <button class="hist-btn" id="histToggleBtn" onclick="toggleHistory()" title="요청 히스토리 (최근 10개)">History</button>
+    <button id="langToggleBtn" onclick="i18n.setLocale(i18n.locale==='ko'?'en':'ko')"
+      style="padding:4px 10px;border-radius:5px;font-size:11px;background:none;border:1px solid var(--border);color:var(--dim);cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:700;">EN</button>
+    <button class="hist-btn" id="histToggleBtn" onclick="toggleHistory()" title="요청 히스토리 (최근 10개)" data-i18n-title="header.historyTitle"><span data-i18n="header.history">History</span></button>
     <select class="model-select" id="modelSel" style="display:none">
       <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
       <option value="claude-opus-4-6">claude-opus-4-6</option>
@@ -645,11 +647,11 @@
     </select>
     <div class="api-group" id="apiGroup">
       <span class="api-label">API Key</span>
-      <span class="api-saved" id="apiSaved" style="display:none">저장됨</span>
+      <span class="api-saved" id="apiSaved" style="display:none" data-i18n="header.apiSaved">저장됨</span>
       <div class="api-dot" id="apiDot"></div>
       <input type="password" class="api-input" id="apiKey"
         placeholder="sk-ant-api03-…  (입력하면 자동 저장)"
-        oninput="onApiKeyChange()">
+        oninput="onApiKeyChange()" data-i18n-placeholder="apiInput.placeholder">
     </div>
   </div>
 </header>
@@ -667,29 +669,29 @@
 
 <div id="landingPanel" class="landing">
   <div>
-    <div class="landing-title">Claude Inspector에 오신 걸 환영합니다</div>
-    <div class="landing-sub">사용 목적에 맞는 모드를 선택하세요</div>
+    <div class="landing-title" data-i18n="landing.title">Claude Inspector에 오신 걸 환영합니다</div>
+    <div class="landing-sub" data-i18n="landing.subtitle">사용 목적에 맞는 모드를 선택하세요</div>
   </div>
   <div class="landing-cards">
     <div class="landing-card" onclick="switchM('claude-md')">
       <div class="lc-icon">🔬</div>
       <div class="lc-title">Simulator</div>
-      <div class="lc-desc">
+      <div class="lc-desc" data-i18n="landing.simDesc">
         5가지 프롬프트 메커니즘(CLAUDE.md, Output Style, Slash Command, Skill, Sub-Agent)의
         실제 API 페이로드를 직접 구성하고 테스트합니다.
       </div>
-      <span class="lc-req">필요: Anthropic API Key</span>
-      <div class="lc-btn">시작하기 →</div>
+      <span class="lc-req" data-i18n="landing.simReq">필요: Anthropic API Key</span>
+      <div class="lc-btn" data-i18n="landing.start">시작하기 →</div>
     </div>
     <div class="landing-card proxy" onclick="switchM('proxy')">
       <div class="lc-icon">🔌</div>
       <div class="lc-title">Proxy Mode</div>
-      <div class="lc-desc">
+      <div class="lc-desc" data-i18n="landing.proxyDesc">
         Claude Code CLI의 실제 API 트래픽을 가로채 실시간으로 시각화합니다.
         실제 사용 중 어떤 페이로드가 오가는지 확인할 수 있습니다.
       </div>
-      <span class="lc-req">필요: Claude Code CLI 설치</span>
-      <div class="lc-btn">시작하기 →</div>
+      <span class="lc-req" data-i18n="landing.proxyReq">필요: Claude Code CLI 설치</span>
+      <div class="lc-btn" data-i18n="landing.start">시작하기 →</div>
     </div>
   </div>
 </div>
@@ -747,11 +749,11 @@
 
   <div class="hist-panel hidden" id="histPanel">
     <div class="panel-header">
-      <span>요청 히스토리</span>
+      <span data-i18n="history.title">요청 히스토리</span>
       <span style="font-size:10px;color:var(--dim)" id="histCount">0 / 10</span>
     </div>
     <div class="hist-list" id="histList">
-      <div class="hist-empty">아직 기록 없음<br><small>API 전송 후 여기 표시됩니다</small></div>
+      <div class="hist-empty" data-i18n-html="history.empty">아직 기록 없음<br><small>API 전송 후 여기 표시됩니다</small></div>
     </div>
   </div>
 </div><!-- /#normalPanels -->
@@ -760,38 +762,38 @@
   <!-- Control -->
   <div class="proxy-ctrl">
     <div class="panel-header">
-      <span>Proxy Control</span>
-      <span class="inject-chip" style="color:var(--red);border-color:rgba(244,135,113,.3);background:rgba(244,135,113,.08)">실시간 캡처</span>
+      <span data-i18n="proxy.title">Proxy Control</span>
+      <span class="inject-chip" style="color:var(--red);border-color:rgba(244,135,113,.3);background:rgba(244,135,113,.08)" data-i18n="proxy.liveCapture">실시간 캡처</span>
     </div>
     <div class="config-body">
       <div class="how-box" style="border-color:rgba(244,135,113,.25);background:rgba(244,135,113,.04)">
-        <div class="how-title" style="color:var(--red)">⚡ 실제 API 트래픽 인터셉트</div>
-        <div class="how-text">
+        <div class="how-title" style="color:var(--red)" data-i18n="proxy.interceptTitle">⚡ 실제 API 트래픽 인터셉트</div>
+        <div class="how-text" data-i18n-html="proxy.interceptDesc">
           Claude Code CLI의 실제 API 요청을 가로채 실시간으로 시각화합니다.<br>
           프록시를 시작한 뒤 아래 명령으로 Claude Code를 실행하세요.
         </div>
       </div>
       <div class="field">
-        <label>포트</label>
+        <label data-i18n="proxy.port">포트</label>
         <input type="number" id="proxyPort" value="9090" min="1024" max="65535" style="width:120px" oninput="updateProxyCmd()">
       </div>
       <div class="proxy-status" id="proxyStatus">
         <span class="ps-dot"></span>
-        <span id="proxyStatusText">중지됨</span>
+        <span id="proxyStatusText" data-i18n="proxy.stopped">중지됨</span>
       </div>
       <div class="field">
         <label>
-          <span>실행 명령</span>
+          <span data-i18n="proxy.runCommand">실행 명령</span>
           <button class="copy-small" onclick="copyProxyCmd()" style="text-transform:none;letter-spacing:0;font-weight:normal">Copy</button>
         </label>
         <div class="proxy-cmd" id="proxyCmdBox">
-          <span id="proxyCmdText" style="color:var(--dim)">프록시를 먼저 시작하세요</span>
+          <span id="proxyCmdText" style="color:var(--dim)" data-i18n="proxy.startFirst">프록시를 먼저 시작하세요</span>
         </div>
       </div>
     </div>
     <div class="config-footer">
-      <button class="btn btn-send" id="proxyStartBtn" style="flex:1;justify-content:center" onclick="toggleProxy()">Start Proxy</button>
-      <button class="btn btn-copy" onclick="clearProxyCaptures()">Clear</button>
+      <button class="btn btn-send" id="proxyStartBtn" style="flex:1;justify-content:center" onclick="toggleProxy()" data-i18n="proxy.startProxy">Start Proxy</button>
+      <button class="btn btn-copy" onclick="clearProxyCaptures()" data-i18n="proxy.clear">Clear</button>
     </div>
   </div>
 
@@ -799,11 +801,11 @@
   <div class="proxy-stream">
     <div class="proxy-list">
       <div class="panel-header">
-        <span>캡처된 요청</span>
+        <span data-i18n="proxy.capturedRequests">캡처된 요청</span>
         <span style="font-size:10px;color:var(--dim)" id="proxyCount">0</span>
       </div>
       <div class="hist-list" id="proxyList">
-        <div class="hist-empty">캡처된 요청 없음<br><small>프록시를 시작하고<br>Claude Code를 실행하세요</small></div>
+        <div class="hist-empty" data-i18n-html="proxy.noCaptures">캡처된 요청 없음<br><small>프록시를 시작하고<br>Claude Code를 실행하세요</small></div>
       </div>
     </div>
     <div class="proxy-detail">
@@ -817,7 +819,7 @@
       <div id="proxyDetailView" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
         <div class="proxy-empty">
           <span style="font-size:28px">🔍</span>
-          <span>요청을 선택하면<br>페이로드가 표시됩니다</span>
+          <span data-i18n-html="proxy.selectRequest">요청을 선택하면<br>페이로드가 표시됩니다</span>
         </div>
       </div>
     </div>
@@ -827,164 +829,589 @@
 </div><!-- /.main -->
 
 <script>
+// ─── i18n ──────────────────────────────────────────────────────────────────
+const LOCALES = {
+  ko: {
+    header: {
+      history: 'History',
+      historyTitle: '요청 히스토리 (최근 10개)',
+      apiSaved: '저장됨',
+      goHome: '홈으로',
+      logoSub: 'Prompt Mechanism Visualizer',
+    },
+    landing: {
+      title: 'Claude Inspector에 오신 걸 환영합니다',
+      subtitle: '사용 목적에 맞는 모드를 선택하세요',
+      simDesc: '5가지 프롬프트 메커니즘(CLAUDE.md, Output Style, Slash Command, Skill, Sub-Agent)의 실제 API 페이로드를 직접 구성하고 테스트합니다.',
+      simReq: '필요: Anthropic API Key',
+      proxyDesc: 'Claude Code CLI의 실제 API 트래픽을 가로채 실시간으로 시각화합니다. 실제 사용 중 어떤 페이로드가 오가는지 확인할 수 있습니다.',
+      proxyReq: '필요: Claude Code CLI 설치',
+      start: '시작하기 →',
+    },
+    history: {
+      title: '요청 히스토리',
+      empty: '아직 기록 없음<br><small>API 전송 후 여기 표시됩니다</small>',
+      noMsg: '메시지 없음',
+    },
+    proxy: {
+      title: 'Proxy Control',
+      liveCapture: '실시간 캡처',
+      interceptTitle: '⚡ 실제 API 트래픽 인터셉트',
+      interceptDesc: 'Claude Code CLI의 실제 API 요청을 가로채 실시간으로 시각화합니다.<br>프록시를 시작한 뒤 아래 명령으로 Claude Code를 실행하세요.',
+      port: '포트',
+      stopped: '중지됨',
+      running: '포트 {port}에서 실행 중',
+      runCommand: '실행 명령',
+      startFirst: '프록시를 먼저 시작하세요',
+      startProxy: 'Start Proxy',
+      stopProxy: 'Stop Proxy',
+      clear: 'Clear',
+      capturedRequests: '캡처된 요청',
+      noCaptures: '캡처된 요청 없음<br><small>프록시를 시작하고<br>Claude Code를 실행하세요</small>',
+      startFail: '프록시 시작 실패: ',
+      selectRequest: '요청을 선택하면<br>페이로드가 표시됩니다',
+      noMessages: 'messages 배열 없음',
+      waitingResponse: '응답 대기 중…',
+      noBody: '바디 없음',
+      noResults: '결과 없음',
+      msgCount: '{count} / {total}개',
+    },
+    messages: {
+      filterUser: '내가 보낸 것',
+      filterTyped: '직접 입력만',
+      filterAssistant: '클로드가 보낸 것',
+      filterAll: '전체',
+      searchPlaceholder: '🔍 검색... (⌘F)',
+      searchClear: '검색 초기화',
+    },
+    analysis: {
+      noMechanisms: '감지된 메커니즘 없음<br><small>일반 API 요청이거나 분석 지원 외 패턴입니다</small>',
+      claudeMdTitle: 'CLAUDE.md — system-reminder 주입',
+      claudeMdDesc: 'Claude Code가 프로젝트/글로벌 CLAUDE.md 내용을 <system-reminder> 태그로 감싸서 messages[] 안에 삽입',
+      outputStyleTitle: 'Output Style — system[] 추가 블록',
+      outputStyleDesc: 'Claude Code가 system 프롬프트 배열에 추가 블록으로 삽입 (모델 응답 스타일 제어)',
+      slashCmdTitle: '① 입력 — Slash Command',
+      slashCmdDesc: '사용자가 /{cmd}을 입력하면 Claude Code가 <command-message> 태그로 감싸서 프롬프트에 주입',
+      skillTitle: 'Skill (tool_use → tool_result)',
+      skillLinkedTitle: '② 실행 — Skill (tool_use → tool_result)',
+      skillDesc: 'Claude가 스킬을 tool_use로 호출하고 결과를 tool_result로 수신',
+      skillLinkedDesc: 'Claude가 위 슬래시 커맨드를 읽고, 매칭되는 스킬을 tool_use로 호출',
+      noToolResult: 'tool_result 없음 (다음 메시지에 있거나 아직 수신 전)',
+      subAgentDesc: 'Claude가 Task tool로 독립적인 서브에이전트 API 요청을 생성 (별도 컨텍스트에서 실행)',
+      searchPlaceholder: '🔍 검색... (⌘F, Enter=다음)',
+    },
+    mechDesc: {
+      cm: {
+        who: 'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
+        what: 'CLAUDE.md 파일 내용을 <system-reminder> 태그로 감싸 messages[] 안에 삽입합니다.',
+      },
+      sc: {
+        who: 'Claude Code CLI가 자동 래핑 (우리 앱은 표시만 함)',
+        what: '/명령어 입력 시 해당 내용을 <command-message> 태그로 감싸 user 메시지에 삽입합니다.',
+      },
+      sk: {
+        who: 'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
+        what: '스킬이 설정되어 있으면 "The following skills are available..." 목록을 <system-reminder>로 주입합니다.',
+      },
+      sa: {
+        who: 'Claude Code CLI가 별도 API 호출 생성 (우리 앱은 표시만 함)',
+        what: 'Task tool 호출 시 Claude Code가 독립적인 두 번째 API 요청을 만들어 서브에이전트를 실행합니다.',
+      },
+    },
+    export: {
+      skillNote: '⚠️  Skill은 tool_use 플로우가 필요합니다. 아래는 Simulate Effect (system 주입 버전)의 실행 가능한 페이로드입니다.',
+      subAgentNote: '⚠️  Sub-Agent는 2개의 API 호출을 생성합니다. 아래는 API Call #2 (격리된 서브에이전트)의 단독 실행 페이로드입니다.',
+    },
+    form: {
+      fileOpen: '📂 파일 열기',
+      fileElectronOnly: '파일 열기는 Electron 앱에서만 지원됩니다.',
+    },
+    apiInput: {
+      placeholder: 'sk-ant-api03-…  (입력하면 자동 저장)',
+    },
+    search: {
+      prev: '이전',
+      next: '다음',
+    },
+    mech: {
+      claudeMd: {
+        howTitle: '⚡ Claude Code에서 실제 동작',
+        howText: '프로젝트 루트에 <code>CLAUDE.md</code>가 있으면 Claude Code가 <strong>모든 요청</strong>에 자동으로 <code>&lt;system-reminder&gt;</code> 태그로 주입. 설정 불필요 — 파일 존재만으로 동작.',
+        ex1: '팀 코딩 스탠다드, 아키텍처 결정, 기술 스택 정보를 적어두면 모든 팀원의 요청에 자동 적용됨',
+        ex1tag: '예시',
+        ex2: '메시지 레벨 (system 아님) — 프로젝트 <em>컨텍스트</em>지 Claude의 <em>정체성</em>이 아님',
+        ex2tag: '레이어',
+        fContent: 'CLAUDE.md 내용',
+        fUserMessage: 'User Message',
+      },
+      outputStyle: {
+        howTitle: '⚡ Claude Code에서 실제 동작',
+        howText: '<code>/output-style software-architect</code> 실행 시 <code>system</code> 배열에 스타일 블록이 추가됨. 세션이 끝날 때까지 <strong>모든 응답</strong>에 적용.',
+        ex1: '코드 리뷰 세션 시작 전 "senior engineer" 스타일 설정 → 이후 모든 답변이 아키텍처 관점으로 변함',
+        ex1tag: '예시',
+        ex2: '시스템 레벨 — CLAUDE.md(메시지)와 달리 Claude의 <em>정체성/행동</em>을 변경',
+        ex2tag: '레이어',
+        fName: '스타일 이름',
+        fContent: '스타일 지침',
+        fUserMessage: 'User Message',
+      },
+      slashCommand: {
+        howTitle: '⚡ Claude Code에서 실제 동작',
+        howText: '<code>.claude/commands/review.md</code> 파일 생성 → <code>/review @file.js</code> 입력 시 <code>{arg1}</code>이 인수로 치환. <strong>Claude가 결정하는 게 아님</strong> — 순수 문자열 치환.',
+        ex1: '코드 리뷰, PR 체크리스트, 배포 절차 등 반복 작업을 명시적으로 실행할 때',
+        ex1tag: '예시',
+        ex2: 'Slash Command는 <em>사용자가 직접 호출</em>, Skill은 <em>Claude가 자율 판단</em>',
+        ex2tag: 'vs Skill',
+        fName: '커맨드 이름',
+        fTemplate: '커맨드 템플릿 ({arg1} 치환)',
+        fArgs: '인수 ({arg1} 대체값)',
+      },
+      skill: {
+        howTitle: '⚡ Claude Code에서 실제 동작 (2단계)',
+        flowStep1: '사용자: "git squash 어떻게 해?"',
+        flowArrow1: '↓ description 필드와 시맨틱 매칭',
+        flowStep2: '매칭 성공 → tool_use: Skill { command: "git-helper" }',
+        flowArrow2: '↓ SKILL.md 전체 내용 주입',
+        flowStep3: 'tool_result: [스킬 내용]',
+        flowArrow3: '↓',
+        flowStep4: 'Claude: 스킬 컨텍스트를 바탕으로 응답',
+        warnText: '<strong>description이 부정확하면 매칭 실패.</strong> "git, squash, commits, rebase" 같이 키워드를 명시적으로 나열해야 함.',
+        ex1: '실제 API로 스킬 효과를 확인 (스킬 내용을 system에 주입하는 단순화 버전)',
+        ex1tag: '▶ Simulate',
+        fName: '스킬 이름',
+        fDescription: '매칭에 사용할 description',
+        fContent: '스킬 내용 (SKILL.md 본문)',
+        fUserMessage: 'User Message (스킬 트리거)',
+      },
+      subAgent: {
+        howTitle: '⚡ Claude Code에서 실제 동작 (API 2번 호출)',
+        apiCall1: 'API Call #1 — 메인 대화',
+        flowStep1: '사용자: "auth 구현 분석해줘"',
+        flowArrow1: '↓ Claude가 복잡한 작업으로 판단',
+        flowStep2: 'tool_use: Task { subagent_type: "Explore", prompt: "…" }',
+        apiCall2: 'API Call #2 — Sub-Agent (완전 격리)',
+        flowStep3: '⚠️ 메인 대화 컨텍스트 없음',
+        flowStep4: '✅ CLAUDE.md는 여전히 주입됨',
+        flowStep5: 'Explore 에이전트가 자율적으로 탐색/분석',
+        flowArrow2: '↓ 결과 반환',
+        apiCall3: '다시 API Call #1',
+        flowStep6: 'tool_result: [sub-agent 분석 결과]',
+        flowStep7: 'Claude: 결과 종합하여 응답',
+        warnText: '<strong>컨텍스트 브리징 없음.</strong> delegation prompt에 필요한 모든 정보를 명시해야 함.',
+        ex1: 'Sub-Agent 대화만 단독 실행하여 delegation prompt 효과 확인',
+        ex1tag: '▶ Run',
+        fType: 'Sub-Agent 타입',
+        fPrompt: 'Delegation Prompt (sub-agent에게 전달)',
+        fUserMessage: 'User Message (메인 대화 트리거)',
+      },
+      inject: {
+        claudeMd: 'messages[].content → system-reminder',
+        outputStyle: 'system[] → additional text block',
+        slashCommand: 'messages[].content → command-message',
+        skill: 'tool_result (Skill tool_use 이후)',
+        subAgent: '격리된 별도 API 호출 (Task 도구)',
+      },
+      btn: {
+        send: 'Send to Claude →',
+        simulate: '▶ Simulate Effect',
+        runSubAgent: '▶ Run Sub-Agent',
+      },
+    },
+  },
+  en: {
+    header: {
+      history: 'History',
+      historyTitle: 'Request history (last 10)',
+      apiSaved: 'Saved',
+      goHome: 'Go Home',
+      logoSub: 'Prompt Mechanism Visualizer',
+    },
+    landing: {
+      title: 'Welcome to Claude Inspector',
+      subtitle: 'Select a mode to get started',
+      simDesc: 'Build and test real API payloads for all 5 prompt mechanisms (CLAUDE.md, Output Style, Slash Command, Skill, Sub-Agent).',
+      simReq: 'Requires: Anthropic API Key',
+      proxyDesc: 'Intercept and visualize live API traffic from the Claude Code CLI. See exactly what payloads are exchanged during real usage.',
+      proxyReq: 'Requires: Claude Code CLI',
+      start: 'Get Started →',
+    },
+    history: {
+      title: 'Request History',
+      empty: 'No history yet<br><small>Entries appear after API calls</small>',
+      noMsg: 'No message',
+    },
+    proxy: {
+      title: 'Proxy Control',
+      liveCapture: 'Live Capture',
+      interceptTitle: '⚡ Live API Traffic Intercept',
+      interceptDesc: 'Intercepts real API requests from the Claude Code CLI and visualizes them in real time.<br>Start the proxy, then run Claude Code with the command below.',
+      port: 'Port',
+      stopped: 'Stopped',
+      running: 'Running on port {port}',
+      runCommand: 'Run Command',
+      startFirst: 'Start the proxy first',
+      startProxy: 'Start Proxy',
+      stopProxy: 'Stop Proxy',
+      clear: 'Clear',
+      capturedRequests: 'Captured Requests',
+      noCaptures: 'No captured requests<br><small>Start the proxy and<br>run Claude Code</small>',
+      startFail: 'Failed to start proxy: ',
+      selectRequest: 'Select a request to<br>view its payload',
+      noMessages: 'No messages array',
+      waitingResponse: 'Waiting for response…',
+      noBody: 'No body',
+      noResults: 'No results',
+      msgCount: '{count} / {total}',
+    },
+    messages: {
+      filterUser: 'Sent by user',
+      filterTyped: 'Typed only',
+      filterAssistant: 'Sent by Claude',
+      filterAll: 'All',
+      searchPlaceholder: '🔍 Search... (⌘F)',
+      searchClear: 'Clear search',
+    },
+    analysis: {
+      noMechanisms: 'No mechanisms detected<br><small>Plain API request or unsupported pattern</small>',
+      claudeMdTitle: 'CLAUDE.md — system-reminder injection',
+      claudeMdDesc: 'Claude Code wraps project/global CLAUDE.md contents in <system-reminder> tags and inserts them inside messages[]',
+      outputStyleTitle: 'Output Style — system[] extra block',
+      outputStyleDesc: 'Claude Code inserts an extra block in the system prompt array (controls model response style)',
+      slashCmdTitle: '① Input — Slash Command',
+      slashCmdDesc: 'When user types /{cmd}, Claude Code wraps it in <command-message> tags and injects it into the prompt',
+      skillTitle: 'Skill (tool_use → tool_result)',
+      skillLinkedTitle: '② Execute — Skill (tool_use → tool_result)',
+      skillDesc: 'Claude invokes a skill via tool_use and receives the result via tool_result',
+      skillLinkedDesc: 'Claude reads the slash command above and calls the matching skill via tool_use',
+      noToolResult: 'No tool_result (in the next message or not yet received)',
+      subAgentDesc: 'Claude creates an isolated sub-agent API request via the Task tool (runs in a separate context)',
+      searchPlaceholder: '🔍 Search... (⌘F, Enter=next)',
+    },
+    mechDesc: {
+      cm: {
+        who: 'Auto-injected by Claude Code CLI (this app only displays)',
+        what: 'Wraps CLAUDE.md file contents in <system-reminder> tags and inserts them inside messages[].',
+      },
+      sc: {
+        who: 'Auto-wrapped by Claude Code CLI (this app only displays)',
+        what: 'When a /command is typed, its contents are wrapped in <command-message> tags and injected into the user message.',
+      },
+      sk: {
+        who: 'Auto-injected by Claude Code CLI (this app only displays)',
+        what: 'When skills are configured, a "The following skills are available..." list is injected via <system-reminder>.',
+      },
+      sa: {
+        who: 'Claude Code CLI creates a separate API call (this app only displays)',
+        what: 'When Task tool is called, Claude Code creates an independent second API request to run the sub-agent.',
+      },
+    },
+    export: {
+      skillNote: '⚠️  Skill requires the full tool_use flow. The payload below is the runnable version from Simulate Effect (system injection variant).',
+      subAgentNote: '⚠️  Sub-Agent generates 2 API calls. The payload below is the standalone payload for API Call #2 (isolated sub-agent).',
+    },
+    form: {
+      fileOpen: '📂 Open File',
+      fileElectronOnly: 'File open is only supported in the Electron app.',
+    },
+    apiInput: {
+      placeholder: 'sk-ant-api03-…  (auto-saved on input)',
+    },
+    search: {
+      prev: 'Previous',
+      next: 'Next',
+    },
+    mech: {
+      claudeMd: {
+        howTitle: '⚡ How it works in Claude Code',
+        howText: 'If <code>CLAUDE.md</code> exists in the project root, Claude Code automatically injects it into <strong>every request</strong> via a <code>&lt;system-reminder&gt;</code> tag. No configuration needed — presence of the file is enough.',
+        ex1: 'Team coding standards, architecture decisions, and tech stack info are automatically applied to every team member\'s request',
+        ex1tag: 'Example',
+        ex2: 'Message level (not system) — project <em>context</em>, not Claude\'s <em>identity</em>',
+        ex2tag: 'Layer',
+        fContent: 'CLAUDE.md Content',
+        fUserMessage: 'User Message',
+      },
+      outputStyle: {
+        howTitle: '⚡ How it works in Claude Code',
+        howText: 'Running <code>/output-style software-architect</code> adds a style block to the <code>system</code> array. Applied to <strong>all responses</strong> for the rest of the session.',
+        ex1: 'Set "senior engineer" style before a code review session → all subsequent answers shift to an architectural perspective',
+        ex1tag: 'Example',
+        ex2: 'System level — unlike CLAUDE.md (message), this changes Claude\'s <em>identity/behavior</em>',
+        ex2tag: 'Layer',
+        fName: 'Style Name',
+        fContent: 'Style Instructions',
+        fUserMessage: 'User Message',
+      },
+      slashCommand: {
+        howTitle: '⚡ How it works in Claude Code',
+        howText: 'Create <code>.claude/commands/review.md</code> → typing <code>/review @file.js</code> substitutes <code>{arg1}</code> with the argument. <strong>Not decided by Claude</strong> — pure string substitution.',
+        ex1: 'Explicitly run repetitive tasks like code review, PR checklists, and deployment procedures',
+        ex1tag: 'Example',
+        ex2: 'Slash Command is <em>directly invoked by user</em>; Skill is <em>autonomously chosen by Claude</em>',
+        ex2tag: 'vs Skill',
+        fName: 'Command Name',
+        fTemplate: 'Command Template ({arg1} substitution)',
+        fArgs: 'Arguments ({arg1} replacement)',
+      },
+      skill: {
+        howTitle: '⚡ How it works in Claude Code (2 steps)',
+        flowStep1: 'User: "How do I git squash?"',
+        flowArrow1: '↓ Semantic match against description field',
+        flowStep2: 'Match found → tool_use: Skill { command: "git-helper" }',
+        flowArrow2: '↓ Inject full SKILL.md content',
+        flowStep3: 'tool_result: [skill content]',
+        flowArrow3: '↓',
+        flowStep4: 'Claude: responds using skill context',
+        warnText: '<strong>Inaccurate description causes match failure.</strong> List keywords explicitly like "git, squash, commits, rebase".',
+        ex1: 'Verify skill effect with real API (simplified version injecting skill content into system)',
+        ex1tag: '▶ Simulate',
+        fName: 'Skill Name',
+        fDescription: 'Description for matching',
+        fContent: 'Skill Content (SKILL.md body)',
+        fUserMessage: 'User Message (skill trigger)',
+      },
+      subAgent: {
+        howTitle: '⚡ How it works in Claude Code (2 API calls)',
+        apiCall1: 'API Call #1 — Main Conversation',
+        flowStep1: 'User: "Analyze the auth implementation"',
+        flowArrow1: '↓ Claude judges this as a complex task',
+        flowStep2: 'tool_use: Task { subagent_type: "Explore", prompt: "…" }',
+        apiCall2: 'API Call #2 — Sub-Agent (Fully Isolated)',
+        flowStep3: '⚠️ No main conversation context',
+        flowStep4: '✅ CLAUDE.md is still injected',
+        flowStep5: 'Explore agent autonomously explores/analyzes',
+        flowArrow2: '↓ Return result',
+        apiCall3: 'Back to API Call #1',
+        flowStep6: 'tool_result: [sub-agent analysis result]',
+        flowStep7: 'Claude: synthesizes result and responds',
+        warnText: '<strong>No context bridging.</strong> All necessary information must be specified in the delegation prompt.',
+        ex1: 'Run only the sub-agent conversation to verify delegation prompt effect',
+        ex1tag: '▶ Run',
+        fType: 'Sub-Agent Type',
+        fPrompt: 'Delegation Prompt (passed to sub-agent)',
+        fUserMessage: 'User Message (main conversation trigger)',
+      },
+      inject: {
+        claudeMd: 'messages[].content → system-reminder',
+        outputStyle: 'system[] → additional text block',
+        slashCommand: 'messages[].content → command-message',
+        skill: 'tool_result (after Skill tool_use)',
+        subAgent: 'Isolated separate API call (Task tool)',
+      },
+      btn: {
+        send: 'Send to Claude →',
+        simulate: '▶ Simulate Effect',
+        runSubAgent: '▶ Run Sub-Agent',
+      },
+    },
+  },
+};
+
+const i18n = {
+  locale: localStorage.getItem('ci-lang') || (navigator.language.startsWith('ko') ? 'ko' : 'en'),
+  t(key, vars = {}) {
+    const val = key.split('.').reduce((o, k) => o?.[k], LOCALES[this.locale]) ?? key;
+    return Object.entries(vars).reduce((s, [k, v]) => s.replace(`{${k}}`, v), val);
+  },
+  setLocale(lang) {
+    this.locale = lang;
+    localStorage.setItem('ci-lang', lang);
+    applyI18n();
+  }
+};
+
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = i18n.t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    el.innerHTML = i18n.t(el.dataset.i18nHtml);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = i18n.t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = i18n.t(el.dataset.i18nTitle);
+  });
+  // lang toggle button text
+  const btn = document.getElementById('langToggleBtn');
+  if (btn) btn.textContent = i18n.locale === 'ko' ? 'EN' : '한';
+  // re-render dynamic content that depends on locale
+  renderHistory();
+  // re-render simulator form if visible
+  if (document.getElementById('normalPanels').style.display !== 'none' && current) {
+    const savedCfg = collectCfg();
+    renderForm(current);
+    for (const [k, v] of Object.entries(savedCfg)) {
+      const el = document.getElementById('f-' + k);
+      if (el) el.value = v;
+    }
+    updatePreview();
+  }
+  if (proxyCaptures.length > 0) {
+    renderProxyList();
+    if (selectedProxyId !== null) renderProxyDetail();
+  } else {
+    const list = document.getElementById('proxyList');
+    if (list) list.innerHTML = `<div class="hist-empty">${i18n.t('proxy.noCaptures')}</div>`;
+  }
+  if (!proxyRunning) {
+    const statusText = document.getElementById('proxyStatusText');
+    if (statusText && !proxyRunning) statusText.textContent = i18n.t('proxy.stopped');
+    const cmdEl = document.getElementById('proxyCmdText');
+    if (cmdEl && !proxyRunning) cmdEl.textContent = i18n.t('proxy.startFirst');
+  }
+}
+
 // ─── Mechanism definitions ─────────────────────────────────────────────────
-const M = {
+function getMechanisms() {
+  const t = (k, v) => i18n.t(k, v);
+  return {
   'claude-md': {
     label: 'CLAUDE.md',
-    inject: 'messages[].content → system-reminder',
+    inject: t('mech.inject.claudeMd'),
     sendable: true,
     howHtml: `
-      <div class="how-title">⚡ Claude Code에서 실제 동작</div>
-      <div class="how-text">
-        프로젝트 루트에 <code>CLAUDE.md</code>가 있으면 Claude Code가
-        <strong>모든 요청</strong>에 자동으로 <code>&lt;system-reminder&gt;</code> 태그로 주입.
-        설정 불필요 — 파일 존재만으로 동작.
+      <div class="how-title">${t('mech.claudeMd.howTitle')}</div>
+      <div class="how-text">${t('mech.claudeMd.howText')}</div>
+      <div class="example-row">
+        <span class="ex-tag">${t('mech.claudeMd.ex1tag')}</span>
+        <span>${t('mech.claudeMd.ex1')}</span>
       </div>
       <div class="example-row">
-        <span class="ex-tag">예시</span>
-        <span>팀 코딩 스탠다드, 아키텍처 결정, 기술 스택 정보를 적어두면 모든 팀원의 요청에 자동 적용됨</span>
-      </div>
-      <div class="example-row">
-        <span class="ex-tag">레이어</span>
-        <span>메시지 레벨 (system 아님) — 프로젝트 <em>컨텍스트</em>지 Claude의 <em>정체성</em>이 아님</span>
+        <span class="ex-tag">${t('mech.claudeMd.ex2tag')}</span>
+        <span>${t('mech.claudeMd.ex2')}</span>
       </div>`,
     fields: [
-      { id:'content', label:'CLAUDE.md 내용', type:'textarea', tall:true, fileBtn:true,
+      { id:'content', label:t('mech.claudeMd.fContent'), type:'textarea', tall:true, fileBtn:true,
         val:`# Project Standards\n\n## Tech Stack\n- TypeScript (strict mode)\n- Bun runtime\n- React + Vite frontend\n\n## Conventions\n- Named exports only\n- File naming: kebab-case\n- Write tests for all features\n- No console.log in production` },
-      { id:'userMessage', label:'User Message', type:'textarea',
+      { id:'userMessage', label:t('mech.claudeMd.fUserMessage'), type:'textarea',
         val:'How should I structure my TypeScript project?' }
     ]
   },
 
   'output-style': {
     label: 'Output Style',
-    inject: 'system[] → additional text block',
+    inject: t('mech.inject.outputStyle'),
     sendable: true,
     howHtml: `
-      <div class="how-title">⚡ Claude Code에서 실제 동작</div>
-      <div class="how-text">
-        <code>/output-style software-architect</code> 실행 시
-        <code>system</code> 배열에 스타일 블록이 추가됨.
-        세션이 끝날 때까지 <strong>모든 응답</strong>에 적용.
+      <div class="how-title">${t('mech.outputStyle.howTitle')}</div>
+      <div class="how-text">${t('mech.outputStyle.howText')}</div>
+      <div class="example-row">
+        <span class="ex-tag">${t('mech.outputStyle.ex1tag')}</span>
+        <span>${t('mech.outputStyle.ex1')}</span>
       </div>
       <div class="example-row">
-        <span class="ex-tag">예시</span>
-        <span>코드 리뷰 세션 시작 전 "senior engineer" 스타일 설정 → 이후 모든 답변이 아키텍처 관점으로 변함</span>
-      </div>
-      <div class="example-row">
-        <span class="ex-tag">레이어</span>
-        <span>시스템 레벨 — CLAUDE.md(메시지)와 달리 Claude의 <em>정체성/행동</em>을 변경</span>
+        <span class="ex-tag">${t('mech.outputStyle.ex2tag')}</span>
+        <span>${t('mech.outputStyle.ex2')}</span>
       </div>`,
     fields: [
-      { id:'name', label:'스타일 이름', type:'input', val:'software-architect' },
-      { id:'content', label:'스타일 지침', type:'textarea', tall:true,
+      { id:'name', label:t('mech.outputStyle.fName'), type:'input', val:'software-architect' },
+      { id:'content', label:t('mech.outputStyle.fContent'), type:'textarea', tall:true,
         val:`You are operating as a senior software architect.\n\n## Response Guidelines\n- Lead with architectural decisions, not implementation details\n- Highlight trade-offs explicitly\n- Reference design patterns by name (Factory, Observer, CQRS)\n- Keep responses concise but precise` },
-      { id:'userMessage', label:'User Message', type:'textarea',
+      { id:'userMessage', label:t('mech.outputStyle.fUserMessage'), type:'textarea',
         val:'Should I use Redux or React Context for state management?' }
     ]
   },
 
   'slash-command': {
     label: 'Slash Command',
-    inject: 'messages[].content → command-message',
+    inject: t('mech.inject.slashCommand'),
     sendable: true,
     howHtml: `
-      <div class="how-title">⚡ Claude Code에서 실제 동작</div>
-      <div class="how-text">
-        <code>.claude/commands/review.md</code> 파일 생성 →
-        <code>/review @file.js</code> 입력 시 <code>{arg1}</code>이 인수로 치환.
-        <strong>Claude가 결정하는 게 아님</strong> — 순수 문자열 치환.
+      <div class="how-title">${t('mech.slashCommand.howTitle')}</div>
+      <div class="how-text">${t('mech.slashCommand.howText')}</div>
+      <div class="example-row">
+        <span class="ex-tag">${t('mech.slashCommand.ex1tag')}</span>
+        <span>${t('mech.slashCommand.ex1')}</span>
       </div>
       <div class="example-row">
-        <span class="ex-tag">예시</span>
-        <span>코드 리뷰, PR 체크리스트, 배포 절차 등 반복 작업을 명시적으로 실행할 때</span>
-      </div>
-      <div class="example-row">
-        <span class="ex-tag">vs Skill</span>
-        <span>Slash Command는 <em>사용자가 직접 호출</em>, Skill은 <em>Claude가 자율 판단</em></span>
+        <span class="ex-tag">${t('mech.slashCommand.ex2tag')}</span>
+        <span>${t('mech.slashCommand.ex2')}</span>
       </div>`,
     fields: [
-      { id:'name', label:'커맨드 이름', type:'input', val:'review' },
-      { id:'template', label:'커맨드 템플릿 ({arg1} 치환)', type:'textarea', tall:true,
+      { id:'name', label:t('mech.slashCommand.fName'), type:'input', val:'review' },
+      { id:'template', label:t('mech.slashCommand.fTemplate'), type:'textarea', tall:true,
         val:`Perform a thorough code review of the following code:\n\n{arg1}\n\nFocus on:\n1. Logic errors and off-by-one bugs\n2. Security vulnerabilities\n3. Performance issues\n4. Code clarity and naming` },
-      { id:'args', label:'인수 ({arg1} 대체값)', type:'textarea',
+      { id:'args', label:t('mech.slashCommand.fArgs'), type:'textarea',
         val:`function calculateTotal(items) {\n  let total = 0;\n  for (var i = 0; i <= items.length; i++) {\n    total += items[i].price;\n  }\n  return total;\n}` }
     ]
   },
 
   'skill': {
     label: 'Skill',
-    inject: 'tool_result (Skill tool_use 이후)',
+    inject: t('mech.inject.skill'),
     sendable: false, simulatable: true,
     howHtml: `
-      <div class="how-title">⚡ Claude Code에서 실제 동작 (2단계)</div>
+      <div class="how-title">${t('mech.skill.howTitle')}</div>
       <div class="flow">
-        <div class="flow-step">사용자: "git squash 어떻게 해?"</div>
-        <div class="flow-arrow">↓ description 필드와 시맨틱 매칭</div>
-        <div class="flow-step hi-purple">매칭 성공 → tool_use: Skill { command: "git-helper" }</div>
-        <div class="flow-arrow">↓ SKILL.md 전체 내용 주입</div>
-        <div class="flow-step hi-purple">tool_result: [스킬 내용]</div>
-        <div class="flow-arrow">↓</div>
-        <div class="flow-step">Claude: 스킬 컨텍스트를 바탕으로 응답</div>
+        <div class="flow-step">${t('mech.skill.flowStep1')}</div>
+        <div class="flow-arrow">${t('mech.skill.flowArrow1')}</div>
+        <div class="flow-step hi-purple">${t('mech.skill.flowStep2')}</div>
+        <div class="flow-arrow">${t('mech.skill.flowArrow2')}</div>
+        <div class="flow-step hi-purple">${t('mech.skill.flowStep3')}</div>
+        <div class="flow-arrow">${t('mech.skill.flowArrow3')}</div>
+        <div class="flow-step">${t('mech.skill.flowStep4')}</div>
       </div>
       <div class="warn-row" style="margin-top:6px">
         <span class="w-icon">⚠️</span>
-        <span><strong>description이 부정확하면 매칭 실패.</strong> "git, squash, commits, rebase" 같이 키워드를 명시적으로 나열해야 함.</span>
+        <span>${t('mech.skill.warnText')}</span>
       </div>
       <div class="example-row">
-        <span class="ex-tag">▶ Simulate</span>
-        <span>실제 API로 스킬 효과를 확인 (스킬 내용을 system에 주입하는 단순화 버전)</span>
+        <span class="ex-tag">${t('mech.skill.ex1tag')}</span>
+        <span>${t('mech.skill.ex1')}</span>
       </div>`,
     fields: [
-      { id:'name', label:'스킬 이름', type:'input', val:'git-helper' },
-      { id:'description', label:'매칭에 사용할 description', type:'input',
+      { id:'name', label:t('mech.skill.fName'), type:'input', val:'git-helper' },
+      { id:'description', label:t('mech.skill.fDescription'), type:'input',
         val:'Git workflows, commits, branches, rebasing, squashing, version control' },
-      { id:'content', label:'스킬 내용 (SKILL.md 본문)', type:'textarea', tall:true, fileBtn:true,
+      { id:'content', label:t('mech.skill.fContent'), type:'textarea', tall:true, fileBtn:true,
         val:`# Git Helper\n\nWhen invoked:\n1. Analyze the git-related request\n2. Provide exact commands with explanations\n3. Warn about destructive operations (reset --hard, force push)\n4. Suggest safe alternatives\n\nAlways include:\n- The exact git command(s)\n- What each command does\n- Any potential risks` },
-      { id:'userMessage', label:'User Message (스킬 트리거)', type:'textarea',
+      { id:'userMessage', label:t('mech.skill.fUserMessage'), type:'textarea',
         val:'How do I squash my last 3 commits?' }
     ]
   },
 
   'sub-agent': {
     label: 'Sub-Agent',
-    inject: '격리된 별도 API 호출 (Task 도구)',
+    inject: t('mech.inject.subAgent'),
     sendable: false, simulatable: true,
     howHtml: `
-      <div class="how-title">⚡ Claude Code에서 실제 동작 (API 2번 호출)</div>
+      <div class="how-title">${t('mech.subAgent.howTitle')}</div>
       <div class="flow">
-        <div class="flow-api-label">API Call #1 — 메인 대화</div>
-        <div class="flow-step">사용자: "auth 구현 분석해줘"</div>
-        <div class="flow-arrow">↓ Claude가 복잡한 작업으로 판단</div>
-        <div class="flow-step hi-orange">tool_use: Task { subagent_type: "Explore", prompt: "…" }</div>
+        <div class="flow-api-label">${t('mech.subAgent.apiCall1')}</div>
+        <div class="flow-step">${t('mech.subAgent.flowStep1')}</div>
+        <div class="flow-arrow">${t('mech.subAgent.flowArrow1')}</div>
+        <div class="flow-step hi-orange">${t('mech.subAgent.flowStep2')}</div>
         <hr class="flow-divider">
-        <div class="flow-api-label">API Call #2 — Sub-Agent (완전 격리)</div>
-        <div class="flow-step hi-yellow">⚠️ 메인 대화 컨텍스트 없음</div>
-        <div class="flow-step">✅ CLAUDE.md는 여전히 주입됨</div>
-        <div class="flow-step">Explore 에이전트가 자율적으로 탐색/분석</div>
-        <div class="flow-arrow">↓ 결과 반환</div>
-        <div class="flow-api-label">다시 API Call #1</div>
-        <div class="flow-step hi-orange">tool_result: [sub-agent 분석 결과]</div>
-        <div class="flow-step">Claude: 결과 종합하여 응답</div>
+        <div class="flow-api-label">${t('mech.subAgent.apiCall2')}</div>
+        <div class="flow-step hi-yellow">${t('mech.subAgent.flowStep3')}</div>
+        <div class="flow-step">${t('mech.subAgent.flowStep4')}</div>
+        <div class="flow-step">${t('mech.subAgent.flowStep5')}</div>
+        <div class="flow-arrow">${t('mech.subAgent.flowArrow2')}</div>
+        <div class="flow-api-label">${t('mech.subAgent.apiCall3')}</div>
+        <div class="flow-step hi-orange">${t('mech.subAgent.flowStep6')}</div>
+        <div class="flow-step">${t('mech.subAgent.flowStep7')}</div>
       </div>
       <div class="warn-row" style="margin-top:6px">
         <span class="w-icon">⚠️</span>
-        <span><strong>컨텍스트 브리징 없음.</strong> delegation prompt에 필요한 모든 정보를 명시해야 함.</span>
+        <span>${t('mech.subAgent.warnText')}</span>
       </div>
       <div class="example-row">
-        <span class="ex-tag">▶ Run</span>
-        <span>Sub-Agent 대화만 단독 실행하여 delegation prompt 효과 확인</span>
+        <span class="ex-tag">${t('mech.subAgent.ex1tag')}</span>
+        <span>${t('mech.subAgent.ex1')}</span>
       </div>`,
     fields: [
-      { id:'type', label:'Sub-Agent 타입', type:'select',
+      { id:'type', label:t('mech.subAgent.fType'), type:'select',
         options:['Explore','general-purpose','Plan','software-architect'], val:'Explore' },
-      { id:'prompt', label:'Delegation Prompt (sub-agent에게 전달)', type:'textarea', tall:true,
+      { id:'prompt', label:t('mech.subAgent.fPrompt'), type:'textarea', tall:true,
         val:`Analyze the authentication flow in this codebase.\n\nContext: OAuth 2.0 with PKCE, Next.js application.\n\nFocus on:\n1. Token storage mechanisms\n2. Refresh token rotation logic\n3. Background token refresh handling\n\nReport back with a structured summary.` },
-      { id:'userMessage', label:'User Message (메인 대화 트리거)', type:'textarea',
+      { id:'userMessage', label:t('mech.subAgent.fUserMessage'), type:'textarea',
         val:'Analyze our authentication implementation for security issues.' }
     ]
   }
-};
+  };
+}
 
 // ─── Feature flags ──────────────────────────────────────────────────────────
 const SHOW_SIMULATOR = false; // true로 바꾸면 Simulator 탭/카드 활성화
@@ -1086,6 +1513,7 @@ function buildSendablePayload(mech, cfg) {
 // ─── Collect config ─────────────────────────────────────────────────────────
 function collectCfg() {
   const cfg = {};
+  const M = getMechanisms();
   for (const f of M[current].fields) {
     const el = document.getElementById('f-' + f.id);
     cfg[f.id] = el ? el.value : (f.val || '');
@@ -1166,6 +1594,7 @@ function updatePreview() {
 
 // ─── Render form ────────────────────────────────────────────────────────────
 function renderForm(mech) {
+  const M = getMechanisms();
   const def = M[mech];
   document.getElementById('panelTitle').textContent = def.label;
   document.getElementById('injectChip').textContent = def.inject;
@@ -1174,7 +1603,7 @@ function renderForm(mech) {
 
   for (const f of def.fields) {
     const fileBtnHtml = f.fileBtn
-      ? `<button class="file-btn" onclick="openFilePicker('f-${f.id}')">📂 파일 열기</button>`
+      ? `<button class="file-btn" onclick="openFilePicker('f-${f.id}')">${i18n.t('form.fileOpen')}</button>`
       : '';
 
     if (f.type === 'textarea') {
@@ -1197,13 +1626,13 @@ function renderForm(mech) {
   const copyBtn = `<button class="btn btn-copy" onclick="copyPayload()">Copy JSON</button>`;
   if (def.sendable) {
     footer.innerHTML = copyBtn +
-      `<button class="btn btn-send" id="actionBtn" onclick="sendToApi()">Send to Claude →</button>`;
+      `<button class="btn btn-send" id="actionBtn" onclick="sendToApi()">${i18n.t('mech.btn.send')}</button>`;
   } else if (mech === 'skill') {
     footer.innerHTML = copyBtn +
-      `<button class="btn btn-sim" id="actionBtn" onclick="simulateSkill()">▶ Simulate Effect</button>`;
+      `<button class="btn btn-sim" id="actionBtn" onclick="simulateSkill()">${i18n.t('mech.btn.simulate')}</button>`;
   } else if (mech === 'sub-agent') {
     footer.innerHTML = copyBtn +
-      `<button class="btn btn-sa" id="actionBtn" onclick="simulateSubAgent()">▶ Run Sub-Agent</button>`;
+      `<button class="btn btn-sa" id="actionBtn" onclick="simulateSubAgent()">${i18n.t('mech.btn.runSubAgent')}</button>`;
   }
 }
 
@@ -1323,9 +1752,9 @@ async function callApi(payload, loadingMsg = 'Sending…') {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = btn.className.includes('btn-send') ? 'Send to Claude →'
-                    : btn.className.includes('btn-sim') ? '▶ Simulate Effect'
-                    : '▶ Run Sub-Agent';
+      btn.innerHTML = btn.className.includes('btn-send') ? i18n.t('mech.btn.send')
+                    : btn.className.includes('btn-sim') ? i18n.t('mech.btn.simulate')
+                    : i18n.t('mech.btn.runSubAgent');
     }
   }
 }
@@ -1422,10 +1851,10 @@ function updateExport(mech, cfg) {
   if (note) {
     if (mech === 'skill') {
       note.style.display = 'block';
-      note.textContent = '⚠️  Skill은 tool_use 플로우가 필요합니다. 아래는 Simulate Effect (system 주입 버전)의 실행 가능한 페이로드입니다.';
+      note.textContent = i18n.t('export.skillNote');
     } else if (mech === 'sub-agent') {
       note.style.display = 'block';
-      note.textContent = '⚠️  Sub-Agent는 2개의 API 호출을 생성합니다. 아래는 API Call #2 (격리된 서브에이전트)의 단독 실행 페이로드입니다.';
+      note.textContent = i18n.t('export.subAgentNote');
     } else {
       note.style.display = 'none';
     }
@@ -1483,11 +1912,12 @@ function mechBadge(mech) {
 }
 
 function saveHistory(mech, cfg) {
+  const M = getMechanisms();
   const def = M[mech];
   const userMsg = (cfg.userMessage || cfg.prompt || '').trim();
   const entry = {
     id: Date.now(),
-    ts: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+    ts: new Date().toLocaleTimeString(i18n.locale === 'ko' ? 'ko-KR' : 'en-US', { hour: '2-digit', minute: '2-digit' }),
     mech,
     mechLabel: def.label,
     userMsg: userMsg.slice(0, 60) + (userMsg.length > 60 ? '…' : ''),
@@ -1504,13 +1934,13 @@ function renderHistory() {
   if (!list) return;
   if (countEl) countEl.textContent = `${sessionHistory.length} / 10`;
   if (sessionHistory.length === 0) {
-    list.innerHTML = '<div class="hist-empty">아직 기록 없음<br><small>API 전송 후 여기 표시됩니다</small></div>';
+    list.innerHTML = `<div class="hist-empty">${i18n.t('history.empty')}</div>`;
     return;
   }
   list.innerHTML = sessionHistory.map(e => `
     <div class="hist-entry" onclick="restoreHistory(${e.id})">
       <div class="hist-mech">${mechBadge(e.mech)}<span>${esc(e.mechLabel)}</span></div>
-      <div class="hist-msg">${e.userMsg ? esc(e.userMsg) : '<em style="opacity:.5">메시지 없음</em>'}</div>
+      <div class="hist-msg">${e.userMsg ? esc(e.userMsg) : `<em style="opacity:.5">${i18n.t('history.noMsg')}</em>`}</div>
       <div class="hist-time">${e.ts}</div>
     </div>
   `).join('');
@@ -1538,7 +1968,7 @@ function toggleHistory() {
 // ─── File picker ──────────────────────────────────────────────────────────
 async function openFilePicker(fieldId) {
   if (!window.electronAPI || !window.electronAPI.openFile) {
-    alert('파일 열기는 Electron 앱에서만 지원됩니다.');
+    alert(i18n.t('form.fileElectronOnly'));
     return;
   }
   const content = await window.electronAPI.openFile();
@@ -1594,8 +2024,8 @@ function renderProxyStatus() {
 
   if (proxyRunning) {
     status.className = 'proxy-status running';
-    if (statusText) statusText.textContent = `포트 ${proxyActualPort}에서 실행 중`;
-    startBtn.textContent = 'Stop Proxy';
+    if (statusText) statusText.textContent = i18n.t('proxy.running', { port: proxyActualPort });
+    startBtn.textContent = i18n.t('proxy.stopProxy');
     startBtn.style.background = 'var(--red)';
     if (cmdEl) {
       cmdEl.style.color = 'var(--green)';
@@ -1603,12 +2033,12 @@ function renderProxyStatus() {
     }
   } else {
     status.className = 'proxy-status';
-    if (statusText) statusText.textContent = '중지됨';
-    startBtn.textContent = 'Start Proxy';
+    if (statusText) statusText.textContent = i18n.t('proxy.stopped');
+    startBtn.textContent = i18n.t('proxy.startProxy');
     startBtn.style.background = 'var(--blue)';
     if (cmdEl) {
       cmdEl.style.color = 'var(--dim)';
-      cmdEl.textContent = '프록시를 먼저 시작하세요';
+      cmdEl.textContent = i18n.t('proxy.startFirst');
     }
   }
 }
@@ -1625,8 +2055,8 @@ async function toggleProxy() {
     const port = parseInt(document.getElementById('proxyPort').value) || 9090;
     const result = await window.electronAPI.proxyStart(port);
     if (result.error) {
-      alert('프록시 시작 실패: ' + result.error);
-      if (btn) { btn.disabled = false; btn.textContent = 'Start Proxy'; }
+      alert(i18n.t('proxy.startFail') + result.error);
+      if (btn) { btn.disabled = false; btn.textContent = i18n.t('proxy.startProxy'); }
       return;
     }
     proxyRunning = true;
@@ -1659,7 +2089,7 @@ function renderProxyList() {
   if (countEl) countEl.textContent = proxyCaptures.length;
 
   if (proxyCaptures.length === 0) {
-    list.innerHTML = '<div class="hist-empty">캡처된 요청 없음<br><small>프록시를 시작하고<br>Claude Code를 실행하세요</small></div>';
+    list.innerHTML = `<div class="hist-empty">${i18n.t('proxy.noCaptures')}</div>`;
     return;
   }
 
@@ -1812,7 +2242,7 @@ function renderUserMsgContent(text, typedOnly, query) {
 function renderProxyMessages(entry, container) {
   const msgs = entry.body?.messages || [];
   if (msgs.length === 0) {
-    container.innerHTML = '<div class="proxy-empty"><span>messages 배열 없음</span></div>';
+    container.innerHTML = `<div class="proxy-empty"><span>${i18n.t('proxy.noMessages')}</span></div>`;
     return;
   }
 
@@ -1824,20 +2254,20 @@ function renderProxyMessages(entry, container) {
   const q = msgSearchQuery;
 
   const filterHtml = `<div class="msg-filter">
-    <button class="mf-btn${msgFilter==='user'?' active':''}" onclick="setMsgFilter('user')">내가 보낸 것</button>
-    <button class="mf-btn${msgFilter==='typed'?' active':''}" onclick="setMsgFilter('typed')">직접 입력만</button>
-    <button class="mf-btn${msgFilter==='assistant'?' active':''}" onclick="setMsgFilter('assistant')">클로드가 보낸 것</button>
-    <button class="mf-btn${msgFilter==='all'?' active':''}" onclick="setMsgFilter('all')">전체</button>
+    <button class="mf-btn${msgFilter==='user'?' active':''}" onclick="setMsgFilter('user')">${i18n.t('messages.filterUser')}</button>
+    <button class="mf-btn${msgFilter==='typed'?' active':''}" onclick="setMsgFilter('typed')">${i18n.t('messages.filterTyped')}</button>
+    <button class="mf-btn${msgFilter==='assistant'?' active':''}" onclick="setMsgFilter('assistant')">${i18n.t('messages.filterAssistant')}</button>
+    <button class="mf-btn${msgFilter==='all'?' active':''}" onclick="setMsgFilter('all')">${i18n.t('messages.filterAll')}</button>
     <span class="msg-count" id="msgCountEl"></span>
   </div>`;
 
   const searchHtml = `<div class="msg-search-bar">
     <input type="text" id="msgSearchInput" class="msg-search-input"
-      placeholder="🔍 검색... (⌘F)" value="${esc(q)}"
+      placeholder="${esc(i18n.t('messages.searchPlaceholder'))}" value="${esc(q)}"
       oninput="setMsgSearch(this.value)"
       oncompositionstart="_imeComposing=true"
       oncompositionend="_imeComposing=false;setMsgSearch(this.value)">
-    ${q ? `<button class="msg-search-clear" onclick="setMsgSearch('');document.getElementById('msgSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
+    ${q ? `<button class="msg-search-clear" onclick="setMsgSearch('');document.getElementById('msgSearchInput')?.focus()" title="${esc(i18n.t('messages.searchClear'))}">✕</button>` : ''}
   </div>`;
 
   const cards = [];
@@ -1891,10 +2321,10 @@ function renderProxyMessages(entry, container) {
   // flex/overflow 전부 덮어씌워서 단순 스크롤 컨테이너로 전환
   container.style.cssText = 'flex:1;overflow-y:auto;display:block';
   container.innerHTML = `<div style="position:sticky;top:0;z-index:1;background:var(--bg)">${filterHtml}${searchHtml}</div>` +
-    `<div style="display:flex;flex-direction:column;gap:8px;padding:12px">${cards.join('') || '<div class="proxy-empty"><span>결과 없음</span></div>'}</div>`;
+    `<div style="display:flex;flex-direction:column;gap:8px;padding:12px">${cards.join('') || `<div class="proxy-empty"><span>${i18n.t('proxy.noResults')}</span></div>`}</div>`;
 
   const countEl = document.getElementById('msgCountEl');
-  if (countEl) countEl.textContent = `${cards.length} / ${msgs.length}개`;
+  if (countEl) countEl.textContent = i18n.t('proxy.msgCount', { count: cards.length, total: msgs.length });
 
   // Restore focus on search input after re-render
   {
@@ -1963,7 +2393,7 @@ function navigateSearchMatch(delta) {
 
 function updateSearchCounter(total) {
   const el = document.getElementById('searchCounter');
-  if (el) el.textContent = total > 0 ? `${searchCurrentIdx + 1}/${total}` : '0개';
+  if (el) el.textContent = total > 0 ? `${searchCurrentIdx + 1}/${total}` : '0';
 }
 
 function setProxyDetailMechFilter(key, pattern) {
@@ -1975,20 +2405,22 @@ function setProxyDetailMechFilter(key, pattern) {
   renderProxyDetail();
 }
 
-const CHIP_META = {
-  cm: { color: 'var(--green)',
-        who:  'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
-        what: 'CLAUDE.md 파일 내용을 <system-reminder> 태그로 감싸 messages[] 안에 삽입합니다.' },
-  sc: { color: 'var(--yellow)',
-        who:  'Claude Code CLI가 자동 래핑 (우리 앱은 표시만 함)',
-        what: '/명령어 입력 시 해당 내용을 <command-message> 태그로 감싸 user 메시지에 삽입합니다.' },
-  sk: { color: 'var(--purple)',
-        who:  'Claude Code CLI가 자동 주입 (우리 앱은 표시만 함)',
-        what: '스킬이 설정되어 있으면 "The following skills are available..." 목록을 <system-reminder>로 주입합니다.' },
-  sa: { color: 'var(--orange)',
-        who:  'Claude Code CLI가 별도 API 호출 생성 (우리 앱은 표시만 함)',
-        what: 'Task tool 호출 시 Claude Code가 독립적인 두 번째 API 요청을 만들어 서브에이전트를 실행합니다.' },
-};
+function getChipMeta() {
+  return {
+    cm: { color: 'var(--green)',
+          who:  i18n.t('mechDesc.cm.who'),
+          what: i18n.t('mechDesc.cm.what') },
+    sc: { color: 'var(--yellow)',
+          who:  i18n.t('mechDesc.sc.who'),
+          what: i18n.t('mechDesc.sc.what') },
+    sk: { color: 'var(--purple)',
+          who:  i18n.t('mechDesc.sk.who'),
+          what: i18n.t('mechDesc.sk.what') },
+    sa: { color: 'var(--orange)',
+          who:  i18n.t('mechDesc.sa.who'),
+          what: i18n.t('mechDesc.sa.what') },
+  };
+}
 
 function buildMechFilterChips(body) {
   const det = detectMechanisms(body);
@@ -2018,7 +2450,7 @@ function buildMechFilterChips(body) {
   if (chips.length === 0) return '';
 
   const activeChip = chips.find(c => c.key === proxyDetailMechFilter);
-  const meta = activeChip ? CHIP_META[activeChip.metaKey] : null;
+  const meta = activeChip ? getChipMeta()[activeChip.metaKey] : null;
   const descBanner = meta
     ? `<div class="mech-filter-desc">
         <span class="mech-filter-desc-dot" style="background:${meta.color}"></span>
@@ -2112,7 +2544,7 @@ function renderProxyDetail() {
   detail.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column';
 
   if (!entry) {
-    detail.innerHTML = '<div class="proxy-empty"><span style="font-size:28px">🔍</span><span>요청을 선택하면<br>페이로드가 표시됩니다</span></div>';
+    detail.innerHTML = `<div class="proxy-empty"><span style="font-size:28px">🔍</span><span>${i18n.t('proxy.selectRequest')}</span></div>`;
     return;
   }
 
@@ -2152,23 +2584,23 @@ function renderProxyDetail() {
   const q = proxyDetailSearch;
   const searchNav = q ? `<div class="search-nav">
     <span id="searchCounter"></span>
-    <button class="search-nav-btn" onclick="navigateSearchMatch(-1)" title="이전">▲</button>
-    <button class="search-nav-btn" onclick="navigateSearchMatch(1)" title="다음">▼</button>
+    <button class="search-nav-btn" onclick="navigateSearchMatch(-1)" title="${esc(i18n.t('search.prev'))}">▲</button>
+    <button class="search-nav-btn" onclick="navigateSearchMatch(1)" title="${esc(i18n.t('search.next'))}">▼</button>
   </div>` : '';
   const searchBar = `<div class="msg-search-bar" style="flex-shrink:0">
     <input type="text" class="msg-search-input" id="proxyDetailSearchInput"
-      placeholder="🔍 검색... (⌘F, Enter=다음)" value="${esc(q)}"
+      placeholder="${esc(i18n.t('analysis.searchPlaceholder'))}" value="${esc(q)}"
       oninput="setProxyDetailSearch(this.value)"
       oncompositionstart="_imeComposing=true"
       oncompositionend="_imeComposing=false;setProxyDetailSearch(this.value)">
     ${searchNav}
-    ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('');document.getElementById('proxyDetailSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
+    ${q ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('');document.getElementById('proxyDetailSearchInput')?.focus()" title="${esc(i18n.t('messages.searchClear'))}">✕</button>` : ''}
   </div>`;
   const mechChips = proxyDetailTab === 'request' ? buildMechFilterChips(entry.body) : '';
   const header = `<div style="flex-shrink:0">${searchBar}${mechChips}</div>`;
 
   if (data === null || data === undefined) {
-    detail.innerHTML = header + `<div style="color:var(--dim);padding:16px;font-size:12px">${proxyDetailTab === 'response' ? '응답 대기 중…' : '바디 없음'}</div>`;
+    detail.innerHTML = header + `<div style="color:var(--dim);padding:16px;font-size:12px">${proxyDetailTab === 'response' ? i18n.t('proxy.waitingResponse') : i18n.t('proxy.noBody')}</div>`;
     return;
   }
 
@@ -2261,11 +2693,11 @@ function renderProxyAnalysis(entry, container) {
   const aq = proxyDetailSearch;
   const analysisSearchBar = `<div class="msg-search-bar" style="flex-shrink:0">
     <input type="text" class="msg-search-input" id="proxyDetailSearchInput"
-      placeholder="🔍 검색... (⌘F, Enter=다음)" value="${esc(aq)}"
+      placeholder="${esc(i18n.t('analysis.searchPlaceholder'))}" value="${esc(aq)}"
       oninput="setProxyDetailSearch(this.value)"
       oncompositionstart="_imeComposing=true"
       oncompositionend="_imeComposing=false;setProxyDetailSearch(this.value)">
-    ${aq ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('');document.getElementById('proxyDetailSearchInput')?.focus()" title="검색 초기화">✕</button>` : ''}
+    ${aq ? `<button class="msg-search-clear" onclick="setProxyDetailSearch('');document.getElementById('proxyDetailSearchInput')?.focus()" title="${esc(i18n.t('messages.searchClear'))}">✕</button>` : ''}
   </div>`;
 
   let html = '<div style="flex:1;overflow:auto"><div class="analysis-view">';
@@ -2282,7 +2714,7 @@ function renderProxyAnalysis(entry, container) {
   html += '</div>';
 
   if (!hasAny) {
-    html += '<div class="analysis-none">감지된 메커니즘 없음<br><small>일반 API 요청이거나 분석 지원 외 패턴입니다</small></div>';
+    html += `<div class="analysis-none">${i18n.t('analysis.noMechanisms')}</div>`;
     html += '</div></div>';
     container.innerHTML = `<div style="flex-shrink:0">${analysisSearchBar}</div>` + html;
     return;
@@ -2298,8 +2730,8 @@ function renderProxyAnalysis(entry, container) {
     const mdSections = parseClaudeMdSections(det.claudeMd);
     if (mdSections.length > 0) {
       html += `<div class="analysis-section" data-mech-key="cm">
-        <div class="analysis-section-title" style="color:var(--green)">CLAUDE.md — system-reminder 주입</div>
-        <div class="analysis-desc">Claude Code가 프로젝트/글로벌 CLAUDE.md 내용을 &lt;system-reminder&gt; 태그로 감싸서 messages[] 안에 삽입</div>`;
+        <div class="analysis-section-title" style="color:var(--green)">${i18n.t('analysis.claudeMdTitle')}</div>
+        <div class="analysis-desc">${i18n.t('analysis.claudeMdDesc')}</div>`;
       for (let si = 0; si < mdSections.length; si++) {
         const s = mdSections[si];
         const color = s.scope === 'global' ? 'var(--green)' : 'var(--blue)';
@@ -2313,8 +2745,8 @@ function renderProxyAnalysis(entry, container) {
       html += '</div>';
     } else {
       html += `<div class="analysis-section" data-mech-key="cm">
-        <div class="analysis-section-title" style="color:var(--green)">CLAUDE.md — system-reminder 주입</div>
-        <div class="analysis-desc">Claude Code가 프로젝트/글로벌 CLAUDE.md 내용을 &lt;system-reminder&gt; 태그로 감싸서 messages[] 안에 삽입</div>
+        <div class="analysis-section-title" style="color:var(--green)">${i18n.t('analysis.claudeMdTitle')}</div>
+        <div class="analysis-desc">${i18n.t('analysis.claudeMdDesc')}</div>
         <div class="analysis-block highlight-green">${esc(det.claudeMd)}</div>
       </div>`;
     }
@@ -2324,8 +2756,8 @@ function renderProxyAnalysis(entry, container) {
   if (det.outputStyle) {
     const extra = det.outputStyle.slice(1).join('\n\n---\n\n');
     html += `<div class="analysis-section" data-mech-key="st">
-      <div class="analysis-section-title" style="color:var(--blue)">Output Style — system[] 추가 블록</div>
-      <div class="analysis-desc">Claude Code가 system 프롬프트 배열에 추가 블록으로 삽입 (모델 응답 스타일 제어)</div>
+      <div class="analysis-section-title" style="color:var(--blue)">${i18n.t('analysis.outputStyleTitle')}</div>
+      <div class="analysis-desc">${i18n.t('analysis.outputStyleDesc')}</div>
       <div class="analysis-block highlight-blue">${esc(extra)}</div>
     </div>`;
   }
@@ -2335,21 +2767,19 @@ function renderProxyAnalysis(entry, container) {
 
   if (det.slashCommand) {
     html += `<div class="analysis-section" data-mech-key="sc">
-      <div class="analysis-section-title" style="color:var(--yellow)">① 입력 — Slash Command</div>
-      <div class="analysis-desc">사용자가 /${esc(det.slashCommand.tag)}을 입력하면 Claude Code가 &lt;command-message&gt; 태그로 감싸서 프롬프트에 주입</div>
+      <div class="analysis-section-title" style="color:var(--yellow)">${i18n.t('analysis.slashCmdTitle')}</div>
+      <div class="analysis-desc">${i18n.t('analysis.slashCmdDesc', { cmd: esc(det.slashCommand.tag) })}</div>
       <div class="analysis-block highlight-yellow">${esc(det.slashCommand.full)}</div>
     </div>`;
   }
 
   for (const sk of det.skills) {
     html += `<div class="analysis-section" data-mech-key="sk">
-      <div class="analysis-section-title" style="color:var(--purple)">${slashSkillLinked ? '② 실행 — ' : ''}Skill (tool_use → tool_result)</div>
-      <div class="analysis-desc">${slashSkillLinked
-        ? 'Claude가 위 슬래시 커맨드를 읽고, 매칭되는 스킬을 tool_use로 호출'
-        : 'Claude가 스킬을 tool_use로 호출하고 결과를 tool_result로 수신'}</div>
+      <div class="analysis-section-title" style="color:var(--purple)">${i18n.t(slashSkillLinked ? 'analysis.skillLinkedTitle' : 'analysis.skillTitle')}</div>
+      <div class="analysis-desc">${i18n.t(slashSkillLinked ? 'analysis.skillLinkedDesc' : 'analysis.skillDesc')}</div>
       <div class="analysis-kv"><span class="ak">id</span><span class="av">${esc(sk.id)}</span></div>
       <div class="analysis-block highlight-purple jt-json-block" data-json="${escAttr(JSON.stringify(sk.input))}"></div>
-      ${sk.result ? `<div class="analysis-kv"><span class="ak">result (tool_result)</span></div><div class="analysis-block highlight-purple">${esc(sk.result)}</div>` : '<div class="analysis-kv"><span class="ak" style="color:var(--dim)">tool_result 없음 (다음 메시지에 있거나 아직 수신 전)</span></div>'}
+      ${sk.result ? `<div class="analysis-kv"><span class="ak">result (tool_result)</span></div><div class="analysis-block highlight-purple">${esc(sk.result)}</div>` : `<div class="analysis-kv"><span class="ak" style="color:var(--dim)">${i18n.t('analysis.noToolResult')}</span></div>`}
     </div>`;
   }
 
@@ -2357,8 +2787,8 @@ function renderProxyAnalysis(entry, container) {
   for (const sa of det.subAgents) {
     const isJson = sa.input && typeof sa.input === 'object';
     html += `<div class="analysis-section" data-mech-key="sa">
-      <div class="analysis-section-title" style="color:var(--orange)">${esc(sa.name)} — Sub-Agent 호출</div>
-      <div class="analysis-desc">Claude가 Task tool로 독립적인 서브에이전트 API 요청을 생성 (별도 컨텍스트에서 실행)</div>
+      <div class="analysis-section-title" style="color:var(--orange)">${esc(sa.name)} — Sub-Agent</div>
+      <div class="analysis-desc">${i18n.t('analysis.subAgentDesc')}</div>
       <div class="analysis-kv"><span class="ak">subagent_type</span><span class="av" style="color:var(--orange)">${esc(sa.input?.subagent_type || sa.input?.type || '?')}</span></div>
       <div class="analysis-block highlight-orange ${isJson ? 'jt-json-block' : ''}" ${isJson ? `data-json="${escAttr(JSON.stringify(sa.input))}"` : ''}>${isJson ? '' : esc(sa.input?.prompt || '')}</div>
     </div>`;
@@ -2450,6 +2880,9 @@ if (savedKey) {
   document.getElementById('apiKey').value = savedKey;
   onApiKeyChange();
 }
+
+// Apply initial i18n (after DOM is ready)
+applyI18n();
 
 // 시뮬레이터 플래그에 따라 관련 UI 숨기기
 if (!SHOW_SIMULATOR) {
