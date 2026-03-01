@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('node:http');
 const https = require('node:https');
-const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk');
+const { Anthropic } = require('@anthropic-ai/sdk');
 
 let mainWin = null;
 let proxyServer = null;
