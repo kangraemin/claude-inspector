@@ -2469,7 +2469,10 @@ function buildMechFilterChips(body) {
   }
 
   if (det.slashCommand)       chips.push({ key: 'sc', found: true, label: '⌨ Slash Cmd',  pattern: 'command-message', cls: 'sc', metaKey: 'sc' });
-  if (det.skills.length > 0)  chips.push({ key: 'sk', found: true, label: '🔧 Skill',      pattern: 'skills are available', cls: 'sk', metaKey: 'sk' });
+  for (let i = 0; i < det.skills.length; i++) {
+    const skName = det.skills[i].input?.skill || det.skills[i].input?.command || `Skill ${i + 1}`;
+    chips.push({ key: 'sk_' + i, found: true, label: `🔧 ${skName}`, cls: 'sk', metaKey: 'sk' });
+  }
   if (det.subAgents.length > 0) chips.push({ key: 'sa', found: true, label: '🤖 Sub-Agent', pattern: det.subAgents[0]?.name || 'Agent', cls: 'sa', metaKey: 'sa' });
 
   if (chips.length === 0) return '';
@@ -2557,10 +2560,12 @@ function highlightMechInJsonTree(container, body, mechKey) {
       break;
     }
 
-  } else if (mechKey === 'sk') {
+  } else if (mechKey.startsWith('sk')) {
     const det = detectMechanisms(body);
     if (!det.skills.length) return;
-    highlightToolUseById(container, det.skills[0].id);
+    const idx = mechKey.includes('_') ? parseInt(mechKey.split('_')[1]) : 0;
+    const skill = det.skills[idx] || det.skills[0];
+    if (skill) highlightToolUseById(container, skill.id);
   } else if (mechKey === 'sa') {
     const det = detectMechanisms(body);
     if (!det.subAgents.length) return;
@@ -2686,10 +2691,12 @@ function renderProxyDetail() {
     return;
   }
 
+  const prevScrollTop = document.getElementById('proxyDetailCode')?.scrollTop ?? 0;
   detail.innerHTML = header + '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
   const code = document.getElementById('proxyDetailCode');
   renderJsonTree(code, data);
   if (proxyDetailMechFilter) {
+    code.scrollTop = prevScrollTop;
     highlightMechInJsonTree(code, entry.body, proxyDetailMechFilter);
   }
   if (q) {
@@ -2838,15 +2845,15 @@ function renderProxyAnalysis(entry, container) {
     </div>`;
   }
 
-  for (const sk of det.skills) {
-    html += `<div class="analysis-section" data-mech-key="sk">
+  det.skills.forEach((sk, i) => {
+    html += `<div class="analysis-section" data-mech-key="sk_${i}">
       <div class="analysis-section-title" style="color:var(--purple)">${i18n.t(slashSkillLinked ? 'analysis.skillLinkedTitle' : 'analysis.skillTitle')}</div>
       <div class="analysis-desc">${i18n.t(slashSkillLinked ? 'analysis.skillLinkedDesc' : 'analysis.skillDesc')}</div>
       <div class="analysis-kv"><span class="ak">id</span><span class="av">${esc(sk.id)}</span></div>
       <div class="analysis-block highlight-purple jt-json-block" data-json="${escAttr(JSON.stringify(sk.input))}"></div>
       ${sk.result ? `<div class="analysis-kv"><span class="ak">result (tool_result)</span></div><div class="analysis-block highlight-purple">${esc(sk.result)}</div>` : `<div class="analysis-kv"><span class="ak" style="color:var(--dim)">${i18n.t('analysis.noToolResult')}</span></div>`}
     </div>`;
-  }
+  });
 
   // Sub-Agents
   for (const sa of det.subAgents) {
