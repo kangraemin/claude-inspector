@@ -2077,6 +2077,18 @@ function renderProxyStatus() {
   }
 }
 
+let _renderProxyListTimer = null;
+function debouncedRenderProxyList() {
+  clearTimeout(_renderProxyListTimer);
+  _renderProxyListTimer = setTimeout(renderProxyList, 50);
+}
+
+let _renderProxyDetailTimer = null;
+function debouncedRenderProxyDetail() {
+  clearTimeout(_renderProxyDetailTimer);
+  _renderProxyDetailTimer = setTimeout(renderProxyDetail, 100);
+}
+
 async function toggleProxy() {
   const btn = document.getElementById('proxyStartBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
@@ -2086,6 +2098,9 @@ async function toggleProxy() {
     window.electronAPI.offProxy();
     proxyRunning = false;
   } else {
+    // 기존 리스너 먼저 정리 후 새 리스너 등록 (누적 방지)
+    window.electronAPI.offProxy();
+
     const port = parseInt(document.getElementById('proxyPort').value) || 9090;
     const result = await window.electronAPI.proxyStart(port);
     if (result.error) {
@@ -2100,14 +2115,14 @@ async function toggleProxy() {
     window.electronAPI.onProxyRequest((data) => {
       proxyCaptures.unshift(data);
       if (proxyCaptures.length > 50) proxyCaptures.pop();
-      renderProxyList();
+      debouncedRenderProxyList();
     });
     window.electronAPI.onProxyResponse((data) => {
       const entry = proxyCaptures.find(e => e.id === data.id);
       if (entry) {
         entry.response = data;
-        renderProxyList();
-        if (selectedProxyId === data.id) renderProxyDetail();
+        debouncedRenderProxyList();
+        if (selectedProxyId === data.id) debouncedRenderProxyDetail();
       }
     });
   }

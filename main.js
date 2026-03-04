@@ -145,16 +145,18 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
           proxyRes.on('data', chunk => { respChunks.push(chunk); res.write(chunk); });
           proxyRes.on('end', () => {
             res.end();
-            const respStr = Buffer.concat(respChunks).toString('utf8');
-            let respObj = null;
-            try { respObj = JSON.parse(respStr); } catch {}
-            if (!respObj) respObj = parseSseStream(respStr);
-            if (mainWin && !mainWin.isDestroyed()) {
-              mainWin.webContents.send('proxy-response', {
-                id: reqId, status: proxyRes.statusCode,
-                body: respObj || respStr.slice(0, 4000),
-              });
-            }
+            setImmediate(() => {
+              const respStr = Buffer.concat(respChunks).toString('utf8');
+              let respObj = null;
+              try { respObj = JSON.parse(respStr); } catch {}
+              if (!respObj) respObj = parseSseStream(respStr);
+              if (mainWin && !mainWin.isDestroyed()) {
+                mainWin.webContents.send('proxy-response', {
+                  id: reqId, status: proxyRes.statusCode,
+                  body: respObj || respStr.slice(0, 4000),
+                });
+              }
+            });
           });
         });
 
