@@ -154,7 +154,17 @@ The `system` field isn't a single string — it's an **array of 3 blocks**, each
 
 This design keeps every request lean: unused MCP schemas never consume tokens.
 
-## Getting Started
+## Quick Download
+
+[⬇ Download v1.1.0 (.dmg)](https://github.com/kangraemin/claude-inspector/releases/latest)
+
+| Mac (Apple Silicon) | Mac (Intel) |
+|---|---|
+| `Claude Inspector-1.1.0-arm64.dmg` | `Claude Inspector-1.1.0.dmg` |
+
+Download, open the `.dmg`, drag the app to Applications, and launch.
+
+## For Contributors
 
 ```bash
 git clone https://github.com/kangraemin/claude-inspector.git

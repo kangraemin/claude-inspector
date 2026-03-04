@@ -155,7 +155,17 @@ Claude Code CLI 트래픽을 실시간으로 가로채<br>
 
 사용하지 않는 MCP 스키마는 토큰을 전혀 소비하지 않는 것이 핵심입니다.
 
-## 시작하기
+## 빠른 다운로드
+
+[⬇ v1.1.0 다운로드 (.dmg)](https://github.com/kangraemin/claude-inspector/releases/latest)
+
+| Mac (Apple Silicon) | Mac (Intel) |
+|---|---|
+| `Claude Inspector-1.1.0-arm64.dmg` | `Claude Inspector-1.1.0.dmg` |
+
+`.dmg`를 열고 앱을 Applications에 드래그한 뒤 실행하세요.
+
+## 기여자용 시작 방법
 
 ```bash
 git clone https://github.com/kangraemin/claude-inspector.git
