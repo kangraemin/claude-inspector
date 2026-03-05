@@ -109,7 +109,12 @@ ipcMain.handle('open-file', async () => {
     ],
   });
   if (canceled || !filePaths.length) return null;
-  return { path: filePaths[0], content: fs.readFileSync(filePaths[0], 'utf-8') };
+  try {
+    return { path: filePaths[0], content: fs.readFileSync(filePaths[0], 'utf-8') };
+  } catch (e) {
+    console.error('file read failed', e);
+    return { path: filePaths[0], content: null, error: e.message };
+  }
 });
 
 ipcMain.handle('get-token-estimate', (_event, text) => {

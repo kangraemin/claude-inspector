@@ -1741,7 +1741,7 @@ function copyPayload() {
       const o = b.textContent; b.textContent = i18n.t('copy.copied');
       setTimeout(() => { b.textContent = o; }, 1500);
     });
-  });
+  }).catch(e => console.error('copy failed', e));
 }
 
 // ─── Core send function ───────────────────────────────────────────────────
@@ -1816,7 +1816,7 @@ function copyResponse() {
   navigator.clipboard.writeText(lastResponseText).then(() => {
     const btn = document.querySelector('.resp-copy');
     if (btn) { btn.textContent = i18n.t('copy.copied'); setTimeout(() => { btn.textContent = i18n.t('copy.response'); }, 1500); }
-  });
+  }).catch(e => console.error('copy failed', e));
 }
 
 // ─── Markdown toggle ──────────────────────────────────────────────────────
@@ -1928,7 +1928,7 @@ function copyExport() {
       const o = b.textContent; b.textContent = '✓';
       setTimeout(() => { b.textContent = o; }, 1500);
     });
-  });
+  }).catch(e => console.error('copy failed', e));
 }
 
 // ─── History ──────────────────────────────────────────────────────────────
@@ -2987,7 +2987,7 @@ function copyProxyCmd() {
   navigator.clipboard.writeText(el.textContent).then(() => {
     const btn = document.querySelector('[onclick="copyProxyCmd()"]');
     if (btn) { const o = btn.textContent; btn.textContent = '✓'; setTimeout(() => btn.textContent = o, 1500); }
-  });
+  }).catch(e => console.error('copy failed', e));
 }
 
 function copyProxyDetail() {
@@ -2999,7 +2999,7 @@ function copyProxyDetail() {
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.querySelector('[onclick="copyProxyDetail()"]');
     if (btn) { const o = btn.textContent; btn.textContent = '✓'; setTimeout(() => btn.textContent = o, 1500); }
-  });
+  }).catch(e => console.error('copy failed', e));
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────
