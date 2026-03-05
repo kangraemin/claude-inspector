@@ -123,6 +123,9 @@ ipcMain.handle('get-token-estimate', (_event, text) => {
 });
 
 ipcMain.handle('proxy-start', (_event, port = 9090) => {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return { error: 'Invalid port: must be 1–65535' };
+  }
   if (proxyServer) return { running: true, port: proxyServer.address().port };
 
   return new Promise((resolve) => {
@@ -132,7 +135,7 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
       req.on('end', () => {
         const bodyBuf = Buffer.concat(chunks);
         let bodyObj = null;
-        try { bodyObj = JSON.parse(bodyBuf.toString()); } catch {}
+        try { bodyObj = JSON.parse(bodyBuf.toString()); } catch (e) { console.warn('req body parse failed:', e.message); }
 
         const reqId = Date.now();
         const reqData = {
@@ -157,7 +160,7 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
             setImmediate(() => {
               const respStr = Buffer.concat(respChunks).toString('utf8');
               let respObj = null;
-              try { respObj = JSON.parse(respStr); } catch {}
+              try { respObj = JSON.parse(respStr); } catch { /* SSE stream — JSON.parse expected to fail */ }
               if (!respObj) respObj = parseSseStream(respStr);
               if (mainWin && !mainWin.isDestroyed()) {
                 mainWin.webContents.send('proxy-response', {

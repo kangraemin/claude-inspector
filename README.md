@@ -156,11 +156,11 @@ This design keeps every request lean: unused MCP schemas never consume tokens.
 
 ## Quick Download
 
-[⬇ Download v1.1.0 (.dmg)](https://github.com/kangraemin/claude-inspector/releases/latest)
+[⬇ Download v1.1.1 (.dmg)](https://github.com/kangraemin/claude-inspector/releases/latest)
 
 | Mac (Apple Silicon) | Mac (Intel) |
 |---|---|
-| `Claude Inspector-1.1.0-arm64.dmg` | `Claude Inspector-1.1.0.dmg` |
+| `Claude Inspector-1.1.1-arm64.dmg` | `Claude Inspector-1.1.1.dmg` |
 
 Download, open the `.dmg`, drag the app to Applications, and launch.
 
