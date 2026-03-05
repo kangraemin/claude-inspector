@@ -1,0 +1,36 @@
+{
+  "workflow_phase": "verification",
+  "plan_approved": true,
+  "team_name": "dev-v1-1-1",
+  "team_spawned": true,
+  "current_dev_phase": 4,
+  "current_step": 1,
+  "dev_phases": {
+    "phase-1": {
+      "name": "main-js-fixes",
+      "steps": 1,
+      "status": "done"
+    },
+    "phase-2": {
+      "name": "index-html-fixes",
+      "steps": 1,
+      "status": "done"
+    },
+    "phase-3": {
+      "name": "onboard-modal",
+      "steps": 1,
+      "status": "done"
+    },
+    "phase-4": {
+      "name": "version-build-release",
+      "steps": 1,
+      "status": "done"
+    }
+  },
+  "verification": {
+    "rounds_passed": 0
+  },
+  "task_dir": "/Users/ram/programming/vibecoding/claudeInspector/docs/v1-1-1-patch-onboard-release",
+  "active_file": "/Users/ram/programming/vibecoding/claudeInspector/docs/.active",
+  "persistent_mode": false
+}
