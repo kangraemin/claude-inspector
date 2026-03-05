@@ -1,0 +1,48 @@
+{
+  "workflow_phase": "done",
+  "planning": {
+    "no_question_streak": 3
+  },
+  "plan_approved": true,
+  "current_dev_phase": 3,
+  "current_step": 1,
+  "dev_phases": {
+    "1": {
+      "name": "\ub9ac\uc2a4\ub108 \uc911\ubcf5 \uc218\uc815 + debounce",
+      "steps": {
+        "1": {
+          "name": "toggleProxy offProxy + debounce \uc801\uc6a9",
+          "test_defined": true,
+          "passed": true
+        }
+      },
+      "status": "pending"
+    },
+    "2": {
+      "name": "main.js setImmediate",
+      "steps": {
+        "1": {
+          "name": "setImmediate yield",
+          "test_defined": true,
+          "passed": true
+        }
+      },
+      "status": "pending"
+    },
+    "3": {
+      "name": "E2E \ud14c\uc2a4\ud2b8",
+      "steps": {
+        "1": {
+          "name": "e2e tests",
+          "test_defined": true,
+          "passed": false
+        }
+      },
+      "status": "pending"
+    }
+  },
+  "verification": {
+    "rounds_passed": 0
+  },
+  "team_spawned": true
+}
