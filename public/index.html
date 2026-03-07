@@ -1667,7 +1667,7 @@ function buildJsonHtml(val, depth) {
   const rows = entries.map(([k, v], i) => {
     const comma = i < entries.length - 1 ? '<span style="color:var(--dim)">,</span>' : '';
     const keyPart = k !== null ? `<span class="jt-key">"${esc(String(k))}"</span><span style="color:var(--dim)">: </span>` : '';
-    return `<div class="jt-row" style="padding-left:${(depth + 1) * 16}px">${keyPart}${buildJsonHtml(v, depth + 1)}${comma}</div>`;
+    return `<div class="jt-row" style="padding-left:16px">${keyPart}${buildJsonHtml(v, depth + 1)}${comma}</div>`;
   }).join('');
   const typeTag = isArr ? `[${label}]` : `{${label}}`;
 
@@ -1677,7 +1677,7 @@ function buildJsonHtml(val, depth) {
     + `<span class="jt-tag" id="${id}-s" onclick="jtToggle('${id}')" style="display:none">${typeTag}</span>`
     + `<span id="${id}-b">`
     +   rows
-    +   `<div style="padding-left:${depth * 16}px"><span style="color:var(--dim)">${close}</span></div>`
+    +   `<div><span style="color:var(--dim)">${close}</span></div>`
     + `</span>`
     + `</span>`;
 }
