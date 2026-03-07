@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+          - os: macos-13
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build DMG
+        run: npx electron-builder --mac dmg --${{ matrix.arch }}
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dmg-${{ matrix.arch }}
+          path: release/*.dmg
+
+  release:
+    needs: build-mac
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.dmg
+          generate_release_notes: true
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Compute SHA256
+        id: sha
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA_ARM64=$(shasum -a 256 artifacts/Claude-Inspector-${VERSION}-arm64.dmg | cut -d' ' -f1)
+          SHA_X64=$(shasum -a 256 artifacts/Claude-Inspector-${VERSION}-x64.dmg | cut -d' ' -f1)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha_arm64=${SHA_ARM64}" >> "$GITHUB_OUTPUT"
+          echo "sha_x64=${SHA_X64}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: kangraemin/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Cask formula
+        run: |
+          cd homebrew-tap
+          sed -i "s/version \".*\"/version \"${{ steps.sha.outputs.version }}\"/" Casks/claude-inspector.rb
+          sed -i "s/sha256 \".*\" # arm64/sha256 \"${{ steps.sha.outputs.sha_arm64 }}\" # arm64/" Casks/claude-inspector.rb
+          sed -i "s/sha256 \".*\" # x64/sha256 \"${{ steps.sha.outputs.sha_x64 }}\" # x64/" Casks/claude-inspector.rb
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/claude-inspector.rb
+          git commit -m "chore: update claude-inspector to ${{ steps.sha.outputs.version }}"
+          git push

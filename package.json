@@ -28,6 +28,10 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
+      "artifactName": "Claude-Inspector-${version}-${arch}.${ext}",
+      "notarize": {
+        "teamId": "${env.APPLE_TEAM_ID}"
+      },
       "target": [
         {
           "target": "dmg",

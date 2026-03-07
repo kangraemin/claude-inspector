@@ -2639,6 +2639,13 @@ function buildMechFilterChips(body) {
 function highlightMechInJsonTree(container, body, mechKey) {
   if (!mechKey) return;
 
+  function expandLongStr(el) {
+    if (el.classList.contains('jt-str-expanded') && el.style.display === 'none') {
+      const sid = el.id.replace(/-b$/, '');
+      if (sid) jtStrToggle(sid);
+    }
+  }
+
   function hlRange(el, start, end) {
     const html = el.innerHTML;
     el.innerHTML = html.slice(0, start)
@@ -2657,9 +2664,11 @@ function highlightMechInJsonTree(container, body, mechKey) {
     const section = sections[idx];
 
     const escapedPath = esc('Contents of ' + section.path);
-    const strEls = container.querySelectorAll('.jt-str');
+    const strEls = container.querySelectorAll('.jt-str, .jt-str-expanded');
     for (const el of strEls) {
       if (!el.textContent.includes('Contents of ' + section.path)) continue;
+      expandLongStr(el);
+      expandAncestors(el);
       const html = el.innerHTML;
       const start = html.indexOf(escapedPath);
       if (start === -1) continue;
@@ -2692,9 +2701,10 @@ function highlightMechInJsonTree(container, body, mechKey) {
     }
     const specificText = `<command-message>${target.tag}</command-message>`;
     let count = 0;
-    for (const el of container.querySelectorAll('.jt-str')) {
+    for (const el of container.querySelectorAll('.jt-str, .jt-str-expanded')) {
       if (!el.textContent.includes(specificText)) continue;
       if (count === sameTagIdx) {
+        expandLongStr(el);
         expandAncestors(el);
         const html = el.innerHTML;
         const cmOpen = esc('<command-message>');
@@ -2738,7 +2748,7 @@ function expandAncestors(el) {
 }
 
 function highlightToolUseById(container, toolUseId) {
-  const strEls = container.querySelectorAll('.jt-str');
+  const strEls = container.querySelectorAll('.jt-str, .jt-str-expanded');
   for (const el of strEls) {
     if (el.textContent !== `"${toolUseId}"`) continue;
     // jt-str → jt-row("id" prop) → jt-N-b (body) → outer span → jt-row (array item)
