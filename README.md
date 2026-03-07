@@ -27,37 +27,7 @@ and visualizes all 5 prompt augmentation mechanisms.
 
 Everything below was discovered by inspecting **real captured traffic** with Claude Inspector.
 
-### 1. You type "hello" — Claude receives this entire JSON
-
-You send one word. The API receives a JSON payload with 64+ messages, 3 system blocks, 27+ tool schemas, and hidden metadata. This is a **real capture** from an actual Claude Code session:
-
-```json
-{
-  "model": "claude-sonnet-4-6",
-  "max_tokens": 32000,
-  "thinking": { "type": "adaptive" },
-  "stream": true,
-  "context_management": {
-    "edits": [{ "type": "clear_thinking_20251015", "keep": "all" }]
-  },
-  "metadata": {
-    "user_id": "user_003619f3...9c_account_e4008a49-..._session_cdc418a2-..."
-  },
-  "system": [ ...3 blocks... ],        // see #4
-  "tools": [ ...29 schemas... ],       // 27 built-in + 2 MCP already loaded (see #5)
-  "messages": [ ...64 items... ]       // entire conversation re-sent every turn
-}
-```
-
-**What each field reveals:**
-
-- **`messages[]` has 64 items** — the entire conversation history is re-sent on every single API call. Turn 1 sends 1 message. Turn 10 sends 10. Turn 64 sends all 64. Your token cost compounds with every exchange.
-- **`metadata.user_id`** encodes three separate IDs in one string: `user_<64-char-hex>` + `account_<UUID>` + `session_<UUID>`. Anthropic can correlate individual messages, accounts, and sessions from a single field.
-- **`thinking.type: "adaptive"`** (Sonnet) — the model decides per-request whether to use extended thinking. **Opus** instead sends `"type": "enabled", "budget_tokens": 31999`, always allocating nearly the full output budget to thinking.
-- **`context_management`** — an undocumented object not in the public API spec. The `clear_thinking_20251015` edit instructs the API on how to handle thinking blocks when context gets long.
-- **`tools[]` has 29 entries** here — 27 built-in tools plus 2 MCP tools that were already lazy-loaded earlier in this session. The count grows as you use MCP tools.
-
-### 2. Your CLAUDE.md is injected as multiple named sections every turn
+### 1. Your CLAUDE.md is injected as multiple named sections every turn
 
 Every user message is actually 3 content blocks. What you type is only `content[2]`. The first two are silently prepended by Claude Code:
 
@@ -99,52 +69,7 @@ Every user message is actually 3 content blocks. What you type is only `content[
 
 That's 10KB of instructions silently attached to every API call. In a long session, the cumulative cost of a verbose CLAUDE.md dwarfs the cost of your actual prompts.
 
-### 3. 31,999 of 32,000 tokens go to thinking
-
-Every assistant response includes a hidden `thinking` block you never see in the CLI. In a 64-message capture, **16 out of 31 assistant turns** contained thinking blocks:
-
-```json
-{
-  "role": "assistant",
-  "content": [
-    { "type": "thinking",
-      "thinking": "The user wants to start inspection using the dev skill. Let me invoke the dev skill.",
-      "signature": "Eu0BCkYICxgCKkDLtz8rLXrByzrD..." },
-    { "type": "tool_use",
-      "name": "Skill",
-      "input": { "skill": "dev" } }
-  ]
-}
-```
-
-- **`budget_tokens: 31999`** out of `max_tokens: 32000` on Opus — virtually the entire output budget is reserved for thinking, leaving 1 token for the visible response. Sonnet with `"adaptive"` allocates thinking budget dynamically.
-- **`signature`** — a cryptographic signature over the thinking content. This prevents prompt injection attacks where malicious content could try to forge or modify thinking blocks before they're sent back to the API.
-- **The thinking is invisible in your terminal** but fully visible in captured traffic — Claude Inspector shows it in the Messages tab. This is how Claude Code produces precise tool calls even when your instructions are complex.
-
-### 4. The system prompt: 3 cached blocks
-
-The `system` field isn't a single string — it's an **array of 3 blocks**, each with different caching behavior:
-
-```json
-"system": [
-  // [0] 80 chars — NO cache_control (always fresh, changes per CLI version)
-  { "text": "x-anthropic-billing-header: cc_version=2.1.63.a43; cc_entrypoint=cli; cch=edd82;" },
-
-  // [1] 57 chars — cached 1 hour
-  { "text": "You are Claude Code, Anthropic's official CLI for Claude.",
-    "cache_control": { "type": "ephemeral", "ttl": "1h" } },
-
-  // [2] 15,359 chars — cached 1 hour
-  { "text": "You are an interactive agent that helps users with software engineering tasks...",
-    "cache_control": { "type": "ephemeral", "ttl": "1h" } }
-]
-```
-
-**Why 3 separate blocks?** Prompt caching requires cache boundaries to be stable. By splitting the billing header (which changes per CLI version) into block `[0]` with no cache, blocks `[1]` and `[2]` can be cached independently.
-
-**Block `[2]` contains everything** — all behavior rules, descriptions for all 27 tool schemas, current environment info (OS, shell, model name, date), git status, and MCP server descriptions. At 15,359 characters, it's sent on every request but only processed once per hour thanks to caching. Only the **first request after the cache expires** pays the full processing cost; subsequent requests within the hour get a cache read discount.
-
-### 5. MCP tools are lazy-loaded to save tokens
+### 2. MCP tools are lazy-loaded to save tokens
 
 27 built-in tools (`Read`, `Bash`, `Edit`, `Glob`, `Grep`, `Agent`...) are sent with **full JSON schemas** in every request. But **MCP tools are not** — they start as just names in a list:
 
@@ -166,7 +91,7 @@ The `system` field isn't a single string — it's an **array of 3 blocks**, each
 
 This design keeps every request lean: unused MCP schemas never consume tokens.
 
-### 6. Skill ≠ Command — three different injection paths
+### 3. Skill ≠ Command — three different injection paths
 
 When you type `/something` in Claude Code, what happens depends on *what* that something is. There are three completely different mechanisms, and they look nothing alike in the API payload:
 
@@ -218,7 +143,7 @@ The CLI resolves the skill, reads its prompt file, and dumps the entire text int
 | Injection point | `<local-command-stdout>` in user msg | `<command-name>` tags + prompt in user msg | `tool_use` → `tool_result` |
 | Reaches model? | Result only | Full prompt | Full prompt |
 
-### 7. Context compaction — your conversation, summarized
+### 4. Context compaction — your conversation, summarized
 
 When a session approaches the context window limit, Claude Code doesn't just truncate — it **compresses the entire conversation into a structured summary** and inserts it as a text block in `messages[0]`:
 
@@ -244,9 +169,9 @@ When a session approaches the context window limit, Claude Code doesn't just tru
 
 **What's lost:** Individual tool call results, intermediate thinking blocks, and the granular back-and-forth of the conversation. The model continues from the summary as if it remembers everything, but it's working from a compressed reconstruction — not the original context.
 
-**The cost trade-off:** A 153-message conversation (~40KB in `messages[0]` alone) gets compressed into ~10KB. But this summary is now sent with every subsequent request, adding to the compounding cost described in section 2.
+**The cost trade-off:** A 153-message conversation (~40KB in `messages[0]` alone) gets compressed into ~10KB. But this summary is now sent with every subsequent request, adding to the compounding cost described in section 1.
 
-### 8. Plans and invoked skills persist in every request
+### 5. Plans and invoked skills persist in every request
 
 Once you use a skill or enter plan mode, those prompts don't disappear after use — they're **re-injected into every subsequent request** for the rest of the session:
 
@@ -267,7 +192,7 @@ Once you use a skill or enter plan mode, those prompts don't disappear after use
 ]
 ```
 
-**The hidden cost of skills:** In this captured session, two invoked skills (`dev-bounce` + `finish`) added **12,951 characters** to every request. The active plan added another **4,708 characters**. Combined: **~18KB of persistent context** silently riding along on every API call — on top of the 10KB of CLAUDE.md (section 2).
+**The hidden cost of skills:** In this captured session, two invoked skills (`dev-bounce` + `finish`) added **12,951 characters** to every request. The active plan added another **4,708 characters**. Combined: **~18KB of persistent context** silently riding along on every API call — on top of the 10KB of CLAUDE.md (section 1).
 
 **Why this matters:**
 - **Skills compound.** Each `/skill` you invoke in a session stays forever. Five skills with 3KB prompts each = 15KB added to every request.
