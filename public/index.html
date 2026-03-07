@@ -604,12 +604,20 @@
       padding: 12px 16px; overflow: auto;
     }
     .jt-key  { color: #9cdcfe; }
-    .jt-str  { color: var(--orange); white-space: pre-wrap; word-break: break-word; }
+    .jt-str  { color: var(--orange); }
     .jt-num  { color: var(--green); }
     .jt-bool { color: var(--blue); }
     .jt-null { color: var(--dim); }
     .jt-row  { display: block; white-space: nowrap; }
-    .jt-str-long { display: inline-block; vertical-align: top; max-width: 100%; }
+    .jt-str-long { display: inline; }
+    .jt-str-preview {
+      display: inline-block; vertical-align: top; max-width: calc(100% - 60px);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      color: var(--orange); cursor: pointer;
+    }
+    .jt-str-expanded {
+      color: var(--orange); white-space: pre-wrap; word-break: break-word;
+    }
     .jt-str-toggle {
       color: var(--dim); font-size: 10px; cursor: pointer;
       padding: 0 4px; user-select: none;
@@ -1633,20 +1641,20 @@ function buildJsonHtml(val, depth) {
   if (val === true || val === false) return `<span class="jt-bool">${val}</span>`;
   if (typeof val === 'number') return `<span class="jt-num">${val}</span>`;
   if (typeof val === 'string') {
-    const escaped = esc(val).replace(/\\n/g, '\n');
     const COLLAPSE_LEN = 300;
     if (val.length > COLLAPSE_LEN) {
       const sid = `jts${++_jtId}`;
-      const preview = esc(val.slice(0, 80)).replace(/\\n/g, ' ') + '…';
-      return `<span class="jt-str jt-str-long">`
+      const preview = esc(val.slice(0, 80)).replace(/\\n/g, ' ').replace(/\n/g, ' ') + '…';
+      const expanded = esc(val).replace(/\\n/g, '\n');
+      return `<span class="jt-str-long">`
         + `<span class="jt-str-toggle" id="${sid}-btn" onclick="jtStrToggle('${sid}')">▶</span>`
-        + `<span id="${sid}-s" style="cursor:pointer" onclick="jtStrToggle('${sid}')">"${preview}" <span style="color:var(--dim);font-size:10px">(${val.length} chars)</span></span>`
-        + `<span id="${sid}-b" style="display:none">`
+        + `<span class="jt-str-preview" id="${sid}-s" onclick="jtStrToggle('${sid}')">"${preview}" <span style="color:var(--dim);font-size:10px">(${val.length} chars)</span></span>`
+        + `<span class="jt-str-expanded" id="${sid}-b" style="display:none">`
         + `<span class="jt-str-toggle" onclick="jtStrToggle('${sid}')">▼</span>`
-        + `"${escaped}"</span>`
+        + `"${expanded}"</span>`
         + `</span>`;
     }
-    return `<span class="jt-str">"${escaped}"</span>`;
+    return `<span class="jt-str">"${esc(val)}"</span>`;
   }
 
   const isArr = Array.isArray(val);
