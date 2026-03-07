@@ -7,7 +7,7 @@
 MITM proxy that intercepts Claude Code CLI traffic in real-time<br>
 and visualizes all 5 prompt augmentation mechanisms.
 
-[Install](#install) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#-proxy-mode) · [How It Works](#how-it-works)
+[Install](#install) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#proxy-mode) · [How It Works](#how-it-works)
 
 **English** | [한국어](README.ko.md)
 
@@ -87,6 +87,18 @@ Every user message is actually 3 content blocks. What you type is only `content[
 
 **Why this multiplies your costs:** Claude Code re-sends the **entire `messages[]` array** on every API call. If you have 30 conversation turns, those 8,500 characters of CLAUDE.md appear 30 times in the payload — once per turn, embedded in `messages[0]`. A 500-line CLAUDE.md costs tokens on every single request, forever. Keep it concise.
 
+**How much does it actually cost?** Here's the breakdown from a real 153-message Opus session:
+
+| Source | Size | Sent |
+|--------|------|------|
+| Global CLAUDE.md | ~1,000 chars | Every request |
+| Global rules (4 files) | ~6,000 chars | Every request |
+| Project CLAUDE.md | ~800 chars | Every request |
+| Auto-memory (MEMORY.md) | ~1,800 chars | Every request |
+| **Total** | **~10,000 chars** | **Every request, compounding** |
+
+That's 10KB of instructions silently attached to every API call. In a long session, the cumulative cost of a verbose CLAUDE.md dwarfs the cost of your actual prompts.
+
 ### 3. 31,999 of 32,000 tokens go to thinking
 
 Every assistant response includes a hidden `thinking` block you never see in the CLI. In a 64-message capture, **16 out of 31 assistant turns** contained thinking blocks:
@@ -153,6 +165,114 @@ The `system` field isn't a single string — it's an **array of 3 blocks**, each
 **Before/after in this capture:** 8 MCP tools are listed as deferred in `ToolSearch`. But `mcp__context7__resolve-library-id` and `mcp__context7__query-docs` had already been loaded earlier in the session — so `tools[]` shows 29 total (27 built-in + 2 loaded MCP). The 6 `til-server` tools are still deferred because they haven't been needed yet.
 
 This design keeps every request lean: unused MCP schemas never consume tokens.
+
+### 6. Skill ≠ Command — three different injection paths
+
+When you type `/something` in Claude Code, what happens depends on *what* that something is. There are three completely different mechanisms, and they look nothing alike in the API payload:
+
+**Local command** — handled entirely by the CLI client, never reaches the model:
+
+```json
+// You type: /mcp
+{
+  "role": "user",
+  "content": [
+    { "type": "text", "text": "<command-name>/mcp</command-name>\n<command-message>mcp</command-message>" },
+    { "type": "text", "text": "<local-command-stdout>MCP dialog dismissed</local-command-stdout>" }
+  ]
+}
+```
+
+The CLI opens a local UI dialog, captures the result, and injects `<local-command-stdout>` into the message. The model sees only the outcome.
+
+**User-invoked skill** — the full skill prompt is injected directly into the user message:
+
+```json
+// You type: /dev-bounce fix the scroll bug
+{
+  "role": "user",
+  "content": [
+    { "type": "text", "text": "<command-message>dev-bounce</command-message>\n<command-name>/dev-bounce</command-name>\n<command-args>fix the scroll bug</command-args>" },
+    { "type": "text", "text": "Base directory for this skill: /Users/you/.claude/skills/dev-bounce\n\n# dev-bounce\n\nFull skill prompt text here..." }
+  ]
+}
+```
+
+The CLI resolves the skill, reads its prompt file, and dumps the entire text into the user message alongside XML tags.
+
+**Assistant-invoked skill** — the model decides to call a skill via `tool_use`, and receives the prompt as a `tool_result`:
+
+```json
+// Assistant calls Skill tool
+{ "type": "tool_use", "name": "Skill", "input": { "skill": "finish" } }
+
+// System returns the skill prompt
+{ "type": "tool_result", "content": "Launching skill: finish" },
+{ "type": "text", "text": "# /finish\n\nFull skill prompt text here..." }
+```
+
+| | Local Command | User-Invoked Skill | Assistant-Invoked Skill |
+|---|---|---|---|
+| Example | `/mcp`, `/clear`, `/help` | `/dev-bounce`, `/commit` | `Skill("finish")`, `Skill("e2e")` |
+| Who triggers | User types `/` | User types `/` | Model decides |
+| Injection point | `<local-command-stdout>` in user msg | `<command-name>` tags + prompt in user msg | `tool_use` → `tool_result` |
+| Reaches model? | Result only | Full prompt | Full prompt |
+
+### 7. Context compaction — your conversation, summarized
+
+When a session approaches the context window limit, Claude Code doesn't just truncate — it **compresses the entire conversation into a structured summary** and inserts it as a text block in `messages[0]`:
+
+```json
+{
+  "type": "text",
+  "text": "This session is being continued from a previous conversation that ran out of context.
+    The summary below covers the earlier portion of the conversation.\n\n
+    Summary:\n
+    1. Primary Request and Intent:\n   - Badge scroll jump bug fix...\n
+    2. Key Technical Concepts:\n   - Electron desktop app with vanilla HTML/CSS/JS...\n
+    3. Files and Code Sections:\n   - public/index.html — line ~2639-2738...\n
+    4. Errors and fixes:\n   - Badge scroll attempt 1 (commit b21672f): ...\n
+    5. Problem Solving:\n   - JSON padding accumulation: Solved by...\n
+    6. All user messages:\n   - \"아 진짜 개열받는다\"...\n
+    7. Pending Tasks:\n   - Badge scroll jump fix (attempt 3)...\n
+    8. Current Work:\n   - Working on the third attempt...\n
+    9. Optional Next Step:\n   - Continue the dev-bounce workflow..."
+}
+```
+
+**What's preserved:** The summary captures 9 structured sections — your original requests, technical context, exact file paths with line numbers, error history, user messages verbatim, and pending work. It's surprisingly thorough.
+
+**What's lost:** Individual tool call results, intermediate thinking blocks, and the granular back-and-forth of the conversation. The model continues from the summary as if it remembers everything, but it's working from a compressed reconstruction — not the original context.
+
+**The cost trade-off:** A 153-message conversation (~40KB in `messages[0]` alone) gets compressed into ~10KB. But this summary is now sent with every subsequent request, adding to the compounding cost described in section 2.
+
+### 8. Plans and invoked skills persist in every request
+
+Once you use a skill or enter plan mode, those prompts don't disappear after use — they're **re-injected into every subsequent request** for the rest of the session:
+
+```json
+// messages[0].content — injected every turn
+[
+  // Previously invoked skills — 12,951 chars in this capture
+  { "type": "text", "text": "<system-reminder>\nThe following skills were invoked in this session.
+      Continue to follow these guidelines:\n\n
+      ### Skill: dev-bounce\n  [full 8KB skill prompt...]\n\n
+      ### Skill: finish\n    [full 4KB skill prompt...]\n
+    </system-reminder>" },
+
+  // Active plan file — 4,708 chars
+  { "type": "text", "text": "<system-reminder>\nA plan file exists from plan mode at: /.../plan.md\n\n
+      Plan contents:\n# Badge scroll fix\n## Context\n...[full plan]...\n
+    </system-reminder>" }
+]
+```
+
+**The hidden cost of skills:** In this captured session, two invoked skills (`dev-bounce` + `finish`) added **12,951 characters** to every request. The active plan added another **4,708 characters**. Combined: **~18KB of persistent context** silently riding along on every API call — on top of the 10KB of CLAUDE.md (section 2).
+
+**Why this matters:**
+- **Skills compound.** Each `/skill` you invoke in a session stays forever. Five skills with 3KB prompts each = 15KB added to every request.
+- **Plans linger.** A plan created in plan mode persists until the session ends. If you don't complete a plan, it keeps consuming tokens.
+- **The total is staggering.** In this Opus capture: 10KB (CLAUDE.md) + 13KB (skills) + 5KB (plan) + 10KB (compacted context) = **~38KB of hidden overhead** before you even type a word.
 
 ## Install
 
