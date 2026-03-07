@@ -7,7 +7,7 @@
 MITM proxy that intercepts Claude Code CLI traffic in real-time<br>
 and visualizes all 5 prompt augmentation mechanisms.
 
-[Getting Started](#getting-started) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#-proxy-mode) · [How It Works](#how-it-works)
+[Install](#install) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#-proxy-mode) · [How It Works](#how-it-works)
 
 **English** | [한국어](README.ko.md)
 
@@ -154,13 +154,22 @@ The `system` field isn't a single string — it's an **array of 3 blocks**, each
 
 This design keeps every request lean: unused MCP schemas never consume tokens.
 
-## Quick Download
+## Install
+
+### Homebrew (Recommended)
+
+```bash
+brew tap kangraemin/tap
+brew install --cask claude-inspector
+```
+
+### Direct Download
 
 [⬇ Download v1.1.1 (.dmg)](https://github.com/kangraemin/claude-inspector/releases/latest)
 
 | Mac (Apple Silicon) | Mac (Intel) |
 |---|---|
-| `Claude Inspector-1.1.1-arm64.dmg` | `Claude Inspector-1.1.1.dmg` |
+| `Claude-Inspector-1.1.1-arm64.dmg` | `Claude-Inspector-1.1.1-x64.dmg` |
 
 Download, open the `.dmg`, drag the app to Applications, and launch.
 

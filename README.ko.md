@@ -7,7 +7,7 @@
 Claude Code CLI 트래픽을 실시간으로 가로채<br>
 5가지 프롬프트 증강 메커니즘을 모두 시각화하는 MITM 프록시.
 
-[시작하기](#시작하기) · [배울 수 있는 것들](#배울-수-있는-것들) · [프록시 모드](#-프록시-모드) · [동작 원리](#동작-원리)
+[설치](#설치) · [배울 수 있는 것들](#배울-수-있는-것들) · [프록시 모드](#-프록시-모드) · [동작 원리](#동작-원리)
 
 [English](README.md) | **한국어**
 
@@ -155,13 +155,22 @@ Claude Code CLI 트래픽을 실시간으로 가로채<br>
 
 사용하지 않는 MCP 스키마는 토큰을 전혀 소비하지 않는 것이 핵심입니다.
 
-## 빠른 다운로드
+## 설치
+
+### Homebrew (권장)
+
+```bash
+brew tap kangraemin/tap
+brew install --cask claude-inspector
+```
+
+### 직접 다운로드
 
 [⬇ v1.1.1 다운로드 (.dmg)](https://github.com/kangraemin/claude-inspector/releases/latest)
 
 | Mac (Apple Silicon) | Mac (Intel) |
 |---|---|
-| `Claude Inspector-1.1.1-arm64.dmg` | `Claude Inspector-1.1.1.dmg` |
+| `Claude-Inspector-1.1.1-arm64.dmg` | `Claude-Inspector-1.1.1-x64.dmg` |
 
 `.dmg`를 열고 앱을 Applications에 드래그한 뒤 실행하세요.
 
