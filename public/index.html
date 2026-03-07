@@ -604,11 +604,17 @@
       padding: 12px 16px; overflow: auto;
     }
     .jt-key  { color: #9cdcfe; }
-    .jt-str  { color: var(--orange); }
+    .jt-str  { color: var(--orange); white-space: pre-wrap; word-break: break-word; }
     .jt-num  { color: var(--green); }
     .jt-bool { color: var(--blue); }
     .jt-null { color: var(--dim); }
-    .jt-row  { display: block; }
+    .jt-row  { display: block; white-space: nowrap; }
+    .jt-str-long { display: inline-block; vertical-align: top; max-width: 100%; }
+    .jt-str-toggle {
+      color: var(--dim); font-size: 10px; cursor: pointer;
+      padding: 0 4px; user-select: none;
+    }
+    .jt-str-toggle:hover { color: var(--yellow); }
     .jt-btn {
       display: inline-block; width: 14px; font-size: 8px; line-height: 1;
       color: var(--dim); cursor: pointer; user-select: none;
@@ -1626,7 +1632,22 @@ function buildJsonHtml(val, depth) {
   if (val === null) return '<span class="jt-null">null</span>';
   if (val === true || val === false) return `<span class="jt-bool">${val}</span>`;
   if (typeof val === 'number') return `<span class="jt-num">${val}</span>`;
-  if (typeof val === 'string') return `<span class="jt-str">"${esc(val)}"</span>`;
+  if (typeof val === 'string') {
+    const escaped = esc(val).replace(/\\n/g, '\n');
+    const COLLAPSE_LEN = 300;
+    if (val.length > COLLAPSE_LEN) {
+      const sid = `jts${++_jtId}`;
+      const preview = esc(val.slice(0, 80)).replace(/\\n/g, ' ') + '…';
+      return `<span class="jt-str jt-str-long">`
+        + `<span class="jt-str-toggle" id="${sid}-btn" onclick="jtStrToggle('${sid}')">▶</span>`
+        + `<span id="${sid}-s" style="cursor:pointer" onclick="jtStrToggle('${sid}')">"${preview}" <span style="color:var(--dim);font-size:10px">(${val.length} chars)</span></span>`
+        + `<span id="${sid}-b" style="display:none">`
+        + `<span class="jt-str-toggle" onclick="jtStrToggle('${sid}')">▼</span>`
+        + `"${escaped}"</span>`
+        + `</span>`;
+    }
+    return `<span class="jt-str">"${escaped}"</span>`;
+  }
 
   const isArr = Array.isArray(val);
   const entries = isArr ? val.map((v, i) => [null, v]) : Object.entries(val);
@@ -1651,6 +1672,14 @@ function buildJsonHtml(val, depth) {
     +   `<div style="padding-left:${depth * 16}px"><span style="color:var(--dim)">${close}</span></div>`
     + `</span>`
     + `</span>`;
+}
+
+function jtStrToggle(id) {
+  const body = document.getElementById(`${id}-b`);
+  const summary = document.getElementById(`${id}-s`);
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  summary.style.display = open ? '' : 'none';
 }
 
 function jtToggle(id) {
