@@ -2652,7 +2652,7 @@ function highlightMechInJsonTree(container, body, mechKey) {
       + '<span class="mech-hl-text">' + html.slice(start, end) + '</span>'
       + html.slice(end);
     const hl = el.querySelector('.mech-hl-text');
-    if (hl) hl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (hl) requestAnimationFrame(() => hl.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 
   if (mechKey.startsWith('cm')) {
@@ -2756,7 +2756,7 @@ function highlightToolUseById(container, toolUseId) {
     if (!itemRow || !itemRow.classList.contains('jt-row')) break;
     expandAncestors(itemRow);
     itemRow.classList.add('mech-hl-row');
-    itemRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    requestAnimationFrame(() => itemRow.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     return;
   }
 }
