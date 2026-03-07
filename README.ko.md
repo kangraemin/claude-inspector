@@ -79,6 +79,114 @@ Claude Code CLI 트래픽을 실시간으로 가로채<br>
 
 사용하지 않는 MCP 스키마는 토큰을 전혀 소비하지 않는 것이 핵심입니다.
 
+### 3. Skill ≠ Command — 세 가지 주입 경로
+
+Claude Code에서 `/something`을 입력했을 때, 그 "something"이 무엇이냐에 따라 완전히 다른 메커니즘이 작동합니다. API 페이로드에서의 모습도 전혀 다릅니다:
+
+**로컬 커맨드** — CLI 클라이언트에서만 처리되며, 모델에 도달하지 않습니다:
+
+```json
+// /mcp 입력 시
+{
+  "role": "user",
+  "content": [
+    { "type": "text", "text": "<command-name>/mcp</command-name>\n<command-message>mcp</command-message>" },
+    { "type": "text", "text": "<local-command-stdout>MCP dialog dismissed</local-command-stdout>" }
+  ]
+}
+```
+
+CLI가 로컬 UI 다이얼로그를 열고, 결과를 캡처한 뒤 `<local-command-stdout>`으로 메시지에 주입합니다. 모델은 결과만 봅니다.
+
+**사용자가 호출한 스킬** — 스킬 프롬프트 전체가 user 메시지에 직접 주입됩니다:
+
+```json
+// /dev-bounce fix the scroll bug 입력 시
+{
+  "role": "user",
+  "content": [
+    { "type": "text", "text": "<command-message>dev-bounce</command-message>\n<command-name>/dev-bounce</command-name>\n<command-args>fix the scroll bug</command-args>" },
+    { "type": "text", "text": "Base directory for this skill: /Users/you/.claude/skills/dev-bounce\n\n# dev-bounce\n\n스킬 프롬프트 전체 텍스트..." }
+  ]
+}
+```
+
+CLI가 스킬을 찾아 프롬프트 파일을 읽고, XML 태그와 함께 user 메시지에 전체 텍스트를 넣습니다.
+
+**어시스턴트가 호출한 스킬** — 모델이 `tool_use`로 스킬을 호출하고, `tool_result`로 프롬프트를 받습니다:
+
+```json
+// 어시스턴트가 Skill 도구 호출
+{ "type": "tool_use", "name": "Skill", "input": { "skill": "finish" } }
+
+// 시스템이 스킬 프롬프트 반환
+{ "type": "tool_result", "content": "Launching skill: finish" },
+{ "type": "text", "text": "# /finish\n\n스킬 프롬프트 전체 텍스트..." }
+```
+
+| | 로컬 커맨드 | 사용자 호출 스킬 | 어시스턴트 호출 스킬 |
+|---|---|---|---|
+| 예시 | `/mcp`, `/clear`, `/help` | `/dev-bounce`, `/commit` | `Skill("finish")`, `Skill("e2e")` |
+| 누가 트리거 | 사용자가 `/` 입력 | 사용자가 `/` 입력 | 모델이 결정 |
+| 주입 지점 | user msg 내 `<local-command-stdout>` | user msg 내 `<command-name>` 태그 + 프롬프트 | `tool_use` → `tool_result` |
+| 모델에 도달? | 결과만 | 전체 프롬프트 | 전체 프롬프트 |
+
+### 4. 컨텍스트 압축 — 대화가 요약되는 방식
+
+세션이 컨텍스트 윈도우 한계에 가까워지면, Claude Code는 단순히 잘라내지 않습니다 — **전체 대화를 구조화된 요약으로 압축**하여 `messages[0]`에 텍스트 블록으로 삽입합니다:
+
+```json
+{
+  "type": "text",
+  "text": "This session is being continued from a previous conversation that ran out of context.
+    The summary below covers the earlier portion of the conversation.\n\n
+    Summary:\n
+    1. Primary Request and Intent:\n   - 뱃지 스크롤 점프 버그 수정...\n
+    2. Key Technical Concepts:\n   - Electron 데스크탑 앱, vanilla HTML/CSS/JS...\n
+    3. Files and Code Sections:\n   - public/index.html — line ~2639-2738...\n
+    4. Errors and fixes:\n   - 뱃지 스크롤 시도 1 (commit b21672f): ...\n
+    5. Problem Solving:\n   - JSON 패딩 누적: 해결 방법...\n
+    6. All user messages:\n   - \"아 진짜 개열받는다\"...\n
+    7. Pending Tasks:\n   - 뱃지 스크롤 점프 수정 (시도 3)...\n
+    8. Current Work:\n   - 세 번째 시도 작업 중...\n
+    9. Optional Next Step:\n   - dev-bounce 워크플로우 계속..."
+}
+```
+
+**보존되는 것:** 요약은 9개의 구조화된 섹션을 포함합니다 — 원래 요청, 기술적 맥락, 정확한 파일 경로와 줄 번호, 에러 히스토리, 사용자 메시지 원문, 진행 중인 작업. 놀라울 정도로 철저합니다.
+
+**사라지는 것:** 개별 도구 호출 결과, 중간 thinking 블록, 세밀한 대화의 주고받음. 모델은 모든 것을 기억하는 것처럼 요약에서 이어가지만, 원본 컨텍스트가 아니라 압축된 재구성에서 작업하는 것입니다.
+
+**비용 트레이드오프:** 153개 메시지 대화(`messages[0]`만 ~40KB)가 ~10KB로 압축됩니다. 하지만 이 요약은 이후 모든 요청마다 전송되어, 섹션 1에서 설명한 비용 복리 효과를 더합니다.
+
+### 5. Plan과 호출된 Skill은 매 요청에 남는다
+
+스킬을 사용하거나 plan 모드에 진입하면, 그 프롬프트는 사용 후 사라지지 않습니다 — 세션이 끝날 때까지 **이후 모든 요청에 재주입**됩니다:
+
+```json
+// messages[0].content — 매 턴마다 주입
+[
+  // 이전에 호출된 스킬 — 이 캡처에서 12,951자
+  { "type": "text", "text": "<system-reminder>\nThe following skills were invoked in this session.
+      Continue to follow these guidelines:\n\n
+      ### Skill: dev-bounce\n  [전체 8KB 스킬 프롬프트...]\n\n
+      ### Skill: finish\n    [전체 4KB 스킬 프롬프트...]\n
+    </system-reminder>" },
+
+  // 활성 plan 파일 — 4,708자
+  { "type": "text", "text": "<system-reminder>\nA plan file exists from plan mode at: /.../plan.md\n\n
+      Plan contents:\n# 뱃지 스크롤 수정\n## Context\n...[전체 plan]...\n
+    </system-reminder>" }
+]
+```
+
+**스킬의 숨겨진 비용:** 이 캡처 세션에서 두 개의 호출된 스킬(`dev-bounce` + `finish`)이 매 요청마다 **12,951자**를 추가했습니다. 활성 plan은 **4,708자**를 더 추가했습니다. 합계: **~18KB의 영구 컨텍스트**가 매 API 호출마다 조용히 따라다닙니다 — 섹션 1의 CLAUDE.md 10KB 위에 추가로요.
+
+**왜 중요한가:**
+- **스킬은 누적됩니다.** 세션에서 호출한 각 `/skill`은 영원히 남습니다. 3KB 프롬프트를 가진 스킬 5개 = 매 요청마다 15KB 추가.
+- **Plan도 남습니다.** plan 모드에서 생성한 plan은 세션이 끝날 때까지 유지됩니다. plan을 완료하지 않으면 계속 토큰을 소모합니다.
+- **총합은 놀랍습니다.** 이 Opus 캡처에서: 10KB (CLAUDE.md) + 13KB (스킬) + 5KB (plan) + 10KB (압축된 컨텍스트) = 한 글자 입력하기도 전에 **~38KB의 숨겨진 오버헤드**.
+
 ## 설치
 
 ### Homebrew (권장)

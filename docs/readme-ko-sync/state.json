@@ -1,0 +1,18 @@
+{
+  "workflow_phase": "done",
+  "mode": "simple",
+  "planning": {
+    "no_question_streak": 0
+  },
+  "plan_approved": true,
+  "team_name": "",
+  "current_dev_phase": 0,
+  "current_step": 0,
+  "dev_phases": {},
+  "verification": {
+    "rounds_passed": 0
+  },
+  "task_dir": "/Users/ram/programming/vibecoding/claudeInspector/docs/readme-ko-sync",
+  "active_file": "/Users/ram/programming/vibecoding/claudeInspector/docs/readme-ko-sync/.active",
+  "persistent_mode": false
+}
