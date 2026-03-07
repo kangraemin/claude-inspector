@@ -16,7 +16,7 @@ Claude Code CLI 트래픽을 실시간으로 가로채<br>
 ---
 
 <p align="center">
-  <img src="public/screenshots/proxy-request-ko.png" width="100%" alt="Proxy — CLAUDE.md Global/Local 섹션 칩과 인라인 텍스트 하이라이트가 표시된 Request 뷰" />
+  <img src="public/screenshots/proxy-request-en.png" width="100%" alt="Proxy — CLAUDE.md Global/Local 섹션 칩과 인라인 텍스트 하이라이트가 표시된 Request 뷰" />
 </p>
 
 <p align="center">
