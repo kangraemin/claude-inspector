@@ -2863,7 +2863,6 @@ function renderProxyDetail() {
   const code = document.getElementById('proxyDetailCode');
   renderJsonTree(code, data);
   if (proxyDetailMechFilter) {
-    code.scrollTop = prevScrollTop;
     highlightMechInJsonTree(code, entry.body, proxyDetailMechFilter);
   }
   if (q) {
