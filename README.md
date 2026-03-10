@@ -25,75 +25,82 @@ and visualizes all 5 prompt augmentation mechanisms.
 
 ## What You'll Learn
 
-All discovered from **real captured traffic** with Claude Inspector.
+All discovered from **real captured traffic**. See what Claude Code hides from you.
 
-### 1. CLAUDE.md is re-injected every single turn
+### 1. Your message is never just your message
 
-You type `hello`. Claude Code actually sends 3 content blocks:
+You type `hello`. Claude Code wraps it with silently prepended blocks:
 
-| Block | What's inside |
-|-------|--------------|
-| `content[0]` | Skills list (`<system-reminder>`) |
-| `content[1]` | All your CLAUDE.md, rules, memory — **~10KB** |
-| `content[2]` | What you actually typed |
+| Block | What's inside | Size |
+|-------|--------------|------|
+| `content[0]` | Available skills list | ~2KB |
+| `content[1]` | CLAUDE.md + rules + memory + date | **~10KB** |
+| `content[2]` | What you actually typed | few bytes |
 
 **Injection order:** Global CLAUDE.md → Global rules → Project CLAUDE.md → Memory → `currentDate`
 
-**Why this matters:** These ~10KB are included in **every request**. Not stacked — but re-sent each time. A verbose CLAUDE.md silently inflates every API call.
+These ~10KB are re-sent with **every request** — not stacked, but always present. A verbose CLAUDE.md silently inflates every API call.
 
-| Source | Size |
-|--------|------|
-| Global CLAUDE.md | ~1,000 chars |
-| Global rules (4 files) | ~6,000 chars |
-| Project CLAUDE.md | ~800 chars |
-| Auto-memory | ~1,800 chars |
-| **Total per request** | **~10,000 chars** |
+### 2. Claude Code uses multiple models behind the scenes
 
-### 2. MCP tools are lazy-loaded
+Not everything runs on Opus/Sonnet. Lighter tasks get routed to cheaper models:
+
+| Task | Model |
+|------|-------|
+| **Quota check** at startup | Haiku 3.5 |
+| **Topic detection** per message | Haiku 3.5 |
+| **Bash safety pre-check** | Haiku 3.5 |
+| **Context compaction** | Sonnet |
+| **Main agent loop** | Your selected model |
+
+Each user message triggers a hidden classification call (`{"isNewTopic": boolean, "title": string}`) before the main model even sees it.
+
+### 3. MCP tools are lazy-loaded to save tokens
 
 - **Built-in tools** (27) — full JSON schemas sent every request
-- **MCP tools** — deferred as names only, loaded on demand via `ToolSearch`
+- **MCP tools** — listed as names only, loaded on demand
 
-**The flow:** Model reads MCP server description → calls `ToolSearch` → gets full schema → calls the actual tool. Unused MCP tools never consume tokens.
+**The flow:** `ToolSearch` query → full schema returned → added to `tools[]`. Unused MCP tools never consume tokens.
 
-### 3. Skill ≠ Command — three injection paths
+### 4. Skill ≠ Command — three injection paths
 
 Typing `/something` triggers one of three completely different mechanisms:
 
-| | Local Command | User-Invoked Skill | Assistant-Invoked Skill |
+| | Local Command | User Skill | Assistant Skill |
 |---|---|---|---|
-| **Example** | `/mcp`, `/clear` | `/commit`, `/dev-bounce` | `Skill("finish")` |
-| **Who triggers** | User | User | Model decides |
-| **Injection** | `<local-command-stdout>` | `<command-name>` tags + full prompt | `tool_use` → `tool_result` |
-| **Reaches model?** | Result only | Full prompt | Full prompt |
+| **Example** | `/mcp`, `/clear` | `/commit` | `Skill("finish")` |
+| **Who triggers** | User | User | Model |
+| **Injection** | `<local-command-stdout>` | Full prompt in user msg | `tool_use` → `tool_result` |
+| **Model sees** | Result only | Full prompt | Full prompt |
 
-- **Local command** — CLI handles it locally, model sees only the outcome
-- **User-invoked skill** — full skill prompt dumped into your message
-- **Assistant-invoked skill** — model calls `Skill` tool, receives prompt as `tool_result`
+### 5. Context compaction — lossy compression
 
-### 4. Context compaction summarizes your conversation
+When nearing the context limit, the entire conversation is **compressed into 9 structured sections**:
 
-When nearing the context limit, Claude Code **compresses the entire conversation** into a structured summary in `messages[0]`:
+- **Kept:** requests, file paths with line numbers, error history, user messages verbatim, pending tasks
+- **Lost:** tool call results, thinking blocks, intermediate back-and-forth
 
-- **Preserved:** original requests, file paths with line numbers, error history, user messages verbatim, pending tasks (9 sections total)
-- **Lost:** individual tool results, thinking blocks, granular back-and-forth
+A 153-message conversation (~40KB) → ~10KB summary. The model continues as if it remembers everything, but it's working from a reconstruction.
 
-A 153-message conversation (~40KB) compresses to ~10KB. But this summary is re-sent every subsequent request.
-
-### 5. Skills and plans persist forever in a session
+### 6. Skills and plans persist forever
 
 Once invoked, skill prompts and plan files **stay in every request** until the session ends.
 
-| Persistent context | Size in this capture |
+| Persistent context | Size (real capture) |
 |--------------------|---------------------|
-| 2 invoked skills (`dev-bounce` + `finish`) | ~13KB |
+| 2 invoked skills | ~13KB |
 | Active plan file | ~5KB |
-| CLAUDE.md (section 1) | ~10KB |
-| Compacted context (section 4) | ~10KB |
+| CLAUDE.md + rules | ~10KB |
+| Compacted context | ~10KB |
 | **Total hidden overhead** | **~38KB per request** |
 
-- **Skills compound** — each `/skill` stays forever. Five 3KB skills = 15KB added to every request.
-- **Plans linger** — unfinished plans keep consuming tokens until session end.
+Five 3KB skills = 15KB added to every request, forever. Unfinished plans keep consuming tokens.
+
+### 7. Every bash command gets a safety check
+
+Before executing any shell command, a **separate LLM call** extracts command prefixes and checks for injection patterns. Commands like `` git diff $(pwd) `` trigger `command_injection_detected` and get blocked.
+
+After execution, another LLM call extracts modified file paths as `<filepaths>` — this powers Claude Code's awareness of what changed.
 
 ## Install
 
