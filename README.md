@@ -37,7 +37,7 @@ You type `hello`. Claude Code wraps it with silently prepended blocks:
 | `content[1]` | CLAUDE.md + rules + memory + date | **~10KB** |
 | `content[2]` | What you actually typed | few bytes |
 
-**Injection order:** Global CLAUDE.md → Global rules → Project CLAUDE.md → Memory → `currentDate`
+**Injection order:** Global CLAUDE.md → Global rules → Project CLAUDE.md → Memory
 
 These ~10KB are re-sent with **every request** — not stacked, but always present. A verbose CLAUDE.md silently inflates every API call.
 
