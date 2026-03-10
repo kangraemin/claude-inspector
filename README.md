@@ -112,13 +112,11 @@ brew install --cask kangraemin/tap/claude-inspector
 
 ### Direct Download
 
-[⬇ Download v1.1.1 (.dmg)](https://github.com/kangraemin/claude-inspector/releases/latest)
+Download the `.dmg` from the [Releases](https://github.com/kangraemin/claude-inspector/releases/latest) page.
 
 | Mac (Apple Silicon) | Mac (Intel) |
 |---|---|
-| `Claude-Inspector-1.1.1-arm64.dmg` | `Claude-Inspector-1.1.1-x64.dmg` |
-
-Download, open the `.dmg`, drag the app to Applications, and launch.
+| [Claude-Inspector-arm64.dmg](https://github.com/kangraemin/claude-inspector/releases/latest) | [Claude-Inspector-x64.dmg](https://github.com/kangraemin/claude-inspector/releases/latest) |
 
 ## For Contributors
 
