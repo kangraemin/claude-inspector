@@ -108,6 +108,7 @@ After execution, another LLM call extracts modified file paths as `<filepaths>` 
 
 ```bash
 brew install --cask kangraemin/tap/claude-inspector
+open -a "Claude Inspector"
 ```
 
 ### Direct Download
