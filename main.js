@@ -67,6 +67,8 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'public/index.html'));
 
   win.once('ready-to-show', () => win.show());
+  // Fallback: force show if ready-to-show never fires
+  setTimeout(() => { if (!win.isDestroyed() && !win.isVisible()) win.show(); }, 3000);
   mainWin = win;
 
   // Open external links in browser, not Electron
@@ -82,7 +84,11 @@ app.whenReady().then(() => {
   }
   createWindow();
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    } else if (mainWin && !mainWin.isDestroyed()) {
+      mainWin.show();
+    }
   });
 });
 
