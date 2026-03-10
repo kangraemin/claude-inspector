@@ -227,11 +227,11 @@ open -a "Claude Inspector"
 
 ### 직접 다운로드
 
-[⬇ v1.1.1 다운로드 (.dmg)](https://github.com/kangraemin/claude-inspector/releases/latest)
+[⬇ v1.1.2 다운로드 (.dmg)](https://github.com/kangraemin/claude-inspector/releases/latest)
 
 | Mac (Apple Silicon) | Mac (Intel) |
 |---|---|
-| `Claude-Inspector-1.1.1-arm64.dmg` | `Claude-Inspector-1.1.1-x64.dmg` |
+| `Claude-Inspector-1.1.2-arm64.dmg` | `Claude-Inspector-1.1.2-x64.dmg` |
 
 `.dmg`를 열고 앱을 Applications에 드래그한 뒤 실행하세요.
 

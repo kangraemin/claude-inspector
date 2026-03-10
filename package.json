@@ -1,6 +1,6 @@
 {
   "name": "claude-inspector",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Claude Code Prompt Mechanism Visualizer",
   "license": "MIT",
   "main": "main.js",
