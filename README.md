@@ -39,7 +39,7 @@ You type `hello`. Claude Code actually sends 3 content blocks:
 
 **Injection order:** Global CLAUDE.md → Global rules → Project CLAUDE.md → Memory → `currentDate`
 
-**Why this matters:** These 10KB ride along on **every request**. 30 turns = 30 copies. A verbose CLAUDE.md costs more than your actual prompts.
+**Why this matters:** These ~10KB are included in **every request**. Not stacked — but re-sent each time. A verbose CLAUDE.md silently inflates every API call.
 
 | Source | Size |
 |--------|------|
