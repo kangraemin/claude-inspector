@@ -24,10 +24,13 @@
       "main.js",
       "preload.js",
       "public/**",
+      "assets/icon.png",
+      "assets/icon.icns",
       "node_modules/@anthropic-ai/sdk/**"
     ],
     "afterSign": "scripts/notarize.js",
     "mac": {
+      "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
       "artifactName": "Claude-Inspector-${version}-${arch}.${ext}",
       "target": [

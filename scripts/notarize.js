@@ -25,7 +25,11 @@ exports.default = async function notarize(context) {
       `xcrun notarytool submit "${zipPath}" --apple-id "${appleId}" --password "${password}" --team-id "${teamId}" --wait`,
       { stdio: "inherit", timeout: 600000 }
     );
-    execSync(`xcrun stapler staple "${appPath}"`, { stdio: "inherit" });
+    try {
+      execSync(`xcrun stapler staple "${appPath}"`, { stdio: "inherit" });
+    } catch {
+      console.log("⚠ Staple failed (ticket may not have propagated yet) — notarization itself succeeded, continuing...");
+    }
     console.log("Notarization complete!");
   } finally {
     try { require("fs").unlinkSync(zipPath); } catch {}
