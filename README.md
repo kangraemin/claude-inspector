@@ -107,8 +107,7 @@ After execution, another LLM call extracts modified file paths as `<filepaths>` 
 ### Homebrew (Recommended)
 
 ```bash
-brew tap kangraemin/tap
-brew install --cask claude-inspector
+brew install --cask kangraemin/tap/claude-inspector
 ```
 
 ### Direct Download
