@@ -111,13 +111,7 @@ After execution, another LLM call extracts modified file paths as `<filepaths>` 
 ### Homebrew (Recommended)
 
 ```bash
-brew install --cask kangraemin/tap/claude-inspector
-```
-
-Then launch from **Spotlight** (`Cmd+Space` → "Claude Inspector") or:
-
-```bash
-open -a "Claude Inspector"
+brew install --cask kangraemin/tap/claude-inspector && open -a "Claude Inspector"
 ```
 
 ### Direct Download
