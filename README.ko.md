@@ -192,7 +192,13 @@ CLI가 스킬을 찾아 프롬프트 파일을 읽고, XML 태그와 함께 user
 ### Homebrew (권장)
 
 ```bash
-brew install --cask kangraemin/tap/claude-inspector && open -a "Claude Inspector"
+brew install --cask kangraemin/tap/claude-inspector
+```
+
+**Spotlight**(`Cmd+Space` → "Claude Inspector")로 실행하거나:
+
+```bash
+open -a "Claude Inspector"
 ```
 
 ### 직접 다운로드
