@@ -107,8 +107,7 @@ After execution, another LLM call extracts modified file paths as `<filepaths>` 
 ### Homebrew (Recommended)
 
 ```bash
-brew install --cask kangraemin/tap/claude-inspector
-open -a "Claude Inspector"
+brew install --cask kangraemin/tap/claude-inspector && open -a "Claude Inspector"
 ```
 
 ### Direct Download
@@ -118,6 +117,12 @@ Download the `.dmg` from the [Releases](https://github.com/kangraemin/claude-ins
 | Mac (Apple Silicon) | Mac (Intel) |
 |---|---|
 | [Claude-Inspector-arm64.dmg](https://github.com/kangraemin/claude-inspector/releases/latest) | [Claude-Inspector-x64.dmg](https://github.com/kangraemin/claude-inspector/releases/latest) |
+
+### Uninstall
+
+```bash
+brew uninstall --cask claude-inspector
+```
 
 ## For Contributors
 

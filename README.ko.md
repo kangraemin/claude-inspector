@@ -192,8 +192,7 @@ CLI가 스킬을 찾아 프롬프트 파일을 읽고, XML 태그와 함께 user
 ### Homebrew (권장)
 
 ```bash
-brew install --cask kangraemin/tap/claude-inspector
-open -a "Claude Inspector"
+brew install --cask kangraemin/tap/claude-inspector && open -a "Claude Inspector"
 ```
 
 ### 직접 다운로드
@@ -205,6 +204,12 @@ open -a "Claude Inspector"
 | `Claude-Inspector-1.1.1-arm64.dmg` | `Claude-Inspector-1.1.1-x64.dmg` |
 
 `.dmg`를 열고 앱을 Applications에 드래그한 뒤 실행하세요.
+
+### 삭제
+
+```bash
+brew uninstall --cask claude-inspector
+```
 
 ## 기여자용 시작 방법
 
