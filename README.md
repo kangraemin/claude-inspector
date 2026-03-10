@@ -9,6 +9,10 @@ and visualizes all 5 prompt augmentation mechanisms.
 
 [Install](#install) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#proxy-mode) · [How It Works](#how-it-works)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/kangraemin/claude-inspector)](https://github.com/kangraemin/claude-inspector/releases/latest)
+[![macOS](https://img.shields.io/badge/macOS-arm64%20%7C%20x64-black)](https://github.com/kangraemin/claude-inspector/releases/latest)
+
 **English** | [한국어](README.ko.md)
 
 </div>
@@ -16,7 +20,7 @@ and visualizes all 5 prompt augmentation mechanisms.
 ---
 
 <p align="center">
-  <img src="public/screenshots/proxy-request-ko.png" width="100%" alt="Proxy — Request view showing CLAUDE.md Global/Local section chips with inline text highlight" />
+  <img src="public/screenshots/proxy-request-en.png" width="100%" alt="Proxy — Request view showing CLAUDE.md Global/Local section chips with inline text highlight" />
 </p>
 
 <p align="center">
@@ -130,7 +134,7 @@ Download the `.dmg` from the [Releases](https://github.com/kangraemin/claude-ins
 brew uninstall --cask claude-inspector
 ```
 
-## For Contributors
+## Development
 
 ```bash
 git clone https://github.com/kangraemin/claude-inspector.git
@@ -191,9 +195,7 @@ Claude Inspector sits between Claude Code and the Anthropic API, capturing the f
 ## Build
 
 ```bash
-npm run dist         # .dmg + .exe
-npm run dist:mac     # macOS only (arm64 + x64)
-npm run dist:win     # Windows only (NSIS)
+npm run dist:mac     # macOS (arm64 + x64)
 ```
 
 ## Related
