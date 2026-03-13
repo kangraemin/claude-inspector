@@ -1,5 +1,5 @@
 /**
- * E2E tests for Claude Inspector (Electron)
+ * E2E tests for Claude Inspector (Electron) — Proxy mode only
  *
  * Run: npm run test:e2e
  * 앱이 실행 중이면 먼저 종료: pkill -x "Electron"
@@ -27,66 +27,15 @@ test.afterAll(async () => {
   await app.close();
 });
 
-/**
- * SHOW_SIMULATOR=false 상태에서 비proxy 탭들이 display:none으로 숨겨지므로,
- * 시뮬레이터 관련 테스트는 이 함수를 먼저 호출해 탭과 UI를 복원한다.
- */
-async function activateSimulator() {
-  await page.evaluate(() => {
-    document.querySelectorAll<HTMLElement>('.tab').forEach(t => { t.style.display = ''; });
-    (window as any).switchM('claude-md');
-  });
-}
-
-/** 프록시 패널이 필요한 테스트 전 호출 */
-async function activateProxy() {
-  await page.evaluate(() => (window as any).switchM('proxy'));
-}
-
 // ─── 기본 UI ─────────────────────────────────────────────────────────────────
 
 test('앱 타이틀 확인', async () => {
   await expect(page).toHaveTitle('Claude Inspector');
 });
 
-test('5개 메커니즘 탭 모두 존재', async () => {
-  await activateSimulator();
-  const tabs = ['claude-md', 'output-style', 'slash-command', 'skill', 'sub-agent'];
-  for (const m of tabs) {
-    await expect(page.locator(`[data-m="${m}"]`)).toBeVisible();
-  }
-});
-
-test('API 키 입력란 존재', async () => {
-  await activateSimulator();
-  const apiKeyInput = page.locator('input[type="password"], input[placeholder*="API"], input[placeholder*="sk-"]').first();
-  await expect(apiKeyInput).toBeVisible();
-});
-
-// ─── 메커니즘 탭 전환 ────────────────────────────────────────────────────────
-
-test('CLAUDE.md 탭 클릭 → 컨텐츠 전환', async () => {
-  await activateSimulator();
-  await page.click('[data-m="claude-md"]');
-  await expect(page.locator('[data-m="claude-md"]')).toHaveClass(/active/);
-});
-
-test('Output Style 탭 클릭 → 컨텐츠 전환', async () => {
-  await activateSimulator();
-  await page.click('[data-m="output-style"]');
-  await expect(page.locator('[data-m="output-style"]')).toHaveClass(/active/);
-});
-
-test('Slash Command 탭 클릭 → 컨텐츠 전환', async () => {
-  await activateSimulator();
-  await page.click('[data-m="slash-command"]');
-  await expect(page.locator('[data-m="slash-command"]')).toHaveClass(/active/);
-});
-
 // ─── 프록시 ──────────────────────────────────────────────────────────────────
 
 test('프록시 시작 버튼 존재', async () => {
-  await activateProxy();
   await expect(page.locator('#proxyStartBtn')).toBeVisible();
 });
 
@@ -110,7 +59,6 @@ test('toggleProxy 시작 분기에 offProxy 선행 호출 코드 존재 (리스�
 });
 
 test('반복 토글 후 UI 반응성 (500ms 이내)', async () => {
-  await activateProxy();
   const btn = page.locator('#proxyStartBtn');
   await expect(btn).toBeVisible();
 
@@ -163,36 +111,7 @@ test('연속 IPC 이벤트 시 proxyList debounce 동작', async () => {
   expect(renderCount).toBeGreaterThan(0);
 });
 
-// ─── 그룹 A: 나머지 메커니즘 탭 전환 ────────────────────────────────────────
-
-test('Skill 탭 클릭 → active 클래스', async () => {
-  await activateSimulator();
-  await page.click('[data-m="skill"]');
-  await expect(page.locator('[data-m="skill"]')).toHaveClass(/active/);
-});
-
-test('Sub-Agent 탭 클릭 → active 클래스', async () => {
-  await activateSimulator();
-  await page.click('[data-m="sub-agent"]');
-  await expect(page.locator('[data-m="sub-agent"]')).toHaveClass(/active/);
-});
-
-// ─── 그룹 B: 히스토리 + 언어 전환 ───────────────────────────────────────────
-
-test('히스토리 버튼 클릭 → 히스토리 패널 토글', async () => {
-  await activateSimulator(); // histBtn은 simulator 모드에서만 visible
-  const panel = page.locator('#histPanel');
-  const btn = page.locator('#histToggleBtn');
-  const initialHidden = await panel.evaluate(el => el.classList.contains('hidden'));
-  await btn.click();
-  if (initialHidden) {
-    await expect(panel).not.toHaveClass(/hidden/);
-  } else {
-    await expect(panel).toHaveClass(/hidden/);
-  }
-  // 원상복구
-  await btn.click();
-});
+// ─── 언어 전환 ───────────────────────────────────────────────────────────────
 
 test('언어 전환 버튼 클릭 → 로케일 변경', async () => {
   const btn = page.locator('#langToggleBtn');
@@ -204,60 +123,16 @@ test('언어 전환 버튼 클릭 → 로케일 변경', async () => {
   await btn.click();
 });
 
-// ─── 그룹 C: 메커니즘 에디터 입력 ───────────────────────────────────────────
-
-test('CLAUDE.md 탭 → #f-content textarea 입력 유지', async () => {
-  await activateSimulator();
-  await page.click('[data-m="claude-md"]');
-  const textarea = page.locator('#f-content').first();
-  await textarea.fill('test-content-input');
-  await expect(textarea).toHaveValue('test-content-input');
-});
-
-test('Output Style 탭 → #f-content textarea 입력 유지', async () => {
-  await activateSimulator();
-  await page.click('[data-m="output-style"]');
-  const textarea = page.locator('#f-content').first();
-  await textarea.fill('output-style-input');
-  await expect(textarea).toHaveValue('output-style-input');
-});
-
-test('Slash Command 탭 → #f-template textarea 입력 유지', async () => {
-  await activateSimulator();
-  await page.click('[data-m="slash-command"]');
-  const textarea = page.locator('#f-template').first();
-  await textarea.fill('slash-template-input');
-  await expect(textarea).toHaveValue('slash-template-input');
-});
-
-// ─── 그룹 D: 핵심 UI 요소 존재 확인 ─────────────────────────────────────────
-
-test('#actionBtn 전송 버튼 visible', async () => {
-  await activateSimulator();
-  await page.click('[data-m="claude-md"]');
-  await expect(page.locator('#actionBtn')).toBeVisible();
-});
-
-test('#modelSel 드롭다운 DOM 존재', async () => {
-  await expect(page.locator('#modelSel')).toHaveCount(1);
-});
+// ─── 프록시 UI 요소 ─────────────────────────────────────────────────────────
 
 test('#proxyStartBtn ID 명확화 확인', async () => {
   await expect(page.locator('#proxyStartBtn')).toHaveCount(1);
 });
 
-// ─── 그룹 E: 프록시 상세 탭 버튼 ────────────────────────────────────────────
+// ─── 프록시 상세 탭 버튼 ────────────────────────────────────────────────────
 
 for (const dtab of ['messages', 'request', 'response', 'analysis']) {
   test(`프록시 상세 탭 버튼: ${dtab}`, async () => {
     await expect(page.locator(`.dtab[data-dtab="${dtab}"]`)).toHaveCount(1);
   });
 }
-
-// ─── 그룹 F: Export 버튼 정적 검증 ──────────────────────────────────────────
-
-test('Export 언어 탭 3개 존재 (curl, python, typescript)', async () => {
-  for (const lang of ['curl', 'python', 'typescript']) {
-    await expect(page.locator(`.exp-tab[data-lang="${lang}"]`)).toHaveCount(1);
-  }
-});

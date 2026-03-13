@@ -6,7 +6,6 @@
   <title>Claude Inspector</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
   <style>
     :root {
       --bg: #1e1e1e; --surface: #252526; --surface2: #2d2d2d;
@@ -44,72 +43,10 @@
     .logo-sub { font-size: 11px; color: var(--dim); }
     .logo-ver { font-size: 10px; color: var(--dim); opacity: 0.6; }
     .header-right { display: flex; align-items: center; gap: 8px; }
-    .model-select {
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: 5px; color: var(--text);
-      padding: 4px 8px; font-size: 12px; outline: none; cursor: pointer;
-    }
-    .api-group { display: flex; align-items: center; gap: 6px; }
-    .api-label { font-size: 11px; color: var(--dim); }
-    .api-saved {
-      font-size: 10px; padding: 2px 6px; border-radius: 10px;
-      background: rgba(78,201,176,.15); color: var(--green);
-      border: 1px solid rgba(78,201,176,.3);
-    }
-    .api-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background .2s; }
-    .api-dot.ok { background: var(--green); }
-    .api-input {
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: 5px; color: var(--text);
-      padding: 5px 10px; font-size: 12px; width: 240px;
-      font-family: 'SF Mono', monospace; outline: none; transition: border-color .15s;
-    }
-    .api-input:focus { border-color: var(--blue); }
-
-    /* ── History toggle button ── */
-    .hist-btn {
-      padding: 4px 10px; border-radius: 5px; font-size: 11px;
-      background: none; border: 1px solid var(--border);
-      color: var(--dim); cursor: pointer; transition: all .15s; white-space: nowrap;
-    }
-    .hist-btn:hover { color: var(--text); border-color: var(--blue); }
-    .hist-btn.active { color: var(--blue); border-color: var(--blue); background: rgba(86,156,214,.08); }
-
-    /* ── Tabs ── */
-    .tabs {
-      display: flex; background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 12px; gap: 2px; flex-shrink: 0;
-    }
-    .tab {
-      display: flex; align-items: center; gap: 7px;
-      padding: 10px 16px; cursor: pointer;
-      background: none; border: none; color: var(--dim); font-size: 13px;
-      border-bottom: 2px solid transparent;
-      transition: color .15s, border-color .15s; white-space: nowrap;
-    }
-    .tab:hover { color: var(--text); }
-    .tab.active { color: var(--text); border-bottom-color: var(--blue); }
-    .badge {
-      font-size: 10px; font-weight: 700;
-      padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', monospace;
-    }
-    .tab[data-m="claude-md"]    .badge { background: var(--green);  color: #000; }
-    .tab[data-m="output-style"] .badge { background: var(--blue);   color: #000; }
-    .tab[data-m="slash-command"].badge { background: var(--yellow); color: #000; }
-    .tab[data-m="skill"]        .badge { background: var(--purple); color: #fff; }
-    .tab[data-m="sub-agent"]    .badge { background: var(--orange); color: #000; }
-    .tab[data-m="proxy"]        .badge { background: var(--red);    color: #fff; }
 
     /* ── Layout ── */
     .main { display: flex; flex: 1; overflow: hidden; }
 
-    /* ── Left: Config ── */
-    .config-panel {
-      width: 400px; flex-shrink: 0;
-      background: var(--surface); border-right: 1px solid var(--border);
-      display: flex; flex-direction: column; overflow: hidden;
-    }
     .panel-header {
       padding: 9px 14px; font-size: 11px; text-transform: uppercase;
       letter-spacing: .8px; color: var(--dim);
@@ -143,15 +80,6 @@
     .field textarea { min-height: 80px; }
     .field textarea.tall { min-height: 120px; }
 
-    /* ── File button ── */
-    .file-btn {
-      padding: 2px 8px; border-radius: 4px; font-size: 10px;
-      background: var(--surface2); border: 1px solid var(--border);
-      color: var(--dim); cursor: pointer; transition: all .15s;
-      text-transform: none; letter-spacing: 0; font-weight: normal;
-    }
-    .file-btn:hover { color: var(--text); border-color: var(--blue); }
-
     /* ── How-it-works box ── */
     .how-box {
       background: rgba(86,156,214,.05); border: 1px solid rgba(86,156,214,.18);
@@ -164,34 +92,6 @@
       background: var(--surface2); padding: 1px 4px; border-radius: 3px;
       font-family: 'SF Mono', monospace; font-size: 11px; color: var(--text);
     }
-    .example-row { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--dim); line-height: 1.45; }
-    .example-row .ex-tag {
-      flex-shrink: 0; background: rgba(78,201,176,.12); color: var(--green);
-      border: 1px solid rgba(78,201,176,.25); border-radius: 4px;
-      font-size: 10px; font-weight: 700; padding: 1px 5px;
-    }
-    .warn-row { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--yellow); line-height: 1.45; }
-    .warn-row .w-icon { flex-shrink: 0; }
-
-    /* ── Flow diagram ── */
-    .flow { display: flex; flex-direction: column; gap: 0; }
-    .flow-api-label {
-      font-size: 10px; font-weight: 700; color: var(--blue);
-      text-transform: uppercase; letter-spacing: .5px;
-      margin-bottom: 4px; margin-top: 6px;
-    }
-    .flow-api-label:first-child { margin-top: 0; }
-    .flow-step {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 4px; padding: 6px 10px;
-      font-size: 11px; font-family: 'SF Mono', monospace; line-height: 1.4; color: var(--text);
-    }
-    .flow-step.hi-purple { border-color: var(--purple); color: var(--purple); background: rgba(197,134,192,.07); }
-    .flow-step.hi-orange { border-color: var(--orange); color: var(--orange); background: rgba(206,145,120,.07); }
-    .flow-step.hi-yellow { border-color: var(--yellow); color: var(--yellow); background: rgba(220,220,170,.07); }
-    .flow-arrow { text-align: center; color: var(--dim); font-size: 11px; padding: 3px 0; }
-    .flow-divider { border: none; border-top: 1px dashed var(--border); margin: 7px 0; }
-
     /* ── Buttons ── */
     .config-footer {
       padding: 11px 13px; border-top: 1px solid var(--border);
@@ -204,39 +104,10 @@
     }
     .btn:disabled { opacity: .4; cursor: not-allowed; }
     .btn-send { background: var(--blue); color: #fff; flex: 1; justify-content: center; }
-    .btn-sim  { background: var(--purple); color: #fff; flex: 1; justify-content: center; }
-    .btn-sa   { background: var(--orange); color: #000; flex: 1; justify-content: center; }
-    .btn-send:not(:disabled):hover, .btn-sim:not(:disabled):hover, .btn-sa:not(:disabled):hover { opacity: .82; }
+    .btn-send:not(:disabled):hover { opacity: .82; }
     .btn-copy { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
     .btn-copy:hover { border-color: var(--blue); }
 
-    /* ── Right: Preview panel ── */
-    .preview-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .preview-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 7px 14px; background: var(--surface);
-      border-bottom: 1px solid var(--border); flex-shrink: 0;
-    }
-    .ptabs { display: flex; gap: 4px; }
-    .ptab {
-      padding: 4px 12px; font-size: 12px; border-radius: 4px; cursor: pointer;
-      background: none; border: 1px solid transparent; color: var(--dim); transition: all .15s;
-    }
-    .ptab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
-    .pactions { display: flex; align-items: center; gap: 8px; }
-
-    /* ── Size/Token pill ── */
-    .size-pill {
-      font-size: 10px; padding: 2px 8px; border-radius: 10px;
-      background: rgba(133,133,133,.1); color: var(--dim); border: 1px solid var(--border);
-      font-family: 'SF Mono', monospace; white-space: nowrap;
-    }
-    .live-pill {
-      display: flex; align-items: center; gap: 5px; font-size: 11px;
-      padding: 3px 8px; border-radius: 10px;
-      background: rgba(78,201,176,.1); color: var(--green); border: 1px solid rgba(78,201,176,.22);
-    }
-    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
     .copy-small {
       padding: 4px 10px; font-size: 11px;
@@ -245,114 +116,7 @@
     }
     .copy-small:hover { color: var(--text); border-color: var(--blue); }
 
-    /* ── pview base ── */
-    .pview { flex: 1; overflow: auto; }
-    .pview pre { margin: 0; padding: 16px; font-size: 12px; line-height: 1.65; min-height: 100%; }
-    .pview code { font-family: 'SF Mono', 'Fira Code', monospace !important; }
-    .pview.hidden { display: none; }
-
-    /* ── Response pane (flex override) ── */
-    #pv-response { display: flex; flex-direction: column; overflow: hidden; }
-    #pv-response.hidden { display: none; }
-    .resp-toolbar {
-      padding: 6px 14px; background: var(--surface); border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: flex-end;
-      flex-shrink: 0; gap: 8px;
-    }
-    .resp-md-label { font-size: 11px; color: var(--dim); }
-    .resp-md-btn {
-      padding: 3px 9px; font-size: 10px; border-radius: 4px; cursor: pointer;
-      background: none; border: 1px solid var(--border);
-      color: var(--dim); transition: all .15s; font-weight: 700; font-family: 'SF Mono', monospace;
-    }
-    .resp-md-btn:hover, .resp-md-btn.active { border-color: var(--blue); color: var(--blue); }
-    .resp-scroll { flex: 1; overflow: auto; }
-    #resp-view { padding: 16px; }
-    .resp-text { font-size: 13px; line-height: 1.75; color: var(--text); }
-    .resp-text:not(.md-rendered) { white-space: pre-wrap; }
-    .resp-err { color: var(--red); font-family: monospace; font-size: 12px; }
-    .resp-meta {
-      margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border);
-      display: flex; gap: 16px; flex-wrap: wrap;
-    }
-    .resp-stat { font-size: 11px; }
-    .resp-stat span { color: var(--dim); }
-    .resp-stat b { color: var(--text); }
-    .resp-copy {
-      margin-top: 10px; padding: 5px 12px; font-size: 11px;
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 4px; color: var(--dim); cursor: pointer; transition: all .15s; display: inline-block;
-    }
-    .resp-copy:hover { color: var(--text); border-color: var(--blue); }
-
-    /* ── Markdown rendered ── */
-    .md-rendered h1, .md-rendered h2, .md-rendered h3 { color: var(--text); margin: 14px 0 6px; font-weight: 600; }
-    .md-rendered h1 { font-size: 17px; }
-    .md-rendered h2 { font-size: 15px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-    .md-rendered h3 { font-size: 13px; color: var(--blue); }
-    .md-rendered p { margin-bottom: 10px; line-height: 1.7; }
-    .md-rendered ul, .md-rendered ol { padding-left: 22px; margin-bottom: 10px; }
-    .md-rendered li { margin-bottom: 5px; line-height: 1.6; }
-    .md-rendered code {
-      background: var(--surface2); padding: 1px 5px; border-radius: 3px;
-      font-family: 'SF Mono', monospace; font-size: 11.5px; color: var(--green);
-    }
-    .md-rendered pre {
-      background: var(--surface2); padding: 10px 14px; border-radius: 6px;
-      overflow-x: auto; margin: 10px 0; border: 1px solid var(--border);
-    }
-    .md-rendered pre code { background: none; padding: 0; color: var(--text); font-size: 12px; }
-    .md-rendered blockquote {
-      border-left: 3px solid var(--blue); padding-left: 14px;
-      color: var(--dim); margin: 10px 0; font-style: italic;
-    }
-    .md-rendered strong { color: var(--text); }
-    .md-rendered a { color: var(--blue); text-decoration: none; }
-    .md-rendered a:hover { text-decoration: underline; }
-    .md-rendered hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
-    .md-rendered table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12px; }
-    .md-rendered th, .md-rendered td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
-    .md-rendered th { background: var(--surface2); color: var(--blue); }
-
-    /* ── Export pane ── */
-    #pv-export { display: flex; flex-direction: column; overflow: hidden; }
-    #pv-export.hidden { display: none; }
-    .exp-toolbar {
-      padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 4px; flex-shrink: 0;
-    }
-    .exp-tab {
-      padding: 4px 11px; font-size: 11px; border-radius: 4px; cursor: pointer;
-      background: none; border: 1px solid transparent; color: var(--dim); transition: all .15s;
-    }
-    .exp-tab.active { background: var(--surface2); border-color: var(--border); color: var(--text); }
-    .exp-tab:hover { color: var(--text); }
-    .exp-note {
-      padding: 7px 14px; font-size: 11px; color: var(--yellow); line-height: 1.5;
-      background: rgba(220,220,170,.05); border-bottom: 1px solid rgba(220,220,170,.15);
-      flex-shrink: 0;
-    }
-    .exp-scroll { flex: 1; overflow: auto; }
-    .exp-scroll pre { margin: 0; padding: 16px; min-height: 100%; }
-    .exp-scroll code { font-family: 'SF Mono', 'Fira Code', monospace !important; font-size: 12px; line-height: 1.65; }
-
-    /* ── History panel ── */
-    .hist-panel {
-      width: 260px; flex-shrink: 0;
-      background: var(--surface); border-left: 1px solid var(--border);
-      display: flex; flex-direction: column; overflow: hidden;
-    }
-    .hist-panel.hidden { display: none; }
     .hist-list { flex: 1; overflow-y: auto; }
-    .hist-entry {
-      padding: 10px 13px; border-bottom: 1px solid var(--border);
-      cursor: pointer; transition: background .12s;
-    }
-    .hist-entry:hover { background: var(--surface2); }
-    .hist-entry:last-child { border-bottom: none; }
-    .hist-mech { display: flex; align-items: center; font-size: 11px; color: var(--text); margin-bottom: 3px; }
-    .hist-msg { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
-    .hist-time { font-size: 10px; color: var(--dim); opacity: .6; }
     .hist-empty { padding: 20px 16px; color: var(--dim); font-size: 12px; text-align: center; line-height: 1.7; }
 
     /* ── Spinner ── */
@@ -368,49 +132,7 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
 
-    /* ── Landing ── */
-    .landing {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 40px; padding: 40px;
-      background: var(--bg);
-    }
-    .landing-title { font-size: 20px; font-weight: 700; color: var(--text); text-align: center; }
-    .landing-sub { font-size: 13px; color: var(--dim); text-align: center; margin-top: 6px; }
-    .landing-cards { display: flex; gap: 24px; }
-    .landing-card {
-      width: 280px; padding: 28px 24px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; cursor: pointer;
-      transition: border-color .2s, transform .15s, box-shadow .2s;
-      display: flex; flex-direction: column; gap: 14px;
-    }
-    .landing-card:hover {
-      border-color: var(--blue); transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0,0,0,.25);
-    }
-    .landing-card.proxy:hover { border-color: var(--red); }
-    .lc-icon { font-size: 32px; }
-    .lc-title { font-size: 16px; font-weight: 700; color: var(--text); }
-    .lc-desc { font-size: 12px; color: var(--dim); line-height: 1.65; }
-    .lc-req {
-      font-size: 11px; padding: 4px 10px; border-radius: 5px; align-self: flex-start;
-      background: var(--surface2); border: 1px solid var(--border); color: var(--dim);
-      font-family: 'SF Mono', monospace;
-    }
-    .landing-card:hover .lc-req { color: var(--text); }
-    .lc-btn {
-      margin-top: 4px; padding: 8px 16px; border-radius: 6px; font-size: 13px;
-      font-weight: 600; cursor: pointer; border: none; transition: opacity .15s;
-      text-align: center;
-    }
-    .landing-card .lc-btn { background: var(--blue); color: #fff; }
-    .landing-card.proxy .lc-btn { background: var(--red); color: #fff; }
-    .lc-btn:hover { opacity: .85; }
-    .logo { cursor: pointer; }
-
     /* ── Proxy panel ── */
-    #normalPanels { display: flex; flex: 1; overflow: hidden; }
     .proxy-panel { flex: 1; display: flex; overflow: hidden; }
     .proxy-ctrl {
       width: 320px; flex-shrink: 0;
@@ -775,7 +497,7 @@
 </div>
 
 <header class="header">
-  <div class="logo" onclick="switchM('home')" title="홈으로" data-i18n-title="header.goHome">
+  <div class="logo">
     <div class="logo-icon">CI</div>
     <span class="logo-text">Claude Inspector</span>
     <span class="logo-sub" data-i18n="header.logoSub">Prompt Mechanism Visualizer</span>
@@ -784,124 +506,10 @@
   <div class="header-right">
     <button id="langToggleBtn" onclick="i18n.setLocale(i18n.locale==='ko'?'en':'ko')"
       style="padding:4px 10px;border-radius:5px;font-size:11px;background:none;border:1px solid var(--border);color:var(--dim);cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:700;">EN</button>
-    <button class="hist-btn" id="histToggleBtn" onclick="toggleHistory()" title="요청 히스토리 (최근 10개)" data-i18n-title="header.historyTitle"><span data-i18n="header.history">History</span></button>
-    <select class="model-select" id="modelSel" style="display:none">
-      <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
-      <option value="claude-opus-4-6">claude-opus-4-6</option>
-      <option value="claude-haiku-4-5-20251001">claude-haiku-4-5</option>
-    </select>
-    <div class="api-group" id="apiGroup">
-      <span class="api-label">API Key</span>
-      <span class="api-saved" id="apiSaved" style="display:none" data-i18n="header.apiSaved">저장됨</span>
-      <div class="api-dot" id="apiDot"></div>
-      <input type="password" class="api-input" id="apiKey"
-        placeholder="sk-ant-api03-…  (입력하면 자동 저장)"
-        oninput="onApiKeyChange()" data-i18n-placeholder="apiInput.placeholder">
-    </div>
   </div>
 </header>
 
-<nav class="tabs" id="tabNav">
-  <button class="tab" data-m="claude-md"     onclick="switchM('claude-md')">    <span class="badge">MD</span> CLAUDE.md</button>
-  <button class="tab"        data-m="output-style"  onclick="switchM('output-style')">  <span class="badge">ST</span> Output Style</button>
-  <button class="tab"        data-m="slash-command" onclick="switchM('slash-command')"> <span class="badge">/</span>  Slash Command</button>
-  <button class="tab"        data-m="skill"         onclick="switchM('skill')">         <span class="badge">SK</span> Skill</button>
-  <button class="tab"        data-m="sub-agent"     onclick="switchM('sub-agent')">     <span class="badge">SA</span> Sub-Agent</button>
-  <button class="tab"        data-m="proxy"         onclick="switchM('proxy')">         <span class="badge">PX</span> Proxy</button>
-</nav>
-
 <div class="main">
-
-<div id="landingPanel" class="landing">
-  <div>
-    <div class="landing-title" data-i18n="landing.title">Claude Inspector에 오신 걸 환영합니다</div>
-    <div class="landing-sub" data-i18n="landing.subtitle">사용 목적에 맞는 모드를 선택하세요</div>
-  </div>
-  <div class="landing-cards">
-    <div class="landing-card" onclick="switchM('claude-md')">
-      <div class="lc-icon">🔬</div>
-      <div class="lc-title">Simulator</div>
-      <div class="lc-desc" data-i18n="landing.simDesc">
-        5가지 프롬프트 메커니즘(CLAUDE.md, Output Style, Slash Command, Skill, Sub-Agent)의
-        실제 API 페이로드를 직접 구성하고 테스트합니다.
-      </div>
-      <span class="lc-req" data-i18n="landing.simReq">필요: Anthropic API Key</span>
-      <div class="lc-btn" data-i18n="landing.start">시작하기 →</div>
-    </div>
-    <div class="landing-card proxy" onclick="switchM('proxy')">
-      <div class="lc-icon">🔌</div>
-      <div class="lc-title">Proxy Mode</div>
-      <div class="lc-desc" data-i18n="landing.proxyDesc">
-        Claude Code CLI의 실제 API 트래픽을 가로채 실시간으로 시각화합니다.
-        실제 사용 중 어떤 페이로드가 오가는지 확인할 수 있습니다.
-      </div>
-      <span class="lc-req" data-i18n="landing.proxyReq">필요: Claude Code CLI 설치</span>
-      <div class="lc-btn" data-i18n="landing.start">시작하기 →</div>
-    </div>
-  </div>
-</div>
-
-<div id="normalPanels" style="display:none">
-  <div class="config-panel">
-    <div class="panel-header">
-      <span id="panelTitle">Configuration</span>
-      <span class="inject-chip" id="injectChip">—</span>
-    </div>
-    <div class="config-body" id="configBody"></div>
-    <div class="config-footer" id="configFooter"></div>
-  </div>
-
-  <div class="preview-panel">
-    <div class="preview-header">
-      <div class="ptabs">
-        <button class="ptab active" id="ptab-payload"  onclick="showPTab('payload')">Payload</button>
-        <button class="ptab"        id="ptab-response" onclick="showPTab('response')">Response</button>
-        <button class="ptab"        id="ptab-export"   onclick="showPTab('export')">Export</button>
-      </div>
-      <div class="pactions">
-        <span class="size-pill" id="sizePill">— KB</span>
-        <span class="live-pill" id="livePill" style="display:none"><span class="live-dot"></span>Live</span>
-        <button class="copy-small" onclick="copyPayload()" data-i18n="copy.json">Copy JSON</button>
-      </div>
-    </div>
-
-    <div class="pview" id="pv-payload">
-      <div class="json-tree-view" id="payloadCode"></div>
-    </div>
-
-    <div class="pview hidden" id="pv-response">
-      <div class="resp-toolbar" id="respToolbar" style="display:none">
-        <button class="copy-small" onclick="copyResponse()" data-i18n="copy.text">Copy Text</button>
-      </div>
-      <div class="resp-scroll">
-        <div id="resp-view"></div>
-      </div>
-    </div>
-
-    <div class="pview hidden" id="pv-export">
-      <div class="exp-toolbar">
-        <button class="exp-tab active" data-lang="curl"       onclick="showExportLang('curl')">cURL</button>
-        <button class="exp-tab"        data-lang="python"     onclick="showExportLang('python')">Python</button>
-        <button class="exp-tab"        data-lang="typescript" onclick="showExportLang('typescript')">TypeScript</button>
-        <button class="copy-small" style="margin-left:auto" onclick="copyExport()" data-i18n="copy.copy">Copy</button>
-      </div>
-      <div id="expNote" class="exp-note" style="display:none"></div>
-      <div class="exp-scroll">
-        <pre><code id="exportCode" class="language-bash"></code></pre>
-      </div>
-    </div>
-  </div>
-
-  <div class="hist-panel hidden" id="histPanel">
-    <div class="panel-header">
-      <span data-i18n="history.title">요청 히스토리</span>
-      <span style="font-size:10px;color:var(--dim)" id="histCount">0 / 10</span>
-    </div>
-    <div class="hist-list" id="histList">
-      <div class="hist-empty" data-i18n-html="history.empty">아직 기록 없음<br><small>API 전송 후 여기 표시됩니다</small></div>
-    </div>
-  </div>
-</div><!-- /#normalPanels -->
 
 <div id="proxyPanel" class="proxy-panel" style="display:none">
   <!-- Control -->
@@ -978,25 +586,7 @@
 const LOCALES = {
   ko: {
     header: {
-      history: 'History',
-      historyTitle: '요청 히스토리 (최근 10개)',
-      apiSaved: '저장됨',
-      goHome: '홈으로',
       logoSub: 'Prompt Mechanism Visualizer',
-    },
-    landing: {
-      title: 'Claude Inspector에 오신 걸 환영합니다',
-      subtitle: '사용 목적에 맞는 모드를 선택하세요',
-      simDesc: '5가지 프롬프트 메커니즘(CLAUDE.md, Output Style, Slash Command, Skill, Sub-Agent)의 실제 API 페이로드를 직접 구성하고 테스트합니다.',
-      simReq: '필요: Anthropic API Key',
-      proxyDesc: 'Claude Code CLI의 실제 API 트래픽을 가로채 실시간으로 시각화합니다. 실제 사용 중 어떤 페이로드가 오가는지 확인할 수 있습니다.',
-      proxyReq: '필요: Claude Code CLI 설치',
-      start: '시작하기 →',
-    },
-    history: {
-      title: '요청 히스토리',
-      empty: '아직 기록 없음<br><small>API 전송 후 여기 표시됩니다</small>',
-      noMsg: '메시지 없음',
     },
     proxy: {
       title: 'Proxy Control',
@@ -1067,116 +657,13 @@ const LOCALES = {
         what: 'Model Context Protocol 도구를 tool_use로 호출합니다.',
       },
     },
-    export: {
-      skillNote: '⚠️  Skill은 tool_use 플로우가 필요합니다. 아래는 Simulate Effect (system 주입 버전)의 실행 가능한 페이로드입니다.',
-      subAgentNote: '⚠️  Sub-Agent는 2개의 API 호출을 생성합니다. 아래는 API Call #2 (격리된 서브에이전트)의 단독 실행 페이로드입니다.',
-    },
-    form: {
-      fileOpen: '📂 파일 열기',
-      fileElectronOnly: '파일 열기는 Electron 앱에서만 지원됩니다.',
-    },
     copy: {
-      json: 'Copy JSON',
-      text: '텍스트 복사',
       copy: '복사',
       copied: '✓ 복사됨',
-      response: '응답 복사',
-    },
-    api: {
-      sending: '전송 중…',
-      simulatingSkill: '스킬 시뮬레이션 중…',
-      runningSubAgent: '{type} 서브 에이전트 실행 중…',
-    },
-    apiInput: {
-      placeholder: 'sk-ant-api03-…  (입력하면 자동 저장)',
     },
     search: {
       prev: '이전',
       next: '다음',
-    },
-    mech: {
-      claudeMd: {
-        howTitle: '⚡ Claude Code에서 실제 동작',
-        howText: '프로젝트 루트에 <code>CLAUDE.md</code>가 있으면 Claude Code가 <strong>모든 요청</strong>에 자동으로 <code>&lt;system-reminder&gt;</code> 태그로 주입. 설정 불필요 — 파일 존재만으로 동작.',
-        ex1: '팀 코딩 스탠다드, 아키텍처 결정, 기술 스택 정보를 적어두면 모든 팀원의 요청에 자동 적용됨',
-        ex1tag: '예시',
-        ex2: '메시지 레벨 (system 아님) — 프로젝트 <em>컨텍스트</em>지 Claude의 <em>정체성</em>이 아님',
-        ex2tag: '레이어',
-        fContent: 'CLAUDE.md 내용',
-        fUserMessage: 'User Message',
-      },
-      outputStyle: {
-        howTitle: '⚡ Claude Code에서 실제 동작',
-        howText: '<code>/output-style software-architect</code> 실행 시 <code>system</code> 배열에 스타일 블록이 추가됨. 세션이 끝날 때까지 <strong>모든 응답</strong>에 적용.',
-        ex1: '코드 리뷰 세션 시작 전 "senior engineer" 스타일 설정 → 이후 모든 답변이 아키텍처 관점으로 변함',
-        ex1tag: '예시',
-        ex2: '시스템 레벨 — CLAUDE.md(메시지)와 달리 Claude의 <em>정체성/행동</em>을 변경',
-        ex2tag: '레이어',
-        fName: '스타일 이름',
-        fContent: '스타일 지침',
-        fUserMessage: 'User Message',
-      },
-      slashCommand: {
-        howTitle: '⚡ Claude Code에서 실제 동작',
-        howText: '<code>.claude/commands/review.md</code> 파일 생성 → <code>/review @file.js</code> 입력 시 <code>{arg1}</code>이 인수로 치환. <strong>Claude가 결정하는 게 아님</strong> — 순수 문자열 치환.',
-        ex1: '코드 리뷰, PR 체크리스트, 배포 절차 등 반복 작업을 명시적으로 실행할 때',
-        ex1tag: '예시',
-        ex2: 'Slash Command는 <em>사용자가 직접 호출</em>, Skill은 <em>Claude가 자율 판단</em>',
-        ex2tag: 'vs Skill',
-        fName: '커맨드 이름',
-        fTemplate: '커맨드 템플릿 ({arg1} 치환)',
-        fArgs: '인수 ({arg1} 대체값)',
-      },
-      skill: {
-        howTitle: '⚡ Claude Code에서 실제 동작 (2단계)',
-        flowStep1: '사용자: "git squash 어떻게 해?"',
-        flowArrow1: '↓ description 필드와 시맨틱 매칭',
-        flowStep2: '매칭 성공 → tool_use: Skill { command: "git-helper" }',
-        flowArrow2: '↓ SKILL.md 전체 내용 주입',
-        flowStep3: 'tool_result: [스킬 내용]',
-        flowArrow3: '↓',
-        flowStep4: 'Claude: 스킬 컨텍스트를 바탕으로 응답',
-        warnText: '<strong>description이 부정확하면 매칭 실패.</strong> "git, squash, commits, rebase" 같이 키워드를 명시적으로 나열해야 함.',
-        ex1: '실제 API로 스킬 효과를 확인 (스킬 내용을 system에 주입하는 단순화 버전)',
-        ex1tag: '▶ Simulate',
-        fName: '스킬 이름',
-        fDescription: '매칭에 사용할 description',
-        fContent: '스킬 내용 (SKILL.md 본문)',
-        fUserMessage: 'User Message (스킬 트리거)',
-      },
-      subAgent: {
-        howTitle: '⚡ Claude Code에서 실제 동작 (API 2번 호출)',
-        apiCall1: 'API Call #1 — 메인 대화',
-        flowStep1: '사용자: "auth 구현 분석해줘"',
-        flowArrow1: '↓ Claude가 복잡한 작업으로 판단',
-        flowStep2: 'tool_use: Task { subagent_type: "Explore", prompt: "…" }',
-        apiCall2: 'API Call #2 — Sub-Agent (완전 격리)',
-        flowStep3: '⚠️ 메인 대화 컨텍스트 없음',
-        flowStep4: '✅ CLAUDE.md는 여전히 주입됨',
-        flowStep5: 'Explore 에이전트가 자율적으로 탐색/분석',
-        flowArrow2: '↓ 결과 반환',
-        apiCall3: '다시 API Call #1',
-        flowStep6: 'tool_result: [sub-agent 분석 결과]',
-        flowStep7: 'Claude: 결과 종합하여 응답',
-        warnText: '<strong>컨텍스트 브리징 없음.</strong> delegation prompt에 필요한 모든 정보를 명시해야 함.',
-        ex1: 'Sub-Agent 대화만 단독 실행하여 delegation prompt 효과 확인',
-        ex1tag: '▶ Run',
-        fType: 'Sub-Agent 타입',
-        fPrompt: 'Delegation Prompt (sub-agent에게 전달)',
-        fUserMessage: 'User Message (메인 대화 트리거)',
-      },
-      inject: {
-        claudeMd: 'messages[].content → system-reminder',
-        outputStyle: 'system[] → additional text block',
-        slashCommand: 'messages[].content → command-message',
-        skill: 'tool_result (Skill tool_use 이후)',
-        subAgent: '격리된 별도 API 호출 (Task 도구)',
-      },
-      btn: {
-        send: 'Send to Claude →',
-        simulate: '▶ Simulate Effect',
-        runSubAgent: '▶ Run Sub-Agent',
-      },
     },
     token: {
       unknown: '불명',
@@ -1216,25 +703,7 @@ const LOCALES = {
   },
   en: {
     header: {
-      history: 'History',
-      historyTitle: 'Request history (last 10)',
-      apiSaved: 'Saved',
-      goHome: 'Go Home',
       logoSub: 'Prompt Mechanism Visualizer',
-    },
-    landing: {
-      title: 'Welcome to Claude Inspector',
-      subtitle: 'Select a mode to get started',
-      simDesc: 'Build and test real API payloads for all 5 prompt mechanisms (CLAUDE.md, Output Style, Slash Command, Skill, Sub-Agent).',
-      simReq: 'Requires: Anthropic API Key',
-      proxyDesc: 'Intercept and visualize live API traffic from the Claude Code CLI. See exactly what payloads are exchanged during real usage.',
-      proxyReq: 'Requires: Claude Code CLI',
-      start: 'Get Started →',
-    },
-    history: {
-      title: 'Request History',
-      empty: 'No history yet<br><small>Entries appear after API calls</small>',
-      noMsg: 'No message',
     },
     proxy: {
       title: 'Proxy Control',
@@ -1305,116 +774,13 @@ const LOCALES = {
         what: 'Calls a Model Context Protocol tool via tool_use.',
       },
     },
-    export: {
-      skillNote: '⚠️  Skill requires the full tool_use flow. The payload below is the runnable version from Simulate Effect (system injection variant).',
-      subAgentNote: '⚠️  Sub-Agent generates 2 API calls. The payload below is the standalone payload for API Call #2 (isolated sub-agent).',
-    },
-    form: {
-      fileOpen: '📂 Open File',
-      fileElectronOnly: 'File open is only supported in the Electron app.',
-    },
     copy: {
-      json: 'Copy JSON',
-      text: 'Copy Text',
       copy: 'Copy',
       copied: '✓ Copied',
-      response: 'Copy Response',
-    },
-    api: {
-      sending: 'Sending…',
-      simulatingSkill: 'Simulating skill…',
-      runningSubAgent: 'Running {type} sub-agent…',
-    },
-    apiInput: {
-      placeholder: 'sk-ant-api03-…  (auto-saved on input)',
     },
     search: {
       prev: 'Previous',
       next: 'Next',
-    },
-    mech: {
-      claudeMd: {
-        howTitle: '⚡ How it works in Claude Code',
-        howText: 'If <code>CLAUDE.md</code> exists in the project root, Claude Code automatically injects it into <strong>every request</strong> via a <code>&lt;system-reminder&gt;</code> tag. No configuration needed — presence of the file is enough.',
-        ex1: 'Team coding standards, architecture decisions, and tech stack info are automatically applied to every team member\'s request',
-        ex1tag: 'Example',
-        ex2: 'Message level (not system) — project <em>context</em>, not Claude\'s <em>identity</em>',
-        ex2tag: 'Layer',
-        fContent: 'CLAUDE.md Content',
-        fUserMessage: 'User Message',
-      },
-      outputStyle: {
-        howTitle: '⚡ How it works in Claude Code',
-        howText: 'Running <code>/output-style software-architect</code> adds a style block to the <code>system</code> array. Applied to <strong>all responses</strong> for the rest of the session.',
-        ex1: 'Set "senior engineer" style before a code review session → all subsequent answers shift to an architectural perspective',
-        ex1tag: 'Example',
-        ex2: 'System level — unlike CLAUDE.md (message), this changes Claude\'s <em>identity/behavior</em>',
-        ex2tag: 'Layer',
-        fName: 'Style Name',
-        fContent: 'Style Instructions',
-        fUserMessage: 'User Message',
-      },
-      slashCommand: {
-        howTitle: '⚡ How it works in Claude Code',
-        howText: 'Create <code>.claude/commands/review.md</code> → typing <code>/review @file.js</code> substitutes <code>{arg1}</code> with the argument. <strong>Not decided by Claude</strong> — pure string substitution.',
-        ex1: 'Explicitly run repetitive tasks like code review, PR checklists, and deployment procedures',
-        ex1tag: 'Example',
-        ex2: 'Slash Command is <em>directly invoked by user</em>; Skill is <em>autonomously chosen by Claude</em>',
-        ex2tag: 'vs Skill',
-        fName: 'Command Name',
-        fTemplate: 'Command Template ({arg1} substitution)',
-        fArgs: 'Arguments ({arg1} replacement)',
-      },
-      skill: {
-        howTitle: '⚡ How it works in Claude Code (2 steps)',
-        flowStep1: 'User: "How do I git squash?"',
-        flowArrow1: '↓ Semantic match against description field',
-        flowStep2: 'Match found → tool_use: Skill { command: "git-helper" }',
-        flowArrow2: '↓ Inject full SKILL.md content',
-        flowStep3: 'tool_result: [skill content]',
-        flowArrow3: '↓',
-        flowStep4: 'Claude: responds using skill context',
-        warnText: '<strong>Inaccurate description causes match failure.</strong> List keywords explicitly like "git, squash, commits, rebase".',
-        ex1: 'Verify skill effect with real API (simplified version injecting skill content into system)',
-        ex1tag: '▶ Simulate',
-        fName: 'Skill Name',
-        fDescription: 'Description for matching',
-        fContent: 'Skill Content (SKILL.md body)',
-        fUserMessage: 'User Message (skill trigger)',
-      },
-      subAgent: {
-        howTitle: '⚡ How it works in Claude Code (2 API calls)',
-        apiCall1: 'API Call #1 — Main Conversation',
-        flowStep1: 'User: "Analyze the auth implementation"',
-        flowArrow1: '↓ Claude judges this as a complex task',
-        flowStep2: 'tool_use: Task { subagent_type: "Explore", prompt: "…" }',
-        apiCall2: 'API Call #2 — Sub-Agent (Fully Isolated)',
-        flowStep3: '⚠️ No main conversation context',
-        flowStep4: '✅ CLAUDE.md is still injected',
-        flowStep5: 'Explore agent autonomously explores/analyzes',
-        flowArrow2: '↓ Return result',
-        apiCall3: 'Back to API Call #1',
-        flowStep6: 'tool_result: [sub-agent analysis result]',
-        flowStep7: 'Claude: synthesizes result and responds',
-        warnText: '<strong>No context bridging.</strong> All necessary information must be specified in the delegation prompt.',
-        ex1: 'Run only the sub-agent conversation to verify delegation prompt effect',
-        ex1tag: '▶ Run',
-        fType: 'Sub-Agent Type',
-        fPrompt: 'Delegation Prompt (passed to sub-agent)',
-        fUserMessage: 'User Message (main conversation trigger)',
-      },
-      inject: {
-        claudeMd: 'messages[].content → system-reminder',
-        outputStyle: 'system[] → additional text block',
-        slashCommand: 'messages[].content → command-message',
-        skill: 'tool_result (after Skill tool_use)',
-        subAgent: 'Isolated separate API call (Task tool)',
-      },
-      btn: {
-        send: 'Send to Claude →',
-        simulate: '▶ Simulate Effect',
-        runSubAgent: '▶ Run Sub-Agent',
-      },
     },
     token: {
       unknown: 'Unknown',
@@ -1483,18 +849,7 @@ function applyI18n() {
   // lang toggle button text
   const btn = document.getElementById('langToggleBtn');
   if (btn) btn.textContent = i18n.locale === 'ko' ? 'EN' : '한';
-  // re-render dynamic content that depends on locale
-  renderHistory();
-  // re-render simulator form if visible
-  if (document.getElementById('normalPanels').style.display !== 'none' && current) {
-    const savedCfg = collectCfg();
-    renderForm(current);
-    for (const [k, v] of Object.entries(savedCfg)) {
-      const el = document.getElementById('f-' + k);
-      if (el) el.value = v;
-    }
-    updatePreview();
-  }
+  // re-render proxy content that depends on locale
   if (proxyCaptures.length > 0) {
     renderProxyList();
     if (selectedProxyId !== null) renderProxyDetail();
@@ -1510,264 +865,7 @@ function applyI18n() {
   }
 }
 
-// ─── Mechanism definitions ─────────────────────────────────────────────────
-function getMechanisms() {
-  const t = (k, v) => i18n.t(k, v);
-  return {
-  'claude-md': {
-    label: 'CLAUDE.md',
-    inject: t('mech.inject.claudeMd'),
-    sendable: true,
-    howHtml: `
-      <div class="how-title">${t('mech.claudeMd.howTitle')}</div>
-      <div class="how-text">${t('mech.claudeMd.howText')}</div>
-      <div class="example-row">
-        <span class="ex-tag">${t('mech.claudeMd.ex1tag')}</span>
-        <span>${t('mech.claudeMd.ex1')}</span>
-      </div>
-      <div class="example-row">
-        <span class="ex-tag">${t('mech.claudeMd.ex2tag')}</span>
-        <span>${t('mech.claudeMd.ex2')}</span>
-      </div>`,
-    fields: [
-      { id:'content', label:t('mech.claudeMd.fContent'), type:'textarea', tall:true, fileBtn:true,
-        val:`# Project Standards\n\n## Tech Stack\n- TypeScript (strict mode)\n- Bun runtime\n- React + Vite frontend\n\n## Conventions\n- Named exports only\n- File naming: kebab-case\n- Write tests for all features\n- No console.log in production` },
-      { id:'userMessage', label:t('mech.claudeMd.fUserMessage'), type:'textarea',
-        val:'How should I structure my TypeScript project?' }
-    ]
-  },
-
-  'output-style': {
-    label: 'Output Style',
-    inject: t('mech.inject.outputStyle'),
-    sendable: true,
-    howHtml: `
-      <div class="how-title">${t('mech.outputStyle.howTitle')}</div>
-      <div class="how-text">${t('mech.outputStyle.howText')}</div>
-      <div class="example-row">
-        <span class="ex-tag">${t('mech.outputStyle.ex1tag')}</span>
-        <span>${t('mech.outputStyle.ex1')}</span>
-      </div>
-      <div class="example-row">
-        <span class="ex-tag">${t('mech.outputStyle.ex2tag')}</span>
-        <span>${t('mech.outputStyle.ex2')}</span>
-      </div>`,
-    fields: [
-      { id:'name', label:t('mech.outputStyle.fName'), type:'input', val:'software-architect' },
-      { id:'content', label:t('mech.outputStyle.fContent'), type:'textarea', tall:true,
-        val:`You are operating as a senior software architect.\n\n## Response Guidelines\n- Lead with architectural decisions, not implementation details\n- Highlight trade-offs explicitly\n- Reference design patterns by name (Factory, Observer, CQRS)\n- Keep responses concise but precise` },
-      { id:'userMessage', label:t('mech.outputStyle.fUserMessage'), type:'textarea',
-        val:'Should I use Redux or React Context for state management?' }
-    ]
-  },
-
-  'slash-command': {
-    label: 'Slash Command',
-    inject: t('mech.inject.slashCommand'),
-    sendable: true,
-    howHtml: `
-      <div class="how-title">${t('mech.slashCommand.howTitle')}</div>
-      <div class="how-text">${t('mech.slashCommand.howText')}</div>
-      <div class="example-row">
-        <span class="ex-tag">${t('mech.slashCommand.ex1tag')}</span>
-        <span>${t('mech.slashCommand.ex1')}</span>
-      </div>
-      <div class="example-row">
-        <span class="ex-tag">${t('mech.slashCommand.ex2tag')}</span>
-        <span>${t('mech.slashCommand.ex2')}</span>
-      </div>`,
-    fields: [
-      { id:'name', label:t('mech.slashCommand.fName'), type:'input', val:'review' },
-      { id:'template', label:t('mech.slashCommand.fTemplate'), type:'textarea', tall:true,
-        val:`Perform a thorough code review of the following code:\n\n{arg1}\n\nFocus on:\n1. Logic errors and off-by-one bugs\n2. Security vulnerabilities\n3. Performance issues\n4. Code clarity and naming` },
-      { id:'args', label:t('mech.slashCommand.fArgs'), type:'textarea',
-        val:`function calculateTotal(items) {\n  let total = 0;\n  for (var i = 0; i <= items.length; i++) {\n    total += items[i].price;\n  }\n  return total;\n}` }
-    ]
-  },
-
-  'skill': {
-    label: 'Skill',
-    inject: t('mech.inject.skill'),
-    sendable: false, simulatable: true,
-    howHtml: `
-      <div class="how-title">${t('mech.skill.howTitle')}</div>
-      <div class="flow">
-        <div class="flow-step">${t('mech.skill.flowStep1')}</div>
-        <div class="flow-arrow">${t('mech.skill.flowArrow1')}</div>
-        <div class="flow-step hi-purple">${t('mech.skill.flowStep2')}</div>
-        <div class="flow-arrow">${t('mech.skill.flowArrow2')}</div>
-        <div class="flow-step hi-purple">${t('mech.skill.flowStep3')}</div>
-        <div class="flow-arrow">${t('mech.skill.flowArrow3')}</div>
-        <div class="flow-step">${t('mech.skill.flowStep4')}</div>
-      </div>
-      <div class="warn-row" style="margin-top:6px">
-        <span class="w-icon">⚠️</span>
-        <span>${t('mech.skill.warnText')}</span>
-      </div>
-      <div class="example-row">
-        <span class="ex-tag">${t('mech.skill.ex1tag')}</span>
-        <span>${t('mech.skill.ex1')}</span>
-      </div>`,
-    fields: [
-      { id:'name', label:t('mech.skill.fName'), type:'input', val:'git-helper' },
-      { id:'description', label:t('mech.skill.fDescription'), type:'input',
-        val:'Git workflows, commits, branches, rebasing, squashing, version control' },
-      { id:'content', label:t('mech.skill.fContent'), type:'textarea', tall:true, fileBtn:true,
-        val:`# Git Helper\n\nWhen invoked:\n1. Analyze the git-related request\n2. Provide exact commands with explanations\n3. Warn about destructive operations (reset --hard, force push)\n4. Suggest safe alternatives\n\nAlways include:\n- The exact git command(s)\n- What each command does\n- Any potential risks` },
-      { id:'userMessage', label:t('mech.skill.fUserMessage'), type:'textarea',
-        val:'How do I squash my last 3 commits?' }
-    ]
-  },
-
-  'sub-agent': {
-    label: 'Sub-Agent',
-    inject: t('mech.inject.subAgent'),
-    sendable: false, simulatable: true,
-    howHtml: `
-      <div class="how-title">${t('mech.subAgent.howTitle')}</div>
-      <div class="flow">
-        <div class="flow-api-label">${t('mech.subAgent.apiCall1')}</div>
-        <div class="flow-step">${t('mech.subAgent.flowStep1')}</div>
-        <div class="flow-arrow">${t('mech.subAgent.flowArrow1')}</div>
-        <div class="flow-step hi-orange">${t('mech.subAgent.flowStep2')}</div>
-        <hr class="flow-divider">
-        <div class="flow-api-label">${t('mech.subAgent.apiCall2')}</div>
-        <div class="flow-step hi-yellow">${t('mech.subAgent.flowStep3')}</div>
-        <div class="flow-step">${t('mech.subAgent.flowStep4')}</div>
-        <div class="flow-step">${t('mech.subAgent.flowStep5')}</div>
-        <div class="flow-arrow">${t('mech.subAgent.flowArrow2')}</div>
-        <div class="flow-api-label">${t('mech.subAgent.apiCall3')}</div>
-        <div class="flow-step hi-orange">${t('mech.subAgent.flowStep6')}</div>
-        <div class="flow-step">${t('mech.subAgent.flowStep7')}</div>
-      </div>
-      <div class="warn-row" style="margin-top:6px">
-        <span class="w-icon">⚠️</span>
-        <span>${t('mech.subAgent.warnText')}</span>
-      </div>
-      <div class="example-row">
-        <span class="ex-tag">${t('mech.subAgent.ex1tag')}</span>
-        <span>${t('mech.subAgent.ex1')}</span>
-      </div>`,
-    fields: [
-      { id:'type', label:t('mech.subAgent.fType'), type:'select',
-        options:['Explore','general-purpose','Plan','software-architect'], val:'Explore' },
-      { id:'prompt', label:t('mech.subAgent.fPrompt'), type:'textarea', tall:true,
-        val:`Analyze the authentication flow in this codebase.\n\nContext: OAuth 2.0 with PKCE, Next.js application.\n\nFocus on:\n1. Token storage mechanisms\n2. Refresh token rotation logic\n3. Background token refresh handling\n\nReport back with a structured summary.` },
-      { id:'userMessage', label:t('mech.subAgent.fUserMessage'), type:'textarea',
-        val:'Analyze our authentication implementation for security issues.' }
-    ]
-  }
-  };
-}
-
-// ─── Feature flags ──────────────────────────────────────────────────────────
-const SHOW_SIMULATOR = false; // true로 바꾸면 Simulator 탭/카드 활성화
-
-// ─── State ─────────────────────────────────────────────────────────────────
-let current = 'claude-md';
-let lastResponseText = '';
-let currentPayload = null;
-let mdEnabled = false;
-let exportLang = 'curl';
-let sessionHistory = [];
-
-// ─── Payload builder ───────────────────────────────────────────────────────
-function buildPayload(mech, cfg) {
-  const sys = "You are Claude Code, Anthropic's official CLI for Claude.";
-  const model = document.getElementById('modelSel')?.value || 'claude-sonnet-4-6';
-  const msg = cfg.userMessage || '';
-
-  if (mech === 'claude-md') {
-    return {
-      model, max_tokens: 1024, system: sys,
-      messages: [{ role: 'user', content: [{ type: 'text',
-        text: `<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\nCodebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n\nContents of /path/to/CLAUDE.md (project instructions, checked into the codebase):\n\n${cfg.content || ''}\n</system-reminder>\n\n${msg}`
-      }] }]
-    };
-  }
-  if (mech === 'output-style') {
-    return {
-      model, max_tokens: 1024,
-      system: [
-        { type: 'text', text: sys },
-        { type: 'text', text: `# Output Style: ${cfg.name || 'custom'}\n\n${cfg.content || ''}` }
-      ],
-      messages: [{ role: 'user', content: msg }]
-    };
-  }
-  if (mech === 'slash-command') {
-    const expanded = (cfg.template || '').replace(/\{arg1\}/g, cfg.args || '');
-    return {
-      model, max_tokens: 1024, system: sys,
-      messages: [{ role: 'user', content: [{ type: 'text',
-        text: `<command-message>${cfg.name || 'command'} is running…</command-message>\n\n${expanded}${cfg.args ? `\n\nARGUMENTS: ${cfg.args}` : ''}`
-      }] }]
-    };
-  }
-  if (mech === 'skill') {
-    return {
-      model, max_tokens: 1024, system: sys,
-      messages: [
-        { role: 'user', content: msg },
-        { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_skill_01', name: 'Skill', input: { command: cfg.name || 'skill-name' } }] },
-        { role: 'user',      content: [{ type: 'tool_result', tool_use_id: 'toolu_skill_01', content: cfg.content || '' }] }
-      ]
-    };
-  }
-  if (mech === 'sub-agent') {
-    return {
-      '⚡ API Call #1 — Main Conversation': {
-        model, max_tokens: 1024, system: sys,
-        messages: [
-          { role: 'user', content: msg },
-          { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_task_01', name: 'Task',
-              input: { subagent_type: cfg.type || 'Explore', prompt: cfg.prompt || '' } }] }
-        ]
-      },
-      '🤖 API Call #2 — Sub-Agent (Isolated)': {
-        model, max_tokens: 2048,
-        system: `[${cfg.type || 'Explore'} specialized system prompt]\n⚠️  No main conversation context\n✅ CLAUDE.md injected here too`,
-        messages: [{ role: 'user', content: cfg.prompt || '' }]
-      }
-    };
-  }
-  return {};
-}
-
-// ─── Sendable payload (for Export + simulate calls) ───────────────────────
-function buildSendablePayload(mech, cfg) {
-  const model = document.getElementById('modelSel')?.value || 'claude-sonnet-4-6';
-  if (mech === 'skill') {
-    return {
-      model, max_tokens: 1024,
-      system: [
-        { type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." },
-        { type: 'text', text: `# Active Skill: ${cfg.name}\n\nDescription: ${cfg.description}\n\n${cfg.content}` }
-      ],
-      messages: [{ role: 'user', content: cfg.userMessage || '' }]
-    };
-  }
-  if (mech === 'sub-agent') {
-    return {
-      model, max_tokens: 1024,
-      system: `You are a ${cfg.type || 'general-purpose'} sub-agent. You operate in an isolated conversation with no access to the main conversation history.`,
-      messages: [{ role: 'user', content: cfg.prompt || '' }]
-    };
-  }
-  return buildPayload(mech, cfg);
-}
-
-// ─── Collect config ─────────────────────────────────────────────────────────
-function collectCfg() {
-  const cfg = {};
-  const M = getMechanisms();
-  for (const f of M[current].fields) {
-    const el = document.getElementById('f-' + f.id);
-    cfg[f.id] = el ? el.value : (f.val || '');
-  }
-  return cfg;
-}
-
+// ─── JSON Tree Viewer ─────────────────────────────────────────────────────
 // ─── JSON Tree Viewer ─────────────────────────────────────────────────────
 let _jtId = 0;
 let _jtLine = 0;
@@ -1928,421 +1026,6 @@ function splitLongExpLines(container, targetBlock) {
       block.appendChild(div);
     }
   }
-}
-
-// ─── Update preview ─────────────────────────────────────────────────────────
-function updatePreview() {
-  const cfg = collectCfg();
-  const payload = buildPayload(current, cfg);
-  currentPayload = payload;
-  const code = document.getElementById('payloadCode');
-  renderJsonTree(code, payload);
-
-  // Size + token estimate
-  const bytes = new TextEncoder().encode(JSON.stringify(payload)).length;
-  const kb = (bytes / 1024).toFixed(1);
-  const tokens = Math.ceil(bytes / 3.5);
-  document.getElementById('sizePill').textContent = `${kb} KB · ~${tokens.toLocaleString()} tok`;
-
-  // Update export tab if visible
-  if (!document.getElementById('pv-export').classList.contains('hidden')) {
-    updateExport(current, cfg);
-  }
-}
-
-// ─── Render form ────────────────────────────────────────────────────────────
-function renderForm(mech) {
-  const M = getMechanisms();
-  const def = M[mech];
-  document.getElementById('panelTitle').textContent = def.label;
-  document.getElementById('injectChip').textContent = def.inject;
-
-  let html = `<div class="how-box">${def.howHtml}</div>`;
-
-  for (const f of def.fields) {
-    const fileBtnHtml = f.fileBtn
-      ? `<button class="file-btn" onclick="openFilePicker('f-${f.id}')">${i18n.t('form.fileOpen')}</button>`
-      : '';
-
-    if (f.type === 'textarea') {
-      html += `<div class="field"><label><span>${f.label}</span>${fileBtnHtml}</label>
-        <textarea id="f-${f.id}" class="${f.tall?'tall':''}" oninput="updatePreview()">${esc(f.val||'')}</textarea></div>`;
-    } else if (f.type === 'input') {
-      html += `<div class="field"><label><span>${f.label}</span>${fileBtnHtml}</label>
-        <input type="text" id="f-${f.id}" value="${esc(f.val||'')}" oninput="updatePreview()"></div>`;
-    } else if (f.type === 'select') {
-      const opts = (f.options||[]).map(o=>`<option${o===f.val?' selected':''}>${o}</option>`).join('');
-      html += `<div class="field"><label><span>${f.label}</span></label>
-        <select id="f-${f.id}" onchange="updatePreview()">${opts}</select></div>`;
-    }
-  }
-
-  document.getElementById('configBody').innerHTML = html;
-
-  // Footer
-  const footer = document.getElementById('configFooter');
-  const copyBtn = `<button class="btn btn-copy" onclick="copyPayload()">${i18n.t('copy.json')}</button>`;
-  if (def.sendable) {
-    footer.innerHTML = copyBtn +
-      `<button class="btn btn-send" id="actionBtn" onclick="sendToApi()">${i18n.t('mech.btn.send')}</button>`;
-  } else if (mech === 'skill') {
-    footer.innerHTML = copyBtn +
-      `<button class="btn btn-sim" id="actionBtn" onclick="simulateSkill()">${i18n.t('mech.btn.simulate')}</button>`;
-  } else if (mech === 'sub-agent') {
-    footer.innerHTML = copyBtn +
-      `<button class="btn btn-sa" id="actionBtn" onclick="simulateSubAgent()">${i18n.t('mech.btn.runSubAgent')}</button>`;
-  }
-}
-
-// ─── Switch mechanism ────────────────────────────────────────────────────────
-function switchM(mech) {
-  const landing   = document.getElementById('landingPanel');
-  const normal    = document.getElementById('normalPanels');
-  const proxy     = document.getElementById('proxyPanel');
-  const tabNav    = document.getElementById('tabNav');
-  const apiGroup  = document.getElementById('apiGroup');
-  const modelSel  = document.getElementById('modelSel');
-  const histBtn   = document.getElementById('histToggleBtn');
-
-  if (mech === 'home') {
-    landing.style.display  = 'flex';
-    normal.style.display   = 'none';
-    proxy.style.display    = 'none';
-    tabNav.style.display   = 'none';
-    if (apiGroup) apiGroup.style.display = 'none';
-    if (modelSel) modelSel.style.display = 'none';
-    if (histBtn)  histBtn.style.display  = 'none';
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    return;
-  }
-
-  landing.style.display = 'none';
-  tabNav.style.display  = 'flex';
-  if (modelSel) modelSel.style.display = '';
-
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.m === mech));
-
-  if (mech === 'proxy') {
-    normal.style.display = 'none';
-    proxy.style.display  = 'flex';
-    if (apiGroup) apiGroup.style.display = 'none';
-    if (modelSel) modelSel.style.display = 'none';
-    if (histBtn)  histBtn.style.display  = 'none';
-    return;
-  }
-
-  normal.style.display = 'flex';
-  proxy.style.display  = 'none';
-  if (apiGroup) apiGroup.style.display = 'flex';
-  if (histBtn)  histBtn.style.display  = '';
-
-  current = mech;
-  renderForm(mech);
-  updatePreview();
-  showPTab('payload');
-  document.getElementById('livePill').style.display = 'none';
-  document.getElementById('respToolbar').style.display = 'none';
-  document.getElementById('resp-view').innerHTML = '';
-}
-
-// ─── Preview tabs ─────────────────────────────────────────────────────────
-function showPTab(tab) {
-  ['payload', 'response', 'export'].forEach(t => {
-    document.getElementById('pv-' + t).classList.toggle('hidden', t !== tab);
-    document.getElementById('ptab-' + t).classList.toggle('active', t === tab);
-  });
-  if (tab === 'export') {
-    const cfg = collectCfg();
-    updateExport(current, cfg);
-  }
-}
-
-// ─── Copy payload ─────────────────────────────────────────────────────────
-function copyPayload() {
-  const text = JSON.stringify(currentPayload, null, 2);
-  navigator.clipboard.writeText(text).then(() => {
-    document.querySelectorAll('.btn-copy, [onclick="copyPayload()"]').forEach(b => {
-      const o = b.textContent; b.textContent = i18n.t('copy.copied');
-      setTimeout(() => { b.textContent = o; }, 1500);
-    });
-  }).catch(e => console.error('copy failed', e));
-}
-
-// ─── Core send function ───────────────────────────────────────────────────
-async function callApi(payload, loadingMsg = i18n.t('api.sending')) {
-  const apiKey = document.getElementById('apiKey').value.trim();
-  if (!apiKey) {
-    const inp = document.getElementById('apiKey');
-    inp.focus(); inp.style.borderColor = 'var(--red)';
-    setTimeout(() => { inp.style.borderColor = ''; }, 2000);
-    return false;
-  }
-
-  const btn = document.getElementById('actionBtn');
-  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spin"></span> ${loadingMsg}`; }
-
-  document.getElementById('resp-view').innerHTML =
-    `<div style="color:var(--dim);padding-top:4px"><span class="spin"></span> ${loadingMsg}</div>`;
-  document.getElementById('respToolbar').style.display = 'none';
-  showPTab('response');
-
-  try {
-    const data = await window.electronAPI.sendToClaude(payload, apiKey);
-
-    if (data.error) {
-      document.getElementById('resp-view').innerHTML =
-        `<div class="resp-err">Error: ${esc(data.error)}</div>`;
-    } else if (data.response) {
-      const r = data.response;
-      lastResponseText = r.content?.filter(c => c.type === 'text').map(c => c.text).join('\n') || '';
-      document.getElementById('resp-view').innerHTML =
-        `<div class="json-tree-view" id="respJsonTree" style="flex:1;overflow:auto"></div>`;
-      renderJsonTree(document.getElementById('respJsonTree'), r);
-      document.getElementById('respToolbar').style.display = 'flex';
-      document.getElementById('livePill').style.display = 'flex';
-      saveHistory(current, collectCfg());
-    }
-    return true;
-  } catch (e) {
-    document.getElementById('resp-view').innerHTML =
-      `<div class="resp-err">Network error: ${esc(e.message)}</div>`;
-    return false;
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = btn.className.includes('btn-send') ? i18n.t('mech.btn.send')
-                    : btn.className.includes('btn-sim') ? i18n.t('mech.btn.simulate')
-                    : i18n.t('mech.btn.runSubAgent');
-    }
-  }
-}
-
-// ─── Send (direct mechanisms) ─────────────────────────────────────────────
-function sendToApi() {
-  const cfg = collectCfg();
-  callApi(buildPayload(current, cfg));
-}
-
-// ─── Simulate Skill ───────────────────────────────────────────────────────
-function simulateSkill() {
-  const cfg = collectCfg();
-  callApi(buildSendablePayload('skill', cfg), i18n.t('api.simulatingSkill'));
-}
-
-// ─── Simulate Sub-Agent ───────────────────────────────────────────────────
-function simulateSubAgent() {
-  const cfg = collectCfg();
-  callApi(buildSendablePayload('sub-agent', cfg), i18n.t('api.runningSubAgent', { type: cfg.type || 'Explore' }));
-}
-
-// ─── Copy response ────────────────────────────────────────────────────────
-function copyResponse() {
-  navigator.clipboard.writeText(lastResponseText).then(() => {
-    const btn = document.querySelector('.resp-copy');
-    if (btn) { btn.textContent = i18n.t('copy.copied'); setTimeout(() => { btn.textContent = i18n.t('copy.response'); }, 1500); }
-  }).catch(e => console.error('copy failed', e));
-}
-
-// ─── Markdown toggle ──────────────────────────────────────────────────────
-function renderResponseContent(text) {
-  const container = document.getElementById('respText');
-  if (!container) return;
-  if (mdEnabled && typeof marked !== 'undefined') {
-    container.innerHTML = marked.parse(text);
-    container.className = 'resp-text md-rendered';
-  } else {
-    container.textContent = text;
-    container.className = 'resp-text';
-  }
-}
-
-function toggleMd() {
-  mdEnabled = !mdEnabled;
-  const btn = document.getElementById('mdToggleBtn');
-  if (btn) btn.classList.toggle('active', mdEnabled);
-  renderResponseContent(lastResponseText);
-}
-
-// ─── Export ───────────────────────────────────────────────────────────────
-function generateCurl(payload) {
-  const body = JSON.stringify(payload, null, 2).replace(/'/g, "'\\''");
-  return `curl https://api.anthropic.com/v1/messages \\
-  -H "x-api-key: $ANTHROPIC_API_KEY" \\
-  -H "anthropic-version: 2023-06-01" \\
-  -H "content-type: application/json" \\
-  -d '${body}'`;
-}
-
-function generatePython(payload) {
-  const json = JSON.stringify(payload, null, 2);
-  return `import json, anthropic
-
-client = anthropic.Anthropic()
-
-payload = json.loads("""
-${json}
-""")
-
-response = client.messages.create(**payload)
-print(response.content[0].text)`;
-}
-
-function generateTypeScript(payload) {
-  const obj = JSON.stringify(payload, null, 2);
-  return `import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic();
-
-const response = await client.messages.create(${obj});
-
-console.log(response.content[0].text);`;
-}
-
-function updateExport(mech, cfg) {
-  const code = document.getElementById('exportCode');
-  if (!code) return;
-
-  const payload = buildSendablePayload(mech, cfg);
-
-  // Note for skill/sub-agent
-  const note = document.getElementById('expNote');
-  if (note) {
-    if (mech === 'skill') {
-      note.style.display = 'block';
-      note.textContent = i18n.t('export.skillNote');
-    } else if (mech === 'sub-agent') {
-      note.style.display = 'block';
-      note.textContent = i18n.t('export.subAgentNote');
-    } else {
-      note.style.display = 'none';
-    }
-  }
-
-  let text = '';
-  if (exportLang === 'curl') {
-    text = generateCurl(payload);
-    code.className = 'language-bash';
-  } else if (exportLang === 'python') {
-    text = generatePython(payload);
-    code.className = 'language-python';
-  } else {
-    text = generateTypeScript(payload);
-    code.className = 'language-typescript';
-  }
-
-  code.textContent = text;
-  hljs.highlightElement(code);
-}
-
-function showExportLang(lang) {
-  exportLang = lang;
-  document.querySelectorAll('.exp-tab').forEach(b => {
-    b.classList.toggle('active', b.dataset.lang === lang);
-  });
-  const cfg = collectCfg();
-  updateExport(current, cfg);
-}
-
-function copyExport() {
-  const code = document.getElementById('exportCode');
-  if (!code) return;
-  navigator.clipboard.writeText(code.textContent).then(() => {
-    const btns = document.querySelectorAll('[onclick="copyExport()"]');
-    btns.forEach(b => {
-      const o = b.textContent; b.textContent = '✓';
-      setTimeout(() => { b.textContent = o; }, 1500);
-    });
-  }).catch(e => console.error('copy failed', e));
-}
-
-// ─── History ──────────────────────────────────────────────────────────────
-const BADGE_STYLES = {
-  'claude-md':    { bg: 'var(--green)',  color: '#000', label: 'MD' },
-  'output-style': { bg: 'var(--blue)',   color: '#000', label: 'ST' },
-  'slash-command':{ bg: 'var(--yellow)', color: '#000', label: '/'  },
-  'skill':        { bg: 'var(--purple)', color: '#fff', label: 'SK' },
-  'sub-agent':    { bg: 'var(--orange)', color: '#000', label: 'SA' },
-};
-
-function mechBadge(mech) {
-  const s = BADGE_STYLES[mech] || { bg: 'var(--border)', color: 'var(--text)', label: '?' };
-  return `<span style="background:${s.bg};color:${s.color};border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;margin-right:5px;font-family:'SF Mono',monospace">${s.label}</span>`;
-}
-
-function saveHistory(mech, cfg) {
-  const M = getMechanisms();
-  const def = M[mech];
-  const userMsg = (cfg.userMessage || cfg.prompt || '').trim();
-  const entry = {
-    id: Date.now(),
-    ts: new Date().toLocaleTimeString(i18n.locale === 'ko' ? 'ko-KR' : 'en-US', { hour: '2-digit', minute: '2-digit' }),
-    mech,
-    mechLabel: def.label,
-    userMsg: userMsg.slice(0, 60) + (userMsg.length > 60 ? '…' : ''),
-    cfg: JSON.parse(JSON.stringify(cfg)),
-  };
-  sessionHistory.unshift(entry);
-  if (sessionHistory.length > 10) sessionHistory.pop();
-  renderHistory();
-}
-
-function renderHistory() {
-  const list = document.getElementById('histList');
-  const countEl = document.getElementById('histCount');
-  if (!list) return;
-  if (countEl) countEl.textContent = `${sessionHistory.length} / 10`;
-  if (sessionHistory.length === 0) {
-    list.innerHTML = `<div class="hist-empty">${i18n.t('history.empty')}</div>`;
-    return;
-  }
-  list.innerHTML = sessionHistory.map(e => `
-    <div class="hist-entry" onclick="restoreHistory(${e.id})">
-      <div class="hist-mech">${mechBadge(e.mech)}<span>${esc(e.mechLabel)}</span></div>
-      <div class="hist-msg">${e.userMsg ? esc(e.userMsg) : `<em style="opacity:.5">${i18n.t('history.noMsg')}</em>`}</div>
-      <div class="hist-time">${e.ts}</div>
-    </div>
-  `).join('');
-}
-
-function restoreHistory(id) {
-  const entry = sessionHistory.find(e => e.id === id);
-  if (!entry) return;
-  switchM(entry.mech);
-  for (const [k, v] of Object.entries(entry.cfg)) {
-    const el = document.getElementById('f-' + k);
-    if (el) el.value = v;
-  }
-  updatePreview();
-}
-
-function toggleHistory() {
-  const panel = document.getElementById('histPanel');
-  const btn = document.getElementById('histToggleBtn');
-  const isHidden = panel.classList.contains('hidden');
-  panel.classList.toggle('hidden', !isHidden);
-  btn.classList.toggle('active', isHidden);
-}
-
-// ─── File picker ──────────────────────────────────────────────────────────
-async function openFilePicker(fieldId) {
-  if (!window.electronAPI || !window.electronAPI.openFile) {
-    alert(i18n.t('form.fileElectronOnly'));
-    return;
-  }
-  const content = await window.electronAPI.openFile();
-  if (content !== null && content !== undefined) {
-    const el = document.getElementById(fieldId);
-    if (el) { el.value = content; updatePreview(); }
-  }
-}
-
-// ─── API key (with localStorage) ─────────────────────────────────────────
-function onApiKeyChange() {
-  const v = document.getElementById('apiKey').value;
-  localStorage.setItem('ci-api-key', v);
-  const ok = v.trim().startsWith('sk-ant');
-  document.getElementById('apiDot').className = 'api-dot' + (ok ? ' ok' : '');
-  document.getElementById('apiSaved').style.display = v.trim() ? 'inline' : 'none';
 }
 
 // ─── Util ─────────────────────────────────────────────────────────────────
@@ -3496,44 +2179,17 @@ document.addEventListener('keydown', e => {
   }
 });
 
-document.getElementById('modelSel')?.addEventListener('change', updatePreview);
-
 if (window.electronAPI?.platform === 'darwin') document.body.classList.add('darwin');
 
 fetch('build-info.json').then(r=>r.json()).then(b=>{
   document.getElementById('buildVer').textContent = `v${b.version} (${b.hash})`;
 }).catch(()=>{});
 
-const savedKey = localStorage.getItem('ci-api-key');
-if (savedKey) {
-  document.getElementById('apiKey').value = savedKey;
-  onApiKeyChange();
-}
-
 // Apply initial i18n (after DOM is ready)
 applyI18n();
 
-// 시뮬레이터 플래그에 따라 관련 UI 숨기기
-if (!SHOW_SIMULATOR) {
-  // 탭 숨기기
-  document.querySelectorAll('.tab:not([data-m="proxy"])').forEach(t => t.style.display = 'none');
-  // 랜딩 Simulator 카드 숨기기
-  const simCard = document.querySelector('.landing-card:not(.proxy)');
-  if (simCard) simCard.style.display = 'none';
-  // API Key, 모델 선택, History 버튼 숨기기 (시뮬레이터 전용)
-  const apiGroup = document.getElementById('apiGroup');
-  const modelSel = document.getElementById('modelSel');
-  const histBtn  = document.getElementById('histToggleBtn');
-  if (apiGroup) apiGroup.style.display = 'none';
-  if (modelSel) modelSel.style.display = 'none';
-  if (histBtn)  histBtn.style.display  = 'none';
-}
-
-if (!SHOW_SIMULATOR) {
-  switchM('proxy'); // 시뮬레이터 꺼지면 바로 프록시 모드로
-} else {
-  switchM('home');
-}
+// Show proxy panel directly (simulator removed)
+document.getElementById('proxyPanel').style.display = 'flex';
 
 // ── 프록시 상태 동기화 (리로드 시 메인 프로세스와 sync) ──────────────
 (async () => {
