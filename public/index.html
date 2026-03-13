@@ -2767,7 +2767,7 @@ function updateSearchCounter(total) {
   if (el) el.textContent = total > 0 ? `${searchCurrentIdx + 1}/${total}` : '0';
 }
 
-function setProxyDetailMechFilter(key, pattern) {
+function setProxyDetailMechFilter(key) {
   if (proxyDetailMechFilter === key) {
     proxyDetailMechFilter = null;
   } else {
@@ -2849,8 +2849,7 @@ function buildMechFilterChips(body) {
     + '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:5px 10px 7px">'
     + chips.map(c => {
         const active = proxyDetailMechFilter === c.key ? ' active' : '';
-        const safePattern = (c.pattern || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return `<span class="mech-chip ${c.cls} found btn${active}" onclick="setProxyDetailMechFilter('${c.key}','${safePattern}')">${c.label}</span>`;
+        return `<span class="mech-chip ${c.cls} found btn${active}" data-key="${escAttr(c.key)}" onclick="setProxyDetailMechFilter(this.dataset.key)">${esc(c.label)}</span>`;
       }).join('')
     + '</div>'
     + descBanner
