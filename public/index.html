@@ -611,7 +611,6 @@
     .jt-row  { display: block; white-space: nowrap; }
     .jt-lined { counter-reset: jt-line; position: relative; padding-left: 52px; }
     .jt-lined .jt-row { counter-increment: jt-line; }
-    .jt-lined .jt-row.jt-no-count { counter-increment: none; }
     .jt-lined .jt-row::before {
       content: counter(jt-line);
       position: absolute;
@@ -1740,7 +1739,6 @@ function jtToggle(id) {
   const btn = document.getElementById(`${id}-btn`);
   const open = body.style.display !== 'none';
   body.style.display = open ? 'none' : '';
-  body.querySelectorAll('.jt-row').forEach(r => r.classList.toggle('jt-no-count', open));
   summary.style.display = open ? '' : 'none';
   btn.textContent = open ? '▶' : '▼';
 }
