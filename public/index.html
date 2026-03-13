@@ -3398,8 +3398,10 @@ document.addEventListener('click', (e) => {
   pop.className = 'token-popover';
   // 캐시 적중률 높으면 절감 설명, 낮으면 생략
   let noteHtml = `<div class="token-popover-note">`;
-  noteHtml += `💡 가격 기준일: ${d.pricingDate}. 모델마다 단가 다름. MTok = 백만 토큰.`;
-  if (d.cachePct >= 50) noteHtml += `<br>캐시 ${d.cachePct}%: 입력의 대부분을 캐시에서 저렴하게 읽어 비용 절감.`;
+  noteHtml += `💡 가격 기준일: ${d.pricingDate}`;
+  noteHtml += `<br>💰 모델마다 단가 다름`;
+  noteHtml += `<br>📐 MTok = 백만 토큰 단위 가격`;
+  if (d.cachePct >= 50) noteHtml += `<br>♻️ 캐시 ${d.cachePct}%: 입력 대부분을 캐시에서 저렴하게 읽어 비용 절감`;
   noteHtml += `</div>`;
   pop.innerHTML = `<div class="token-popover-title"><span>비용 계산</span><span class="token-popover-copy" data-text="${textLines.join('\n').replace(/"/g, '&quot;')}">복사</span></div>`
     + `<div class="token-popover-info">모델: ${d.model} · 요청 크기: ${d.kb} KB</div>`
