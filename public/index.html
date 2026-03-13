@@ -3042,7 +3042,18 @@ function renderProxyDetail() {
           else if (isHaiku) { inP = 1; outP = 5; crP = 0.1; cwP = 1.25; }
           const cost = (uncached * inP + cacheRead * crP + cacheWrite * cwP + outTok * outP) / 1_000_000;
           const costStr = cost >= 1 ? '$' + cost.toFixed(2) : cost >= 0.01 ? '$' + cost.toFixed(3) : '$' + cost.toFixed(4);
-          const tooltip = `입력: ${fmtTok(totalIn)} 토큰 (캐시읽기 ${fmtTok(cacheRead)} + 캐시쓰기 ${fmtTok(cacheWrite)} + 미캐시 ${fmtTok(uncached)})\n출력: ${fmtTok(outTok)} 토큰\n캐시 적중률: ${cachePct}%\n추정 비용: ${costStr}`;
+          const fmtCost = (n) => '$' + (n / 1_000_000).toFixed(4);
+          const tooltip = [
+            `[비용 계산] 모델: ${model || '불명'}`,
+            ``,
+            `캐시읽기: ${fmtTok(cacheRead)} tok × $${crP}/MTok = ${fmtCost(cacheRead * crP)}`,
+            `캐시쓰기: ${fmtTok(cacheWrite)} tok × $${cwP}/MTok = ${fmtCost(cacheWrite * cwP)}`,
+            `미캐시 입력: ${fmtTok(uncached)} tok × $${inP}/MTok = ${fmtCost(uncached * inP)}`,
+            `출력: ${fmtTok(outTok)} tok × $${outP}/MTok = ${fmtCost(outTok * outP)}`,
+            ``,
+            `합계: ${costStr}`,
+            `캐시 적중률: ${cachePct}%`
+          ].join('\n');
           let parts = `<span class="tt-badge">${kb} KB</span>`;
           parts += `<span class="tt-badge">입력 ${fmtTok(totalIn)}</span>`;
           parts += `<span class="tt-badge">출력 ${fmtTok(outTok)}</span>`;
