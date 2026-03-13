@@ -42,6 +42,7 @@
     }
     .logo-text { font-size: 15px; font-weight: 700; }
     .logo-sub { font-size: 11px; color: var(--dim); }
+    .logo-ver { font-size: 10px; color: var(--dim); opacity: 0.6; }
     .header-right { display: flex; align-items: center; gap: 8px; }
     .model-select {
       background: var(--bg); border: 1px solid var(--border);
@@ -778,6 +779,7 @@
     <div class="logo-icon">CI</div>
     <span class="logo-text">Claude Inspector</span>
     <span class="logo-sub" data-i18n="header.logoSub">Prompt Mechanism Visualizer</span>
+    <span class="logo-ver" id="buildVer"></span>
   </div>
   <div class="header-right">
     <button id="langToggleBtn" onclick="i18n.setLocale(i18n.locale==='ko'?'en':'ko')"
@@ -3497,6 +3499,10 @@ document.addEventListener('keydown', e => {
 document.getElementById('modelSel')?.addEventListener('change', updatePreview);
 
 if (window.electronAPI?.platform === 'darwin') document.body.classList.add('darwin');
+
+fetch('build-info.json').then(r=>r.json()).then(b=>{
+  document.getElementById('buildVer').textContent = `v${b.version} (${b.hash})`;
+}).catch(()=>{});
 
 const savedKey = localStorage.getItem('ci-api-key');
 if (savedKey) {

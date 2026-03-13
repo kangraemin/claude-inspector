@@ -7,3 +7,4 @@ dist/
 .worklogs/
 .idea/
 request_test.json
+public/build-info.json

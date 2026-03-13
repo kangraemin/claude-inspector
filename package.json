@@ -7,6 +7,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --enable-logging",
+    "predist": "node -e \"const {execSync}=require('child_process');const fs=require('fs');const hash=execSync('git rev-parse --short HEAD').toString().trim();const pkg=require('./package.json');fs.writeFileSync('public/build-info.json',JSON.stringify({version:pkg.version,hash,built:new Date().toISOString()}))\"",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
