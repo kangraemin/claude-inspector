@@ -2761,13 +2761,34 @@ function highlightMechInJsonTree(container, body, mechKey) {
     if (isNaN(idx) || !sections[idx]) return;
     const section = sections[idx];
 
-    // 문자열 펼침 + 하이라이트 (사용자 선호 방식)
+    // 문자열 펼침 + 해당 섹션 줄만 하이라이트
     const allStr = container.querySelectorAll('.jt-str, .jt-str-expanded, .jt-str-preview');
     for (const el of allStr) {
       if (!el.textContent.includes('Contents of ' + section.path)) continue;
       expandLongStr(el);
       expandAncestors(el);
-      hlRange(el, 0, 0, true);
+      // 펼쳐진 jt-exp-line 중 해당 섹션 줄만 하이라이트
+      const parent = el.closest('.jt-str-long');
+      const expBlock = parent ? parent.querySelector('.jt-str-expanded') : null;
+      if (expBlock) {
+        const expLines = expBlock.querySelectorAll('.jt-exp-line');
+        const marker = 'Contents of ' + section.path;
+        let inSection = false;
+        let firstHl = null;
+        for (const line of expLines) {
+          const txt = line.textContent;
+          if (!inSection && txt.includes(marker)) {
+            inSection = true;
+          }
+          if (inSection) {
+            // 다음 섹션 시작이면 중단 (다른 "Contents of " 패턴)
+            if (!txt.includes(marker) && txt.includes('Contents of ')) break;
+            line.classList.add('mech-hl-text');
+            if (!firstHl) firstHl = line;
+          }
+        }
+        if (firstHl) requestAnimationFrame(() => firstHl.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      }
       break;
     }
 
