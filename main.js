@@ -214,8 +214,10 @@ ipcMain.handle('proxy-status', () => {
 
 ipcMain.handle('proxy-stop', () => {
   if (!proxyServer) return { stopped: true };
+  const srv = proxyServer;
+  proxyServer = null;
   return new Promise((resolve) => {
-    proxyServer.close(() => { proxyServer = null; resolve({ stopped: true }); });
+    srv.close(() => { resolve({ stopped: true }); });
   });
 });
 
