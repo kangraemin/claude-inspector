@@ -609,6 +609,19 @@
     .jt-bool { color: var(--blue); }
     .jt-null { color: var(--dim); }
     .jt-row  { display: block; white-space: nowrap; }
+    .jt-lined { counter-reset: jt-line; }
+    .jt-lined .jt-row { counter-increment: jt-line; }
+    .jt-lined .jt-row::before {
+      content: counter(jt-line);
+      display: inline-block;
+      width: 40px;
+      text-align: right;
+      padding-right: 12px;
+      color: var(--dim);
+      font-size: 11px;
+      user-select: none;
+      opacity: 0.5;
+    }
     .jt-str-long { display: inline; }
     .jt-str-preview {
       display: inline-block; vertical-align: top; max-width: calc(100% - 60px);
@@ -634,6 +647,13 @@
       padding: 0 3px; vertical-align: middle;
     }
     .jt-tag:hover { color: var(--text); }
+    .proxy-token-pill {
+      padding: 4px 12px;
+      font-size: 11px;
+      color: var(--dim);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
     .analysis-block .jt-row { white-space: normal; }
     .analysis-kv { display: flex; gap: 8px; font-size: 11px; font-family: 'SF Mono', monospace; }
     .analysis-kv .ak { color: var(--dim); flex-shrink: 0; }
@@ -1706,6 +1726,7 @@ function renderJsonTree(container, data) {
   try { obj = typeof data === 'string' ? JSON.parse(data) : data; }
   catch (e) { container.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); return; }
   container.innerHTML = buildJsonHtml(obj, 0);
+  container.classList.add('jt-lined');
 }
 
 // ─── Update preview ─────────────────────────────────────────────────────────
@@ -2859,8 +2880,16 @@ function renderProxyDetail() {
     return;
   }
 
+  const tokenInfo = proxyDetailTab === 'request' && data
+    ? (() => {
+        const bytes = new TextEncoder().encode(JSON.stringify(data)).length;
+        const kb = (bytes / 1024).toFixed(1);
+        const tokens = Math.ceil(bytes / 3.5);
+        return `<div class="proxy-token-pill">${kb} KB · ~${tokens.toLocaleString()} tok</div>`;
+      })()
+    : '';
   const prevScrollTop = document.getElementById('proxyDetailCode')?.scrollTop ?? 0;
-  detail.innerHTML = header + '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
+  detail.innerHTML = header + tokenInfo + '<div class="json-tree-view" id="proxyDetailCode" style="flex:1;overflow:auto"></div>';
   const code = document.getElementById('proxyDetailCode');
   renderJsonTree(code, data);
   if (proxyDetailMechFilter) {
