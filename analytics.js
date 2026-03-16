@@ -8,9 +8,11 @@ const API_SECRET     = process.env.GA4_API_SECRET     || 'ZfvhJ6CeTbuUZIfecLo4JA
 
 let _clientId = null;
 let _userDataPath = '';
+let _sessionId = null;
 
 function init(userDataPath) {
   _userDataPath = userDataPath;
+  _sessionId = Date.now().toString();
 }
 
 function getClientId() {
@@ -29,7 +31,7 @@ function trackEvent(eventName, params = {}) {
   if (!MEASUREMENT_ID || !API_SECRET) return;
   const body = JSON.stringify({
     client_id: getClientId(),
-    events: [{ name: eventName, params: { ...params, app_version: require('./package.json').version } }],
+    events: [{ name: eventName, params: { ...params, session_id: _sessionId, engagement_time_msec: 100, app_version: require('./package.json').version } }],
   });
   const req = https.request({
     hostname: 'www.google-analytics.com',
