@@ -72,7 +72,7 @@ function createWindow() {
       nodeIntegration: false,
     },
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 8 } } : {}),
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 19 } } : {}),
     title: 'Claude Inspector',
     backgroundColor: '#1e1e1e',
     show: false,
