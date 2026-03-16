@@ -30,20 +30,26 @@ git push
 
 ## Step 2: 빌드 (코드사이닝 + 공증 포함)
 
+⚠️ `npm run dist:mac`은 `predist` lifecycle hook을 트리거하지 않는다.
+`predist`를 먼저 수동 실행해서 `public/build-info.json`에 올바른 버전이 박히도록 해야 한다.
+
 ```bash
-source .env && npm run dist:mac
+source .env && npm run predist && npm run dist:mac
 ```
 
-`predist` 스크립트가 `public/build-info.json`을 자동 갱신하고,
-`afterSign` 훅(`scripts/notarize.js`)이 공증까지 자동 처리한다.
+- `predist`: `public/build-info.json`에 현재 package.json 버전 + git hash 기록
+- `dist:mac`: arm64 + x64 DMG 빌드 + 코드사이닝
+- `afterSign` 훅(`scripts/notarize.js`): Apple 공증 자동 처리
+
 완료까지 5~10분 소요. 중간에 Apple 서버 응답 대기 포함.
 
-빌드 완료 후 파일 확인:
+빌드 완료 후 파일 및 버전 확인:
 ```bash
 ls release/Claude-Inspector-{VERSION}-*.dmg
+cat public/build-info.json  # version이 배포 버전과 일치하는지 반드시 확인
 ```
 
-기대 결과: `Claude-Inspector-X.X.X-arm64.dmg`, `Claude-Inspector-X.X.X-x64.dmg` 2개
+기대 결과: `Claude-Inspector-X.X.X-arm64.dmg`, `Claude-Inspector-X.X.X-x64.dmg` 2개, `build-info.json`의 version이 X.X.X
 
 ---
 
@@ -114,5 +120,6 @@ brew update && brew info --cask claude-inspector
 
 ## 주의사항
 - `release/` 디렉토리에 이전 버전 DMG가 섞여있을 수 있으니 버전명으로 정확히 필터링
-- 공증은 Apple 서버 상태에 따라 실패할 수 있음 → 재시도: `source .env && npm run dist:mac`
+- 공증은 Apple 서버 상태에 따라 실패할 수 있음 → 재시도: `source .env && npm run predist && npm run dist:mac`
+- `dist:mac`은 npm predist lifecycle을 자동 실행하지 않음 — `predist`를 항상 먼저 수동 실행할 것
 - `gh release create`는 태그가 없으면 자동 생성, 이미 있으면 에러 → `gh release delete v{VERSION}` 후 재시도
