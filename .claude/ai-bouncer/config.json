@@ -1,0 +1,8 @@
+{
+  "docs_git_track": false,
+  "commit_strategy": "per-phase",
+  "commit_skill": true,
+  "target_dir": "/Users/ram/programming/vibecoding/claudeInspector/.claude",
+  "enforcement_mode": "prompt-only",
+  "agent_mode": "single"
+}

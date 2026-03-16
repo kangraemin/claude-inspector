@@ -1,0 +1,26 @@
+{
+  "workflow_phase": "done",
+  "mode": "normal",
+  "planning": {
+    "no_question_streak": 0
+  },
+  "plan_approved": true,
+  "team_name": "",
+  "current_dev_phase": 2,
+  "current_step": 1,
+  "dev_phases": {
+    "1": {
+      "name": "offProxy 버그 수정",
+      "folder": "phase-1-offproxy-fix"
+    },
+    "2": {
+      "name": "E2E 테스트 수정 + 추가",
+      "folder": "phase-2-e2e-tests"
+    }
+  },
+  "verification": {
+    "rounds_passed": 3
+  },
+  "task_dir": "docs/2026-03-14/offproxy-e2e-fix",
+  "active_file": "docs/2026-03-14/offproxy-e2e-fix/.active"
+}

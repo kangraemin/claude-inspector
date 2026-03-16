@@ -1,0 +1,22 @@
+{
+  "version": "5521a11",
+  "installed_at": "2026-03-14T10:37:19.207284",
+  "files": [
+    "agents/dev.md",
+    "agents/intent.md",
+    "agents/lead.md",
+    "agents/qa.md",
+    "agents/verifier.md",
+    "agents/guides/tc-guide.md",
+    "skills/dev-bounce/SKILL.md",
+    "hooks/hooks.json",
+    "hooks/plan-gate.sh",
+    "hooks/bash-gate.sh",
+    "hooks/doc-reminder.sh",
+    "hooks/bash-audit.sh",
+    "hooks/completion-gate.sh",
+    "hooks/subagent-track.sh",
+    "hooks/subagent-cleanup.sh",
+    "hooks/lib/resolve-task.sh"
+  ]
+}

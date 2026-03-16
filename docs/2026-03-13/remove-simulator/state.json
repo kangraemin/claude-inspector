@@ -1,0 +1,44 @@
+{
+  "workflow_phase": "done",
+  "mode": "normal",
+  "planning": {
+    "no_question_streak": 0
+  },
+  "plan_approved": true,
+  "team_name": "",
+  "current_dev_phase": 3,
+  "current_step": 3,
+  "dev_phases": {
+    "1": {
+      "name": "Backend cleanup",
+      "steps": [
+        "Remove simulator IPC handlers + SDK from main.js, preload.js, package.json",
+        "QA: verify app boots without errors"
+      ],
+      "folder": "phase-1-backend-cleanup"
+    },
+    "2": {
+      "name": "index.html JS cleanup",
+      "steps": [
+        "Remove simulator JS functions, variables, i18n keys",
+        "Fix applyI18n() and init code, ensure proxy mode displays directly",
+        "QA: verify proxy mode works, no JS errors"
+      ],
+      "folder": "phase-2-js-cleanup"
+    },
+    "3": {
+      "name": "index.html HTML/CSS cleanup + CDN + tests",
+      "steps": [
+        "Remove landing page, tabs, simulator panels, header controls, simulator CSS, marked.js CDN",
+        "Update E2E tests (remove simulator tests, update proxy tests)",
+        "QA: run full test suite"
+      ],
+      "folder": "phase-3-html-css-tests"
+    }
+  },
+  "verification": {
+    "rounds_passed": 3
+  },
+  "task_dir": "docs/2026-03-13/remove-simulator",
+  "active_file": "docs/2026-03-13/remove-simulator/.active"
+}

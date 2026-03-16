@@ -1,0 +1,70 @@
+{
+  "workflow_phase": "done",
+  "mode": "normal",
+  "planning": {
+    "no_question_streak": 0
+  },
+  "plan_approved": true,
+  "team_name": "",
+  "current_dev_phase": 4,
+  "current_step": 2,
+  "dev_phases": {
+    "1": {
+      "name": "network-safety",
+      "folder": "phase-1-network-safety",
+      "steps": {
+        "1": {
+          "title": "EADDRINUSE 재시도 1회 제한",
+          "doc_path": "docs/2026-03-13/code-quality-fixes/phase-1-network-safety/step-1.md"
+        },
+        "2": {
+          "title": "req/proxyRes 에러 핸들러 추가",
+          "doc_path": "docs/2026-03-13/code-quality-fixes/phase-1-network-safety/step-2.md"
+        }
+      }
+    },
+    "2": {
+      "name": "input-validation",
+      "folder": "phase-2-input-validation",
+      "steps": {
+        "1": {
+          "title": "토큰 추정 입력 제한 + 포트 범위 수정",
+          "doc_path": "docs/2026-03-13/code-quality-fixes/phase-2-input-validation/step-1.md"
+        }
+      }
+    },
+    "3": {
+      "name": "protocol-handling",
+      "folder": "phase-3-protocol-handling",
+      "steps": {
+        "1": {
+          "title": "SSE 파싱 마지막 이벤트 유실 방지",
+          "doc_path": "docs/2026-03-13/code-quality-fixes/phase-3-protocol-handling/step-1.md"
+        },
+        "2": {
+          "title": "proxy-stop race condition 방지",
+          "doc_path": "docs/2026-03-13/code-quality-fixes/phase-3-protocol-handling/step-2.md"
+        }
+      }
+    },
+    "4": {
+      "name": "xss-fixes",
+      "folder": "phase-4-xss-fixes",
+      "steps": {
+        "1": {
+          "title": "mech-chip onclick XSS 수정",
+          "doc_path": "docs/2026-03-13/code-quality-fixes/phase-4-xss-fixes/step-1.md"
+        },
+        "2": {
+          "title": "토큰 팝오버 값 esc() 적용",
+          "doc_path": "docs/2026-03-13/code-quality-fixes/phase-4-xss-fixes/step-2.md"
+        }
+      }
+    }
+  },
+  "verification": {
+    "rounds_passed": 3
+  },
+  "task_dir": "docs/2026-03-13/code-quality-fixes",
+  "active_file": "docs/2026-03-13/code-quality-fixes/.active"
+}
