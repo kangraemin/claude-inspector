@@ -703,6 +703,8 @@ const LOCALES = {
       noteOfficialDoc: '공식 문서',
       noteMTok: '📐 MTok = 백만 토큰 단위 가격',
       noteCacheSaving: '♻️ 캐시 {pct}%: 입력 대부분을 캐시에서 저렴하게 읽어 비용 절감',
+      noteSubscription: '🎫 구독 기준 캐시 적용 (캐시읽기 무료)',
+      noteApi: '🔑 API 기준',
     },
     onboard: {
       title: 'Claude Inspector 시작하기',
@@ -820,6 +822,8 @@ const LOCALES = {
       noteOfficialDoc: 'Official Docs',
       noteMTok: '📐 MTok = price per million tokens',
       noteCacheSaving: '♻️ Cache {pct}%: most input read from cache at lower cost',
+      noteSubscription: '🎫 Subscription cache applied (cache read free)',
+      noteApi: '🔑 API pricing',
     },
     onboard: {
       title: 'Getting Started',
@@ -1827,15 +1831,24 @@ function renderProxyDetail() {
           const isOpus4 = model.includes('opus-4-') && !model.includes('opus-4-1'); // opus 4.5/4.6 = $5/$25
           const isOldOpus = model.includes('opus-4-1') || model.includes('opus-4-0') || model.includes('opus-3'); // $15/$75
           const isHaiku = model.includes('haiku');
-          let inP = 3, outP = 15, crP = 0.3, cwP = 3.75; // sonnet default
-          if (isOpus4) { inP = 5; outP = 25; crP = 0.5; cwP = 6.25; }
-          else if (isOldOpus) { inP = 15; outP = 75; crP = 1.5; cwP = 18.75; }
-          else if (isHaiku) { inP = 1; outP = 5; crP = 0.1; cwP = 1.25; }
+          const isApi = entry.request?.isApiKey;
+          let inP = 3, outP = 15;
+          if (isOpus4) { inP = 5; outP = 25; }
+          else if (isOldOpus) { inP = 15; outP = 75; }
+          else if (isHaiku) { inP = 1; outP = 5; }
+          let crP, cwP;
+          if (isApi) {
+            crP = inP * 0.1;   // API: cache read = 10% of input
+            cwP = inP * 1.25;  // API: cache write = 125% of input
+          } else {
+            crP = 0;            // 구독: cache read = 무료
+            cwP = inP;          // 구독: cache write = input과 동일
+          }
           const cost = (uncached * inP + cacheRead * crP + cacheWrite * cwP + outTok * outP) / 1_000_000;
           const costStr = '$' + cost.toFixed(4);
           const fmtCost = (n) => '$' + (n / 1_000_000).toFixed(4);
           const popData = JSON.stringify({
-            model: model || i18n.t('token.unknown'), kb, pricingDate: PRICING_DATE,
+            model: model || i18n.t('token.unknown'), kb, pricingDate: PRICING_DATE, isApi,
             rows: [
               { label: i18n.t('token.cacheRead'), tokens: fmtTok(cacheRead), price: crP, cost: fmtCost(cacheRead * crP) },
               { label: i18n.t('token.cacheWrite'), tokens: fmtTok(cacheWrite), price: cwP, cost: fmtCost(cacheWrite * cwP) },
@@ -2150,6 +2163,8 @@ document.addEventListener('click', (e) => {
   pop.className = 'token-popover';
   // 캐시 적중률 높으면 절감 설명, 낮으면 생략
   let noteHtml = `<div class="token-popover-note">`;
+  noteHtml += d.isApi ? i18n.t('token.noteApi') : i18n.t('token.noteSubscription');
+  noteHtml += `<br>`;
   noteHtml += i18n.t('token.notePricingDate', { date: d.pricingDate });
   noteHtml += `<br>${i18n.t('token.noteModelPrice')} (<a href="https://docs.anthropic.com/en/docs/about-claude/models#model-comparison" style="color:var(--blue,#7aa2f7);text-decoration:underline;cursor:pointer" onclick="event.stopPropagation();require('electron').shell.openExternal(this.href);return false;">${i18n.t('token.noteOfficialDoc')}</a>)`;
   noteHtml += `<br>${i18n.t('token.noteMTok')}`;
