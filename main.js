@@ -145,6 +145,7 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
           method: req.method,
           path: req.url,
           body: bodyObj,
+          isApiKey: !!(req.headers['x-api-key']),
         };
         if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('proxy-request', reqData);
 
