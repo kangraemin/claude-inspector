@@ -1,8 +1,0 @@
-{
-  "docs_git_track": false,
-  "commit_strategy": "per-step",
-  "commit_skill": true,
-  "target_dir": "/Users/ram/programming/vibecoding/claudeInspector/.claude",
-  "enforcement_mode": "hooks",
-  "agent_mode": "single"
-}

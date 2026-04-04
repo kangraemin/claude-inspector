@@ -8,35 +8,3 @@ dist/
 .idea/
 request_test.json
 public/build-info.json
-
-# --- ai-bouncer start ---
-# ai-bouncer runtime artifacts
-.claude/ai-bouncer/.version-checked
-.claude/ai-bouncer/config.json
-.claude/ai-bouncer/manifest.json
-.claude/**/*.backup-*
-.claude/settings.json
-docs/
-# ai-bouncer installed files
-.claude/agents/dev.md
-.claude/agents/intent.md
-.claude/agents/lead.md
-.claude/agents/qa.md
-.claude/agents/verifier.md
-.claude/agents/guides/tc-guide.md
-.claude/skills/dev-bounce/SKILL.md
-.claude/skills/update-bouncer/SKILL.md
-.claude/hooks/hooks.json
-.claude/hooks/plan-gate.sh
-.claude/hooks/bash-gate.sh
-.claude/hooks/doc-reminder.sh
-.claude/hooks/bash-audit.sh
-.claude/hooks/completion-gate.sh
-.claude/hooks/stop-active-cleanup.sh
-.claude/hooks/subagent-track.sh
-.claude/hooks/subagent-cleanup.sh
-.claude/hooks/lib/resolve-task.sh
-.claude/scripts/update-check.sh
-update.sh
-uninstall.sh
-# --- ai-bouncer end ---
