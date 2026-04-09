@@ -701,8 +701,8 @@ const LOCALES = {
       summaryTitle: '세션 흐름 요약',
       selectAll: '전체 선택',
       deselectAll: '전체 해제',
+      selectToAnalyze: '왼쪽에서 분석할 요청을 선택하세요',
       optimizationTitle: '최적화 조언',
-      requestOptimization: '개선 제안 받기',
     },
     analysis: {
       noMechanisms: '감지된 메커니즘 없음<br><small>일반 API 요청이거나 분석 지원 외 패턴입니다</small>',
@@ -835,8 +835,8 @@ const LOCALES = {
       summaryTitle: 'Session Flow Summary',
       selectAll: 'Select all',
       deselectAll: 'Deselect all',
+      selectToAnalyze: 'Select requests to analyze from the left panel',
       optimizationTitle: 'Optimization Advice',
-      requestOptimization: 'Get Optimization Advice',
     },
     analysis: {
       noMechanisms: 'No mechanisms detected<br><small>Plain API request or unsupported pattern</small>',
@@ -1229,7 +1229,6 @@ async function toggleProxy() {
 
       window.electronAPI.onProxyRequest((data) => {
         proxyCaptures.unshift(data);
-        aiflowSelectedIds.add(data.id);
         if (proxyCaptures.length > 50) {
           const removed = proxyCaptures.pop();
           if (removed) aiflowSelectedIds.delete(removed.id);
@@ -1765,8 +1764,7 @@ function renderAiFlow(container) {
   if (aiflowState === 'done' && aiflowResult) { renderAiFlowResult(container); return; }
 
   if (aiflowState === 'analyzing') {
-    const selected = aiflowSelectedIds.size || proxyCaptures.length;
-    container.innerHTML = `<div class="aiflow-status"><div class="aiflow-spinner"></div><div class="status-text">${i18n.t('aiflow.analyzing')}</div><div class="aiflow-info-text">${i18n.t('aiflow.captureCount', { count: selected })}</div></div>`;
+    container.innerHTML = `<div class="aiflow-status"><div class="aiflow-spinner"></div><div class="status-text">${i18n.t('aiflow.analyzing')}</div><div class="aiflow-info-text">${i18n.t('aiflow.captureCount', { count: aiflowSelectedIds.size })}</div></div>`;
     return;
   }
 
@@ -1777,8 +1775,12 @@ function renderAiFlow(container) {
 
   // idle or ready — show description + analyze button
   aiflowState = 'ready';
-  const selected = aiflowSelectedIds.size || proxyCaptures.length;
-  container.innerHTML = `<div class="aiflow-status"><div class="status-icon">🧠</div><div class="status-text">${i18n.t('aiflow.aiflowDesc')}</div><div class="aiflow-info-text">${i18n.t('aiflow.captureCount', { count: selected })}</div><button class="aiflow-btn aiflow-btn-primary" onclick="startAiFlowAnalysis()">${i18n.t('aiflow.analyzeBtn')}</button></div>`;
+  const selected = aiflowSelectedIds.size;
+  const btnDisabled = selected === 0 ? ' disabled' : '';
+  const countText = selected > 0
+    ? i18n.t('aiflow.captureCount', { count: selected })
+    : i18n.t('aiflow.selectToAnalyze');
+  container.innerHTML = `<div class="aiflow-status"><div class="status-icon">🧠</div><div class="status-text">${i18n.t('aiflow.aiflowDesc')}</div><div class="aiflow-info-text">${countText}</div><button class="aiflow-btn aiflow-btn-primary"${btnDisabled} onclick="startAiFlowAnalysis()">${i18n.t('aiflow.analyzeBtn')}</button></div>`;
 }
 
 async function startAiFlowAnalysis() {
@@ -2126,6 +2128,7 @@ function toggleAiFlowCheck(id) {
 // Row click: normal = exclusive, Cmd = toggle, Shift = range
 function aiflowRowClick(id, event) {
   event.preventDefault();
+  window.getSelection()?.removeAllRanges();
   if (event.shiftKey && _lastCheckedId !== null) {
     const ids = proxyCaptures.map(e => e.id);
     const from = ids.indexOf(_lastCheckedId);
@@ -2692,7 +2695,6 @@ document.getElementById('proxyPanel').style.display = 'flex';
       window.electronAPI?.offProxy?.();
       window.electronAPI.onProxyRequest((data) => {
         proxyCaptures.unshift(data);
-        aiflowSelectedIds.add(data.id);
         if (proxyCaptures.length > 50) {
           const removed = proxyCaptures.pop();
           if (removed) aiflowSelectedIds.delete(removed.id);
