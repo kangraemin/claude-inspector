@@ -2020,22 +2020,7 @@ function renderAiFlowResult(container) {
         <div class="aiflow-step-num" style="background:var(--green)">⤵</div>
         <div class="aiflow-step-title" style="color:var(--green)">Flow Chart</div>
       </div>
-      <div class="aiflow-mermaid"><pre class="mermaid">${esc(result.mermaid)}</pre></div>
-    </div>`;
-  }
-
-  // "개선 제안 받기" 버튼
-  html += `<div style="text-align:center;padding:8px 0">
-    <button class="aiflow-btn aiflow-btn-secondary" style="font-size:11px" onclick="requestOptimization()" id="aiflowOptBtn">${i18n.t('aiflow.requestOptimization')}</button>
-  </div>`;
-
-  if (aiflowOptimization) {
-    html += `<div class="aiflow-step" style="border-color:rgba(220,220,170,.3)">
-      <div class="aiflow-step-header" style="background:rgba(220,220,170,.08)">
-        <div class="aiflow-step-num" style="background:var(--yellow)">!</div>
-        <div class="aiflow-step-title" style="color:var(--yellow)">${i18n.t('aiflow.optimizationTitle')}</div>
-      </div>
-      <div class="aiflow-step-body">${esc(aiflowOptimization)}</div>
+      <div class="aiflow-mermaid"><pre class="mermaid" id="aiflowMermaidPre"></pre></div>
     </div>`;
   }
 
@@ -2043,8 +2028,10 @@ function renderAiFlowResult(container) {
   container.style.cssText = 'flex:1;overflow-y:auto;display:block';
   container.innerHTML = html;
 
-  // Render mermaid
+  // Render mermaid — set textContent (not innerHTML) to avoid HTML escaping issues
   if (result.mermaid && typeof mermaid !== 'undefined') {
+    const pre = document.getElementById('aiflowMermaidPre');
+    if (pre) pre.textContent = result.mermaid;
     mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { primaryColor: '#2d2d2d', primaryBorderColor: '#4ec9b0', lineColor: '#569cd6', textColor: '#d4d4d4' } });
     mermaid.run({ querySelector: '.mermaid' });
   }
