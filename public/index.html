@@ -1811,7 +1811,7 @@ function renderAiFlow(container) {
 
   if (aiflowState === 'analyzing') {
     container.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;padding:16px';
-    container.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><div class="aiflow-spinner"></div><span class="status-text">${i18n.t('aiflow.analyzing')}</span></div>
+    container.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><div class="aiflow-spinner"></div><span class="status-text">${i18n.t('aiflow.analyzing')}</span><span id="aiflowElapsed" style="font-size:11px;color:var(--dim);font-family:'SF Mono',monospace"></span></div>
       <pre id="aiflowProgressText" style="flex:1;overflow-y:auto;font-size:11px;color:var(--dim);font-family:'SF Mono',monospace;white-space:pre-wrap;word-break:break-word;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-top:12px"></pre>`;
     return;
   }
@@ -1838,6 +1838,13 @@ async function startAiFlowAnalysis() {
   const container = document.getElementById('proxyDetailView');
   renderAiFlow(container);
 
+  // 경과 시간 카운터
+  const startTime = Date.now();
+  const elapsedTimer = setInterval(() => {
+    const el = document.getElementById('aiflowElapsed');
+    if (el) el.textContent = `${Math.floor((Date.now() - startTime) / 1000)}s`;
+  }, 1000);
+
   // 실시간 프로그레스
   window.electronAPI.onAiflowProgress((text) => {
     const pre = document.getElementById('aiflowProgressText');
@@ -1846,6 +1853,7 @@ async function startAiFlowAnalysis() {
 
   const prompt = buildAiFlowPrompt();
   const result = await window.electronAPI.aiflowAnalyze({ prompt });
+  clearInterval(elapsedTimer);
   window.electronAPI.offAiflowProgress();
 
   if (result.success) {
@@ -1974,23 +1982,32 @@ Rules:
 - Number steps sequentially (STEP 1, STEP 2, ...)
 - End with a one-line overall session summary after the last step
 
-After the summary, output a MERMAID flowchart of the session flow:
+After the summary, output a MERMAID flowchart showing the INTERNAL MECHANISM flow (not just request connections).
+Show how Claude Code's prompt augmentation pipeline works across requests:
 ---
 MERMAID:
 graph TD
-    R1["Req 1: short description"] --> R2["Req 2: short description"]
-    R2 --> R3["Req 3: short description"]
-    R3 -->|sub-agent| R4["Req 4: sub-agent task"]
+    A["User asks question"] --> B["Claude needs MCP tool"]
+    B --> C["ToolSearch: fetch schema"]
+    C --> D["Schema loaded: mcp__x__y"]
+    D --> E["tool_use: mcp__x__y"]
+    E --> F["tool_result returned"]
+    F --> G["Claude generates answer"]
 ---
 
 Rules for MERMAID:
 - Use graph TD (top-down)
-- Each node is R{N}["Req {N}: short label"] — do NOT use # character in labels
-- Keep labels under 40 characters, no double-quotes inside labels
-- Connect sequential requests with -->
-- Label sub-agent connections with -->|sub-agent|
-- Label tool chains with -->|ToolSearch→MCP| or similar
-- Keep node labels very short (under 30 chars)
+- Show the MECHANISM chain, not just request numbers
+- Include these patterns when detected:
+  - ToolSearch → schema loaded → tool_use (deferred tool loading)
+  - command-message → Skill tool_use → skill prompt loaded (skill loading)
+  - Agent/Task tool_use → sub-agent spawned → sub-agent result (sub-agent flow)
+  - system-reminder injection (CLAUDE.md loading)
+- Use descriptive node labels like "ToolSearch: fetch mcp schema" not "Req 1"
+- Add Request numbers as annotations: e.g., A["ToolSearch: fetch schema\n(Req 1)"]
+- Do NOT use # character in labels
+- Keep labels under 50 characters
+- Use different node shapes: [] for actions, {} for decisions, () for results
 
 Data:
 ${JSON.stringify(captures, null, 1)}`;
