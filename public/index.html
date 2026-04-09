@@ -2167,12 +2167,10 @@ function aiflowRowClick(id, event) {
       const start = Math.min(from, to), end = Math.max(from, to);
       for (let i = start; i <= end; i++) aiflowSelectedIds.add(ids[i]);
     }
-  } else if (event.metaKey || event.ctrlKey) {
+  } else {
+    // 기본 클릭 = 토글 (체크박스 직관에 맞게)
     if (aiflowSelectedIds.has(id)) aiflowSelectedIds.delete(id);
     else aiflowSelectedIds.add(id);
-  } else {
-    aiflowSelectedIds.clear();
-    aiflowSelectedIds.add(id);
   }
   _lastCheckedId = id;
   _resetAiFlowIfDone();
