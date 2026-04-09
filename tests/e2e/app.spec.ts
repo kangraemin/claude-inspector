@@ -131,7 +131,7 @@ test('#proxyStartBtn ID 명확화 확인', async () => {
 
 // ─── 프록시 상세 탭 버튼 ────────────────────────────────────────────────────
 
-for (const dtab of ['messages', 'request', 'response', 'analysis']) {
+for (const dtab of ['aiflow', 'request', 'response', 'analysis']) {
   test(`프록시 상세 탭 버튼: ${dtab}`, async () => {
     await expect(page.locator(`.dtab[data-dtab="${dtab}"]`)).toHaveCount(1);
   });
@@ -175,6 +175,12 @@ test('프록시 토글 시 pageerror 없음', async () => {
   } finally {
     page.removeListener('pageerror', handler);
   }
+});
+
+test('AI Flow 탭 클릭 → aiflow 컨텐츠 영역 표시', async () => {
+  await page.locator('.dtab[data-dtab="aiflow"]').click();
+  // 캡처 없으면 안내 메시지(aiflow-status) 표시
+  await expect(page.locator('.aiflow-status')).toBeVisible({ timeout: 5000 });
 });
 
 test('프록시 시작→정지 전체 사이클 정상 동작', async () => {

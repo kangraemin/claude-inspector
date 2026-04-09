@@ -197,19 +197,79 @@
       line-height: 1.7;
     }
 
+    /* ── AI Flow tab ── */
+    .aiflow-container {
+      flex: 1; overflow-y: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .aiflow-status {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px; padding: 40px 20px; text-align: center; flex: 1;
+    }
+    .aiflow-status .status-icon { font-size: 36px; }
+    .aiflow-status .status-text { font-size: 13px; color: var(--dim); line-height: 1.6; }
+    .aiflow-btn {
+      padding: 8px 24px; font-size: 13px; font-weight: 600;
+      border-radius: 6px; border: none; cursor: pointer; transition: all .15s;
+    }
+    .aiflow-btn-primary {
+      background: linear-gradient(135deg, var(--green), var(--blue)); color: #fff;
+    }
+    .aiflow-btn-primary:hover { opacity: .85; }
+    .aiflow-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .aiflow-btn-secondary {
+      background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+    }
+    .aiflow-btn-secondary:hover { border-color: var(--blue); }
+    .aiflow-progress {
+      width: 100%; max-width: 320px; height: 6px;
+      background: var(--surface2); border-radius: 3px; overflow: hidden;
+    }
+    .aiflow-progress-bar {
+      height: 100%; background: linear-gradient(90deg, var(--green), var(--blue));
+      transition: width .3s; width: 0%;
+    }
+    .aiflow-progress-text { font-size: 11px; color: var(--dim); font-family: 'SF Mono', monospace; }
+    .aiflow-step {
+      border: 1px solid var(--border); border-radius: 6px;
+      overflow: hidden; font-size: 12px;
+    }
+    .aiflow-step-header {
+      padding: 8px 12px; background: var(--surface);
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .aiflow-step-num {
+      background: var(--green); color: #1e1e1e;
+      font-size: 10px; font-weight: 800;
+      width: 20px; height: 20px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .aiflow-step-num.sub { background: var(--orange); }
+    .aiflow-step-title { font-weight: 600; flex: 1; }
+    .aiflow-step-body {
+      padding: 10px 12px; line-height: 1.6;
+      font-family: 'SF Mono', monospace; white-space: pre-wrap; word-break: break-word;
+    }
+    .aiflow-ref {
+      display: inline-block; padding: 1px 6px; border-radius: 3px;
+      font-size: 10px; font-weight: 700; cursor: pointer;
+      background: rgba(86,156,214,.15); color: var(--blue);
+      border: 1px solid rgba(86,156,214,.3); transition: all .15s;
+    }
+    .aiflow-ref:hover { background: rgba(86,156,214,.3); }
+    .aiflow-spinner {
+      width: 24px; height: 24px; border: 3px solid var(--border);
+      border-top-color: var(--green); border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .aiflow-error {
+      color: var(--red); font-size: 12px; padding: 12px;
+      background: rgba(244,135,113,.08); border: 1px solid rgba(244,135,113,.3); border-radius: 6px;
+    }
+    .aiflow-check { width: 14px; height: 14px; accent-color: var(--green); cursor: pointer; flex-shrink: 0; margin-right: 4px; }
+
     /* ── Messages view ── */
-    .msg-filter {
-      display: flex; align-items: center; gap: 6px;
-      padding: 7px 12px; border-bottom: 1px solid var(--border);
-      flex-shrink: 0; background: var(--surface);
-    }
-    .mf-btn {
-      padding: 3px 10px; font-size: 11px; border-radius: 4px;
-      background: none; border: 1px solid var(--border);
-      color: var(--dim); cursor: pointer; transition: all .15s;
-    }
-    .mf-btn.active { background: var(--surface2); border-color: var(--blue); color: var(--text); }
-    .msg-count { font-size: 10px; color: var(--dim); margin-left: auto; }
     .msgs-list { display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto; }
     .msg-card { border-radius: 6px; border: 1px solid var(--border); overflow: hidden; font-size: 12px; }
     .msg-card.msg-user { border-color: rgba(86,156,214,.35); }
@@ -576,7 +636,7 @@
     </div>
     <div class="proxy-detail">
       <div class="dtabs">
-        <button class="dtab active" data-dtab="messages" onclick="showDetailTab('messages')">Messages</button>
+        <button class="dtab active" data-dtab="aiflow" onclick="showDetailTab('aiflow')" style="color:var(--green)">AI Flow</button>
         <button class="dtab"        data-dtab="request"  onclick="showDetailTab('request')">Request</button>
         <button class="dtab"        data-dtab="response" onclick="showDetailTab('response')">Response</button>
         <button class="dtab"        data-dtab="analysis" onclick="showDetailTab('analysis')" style="color:var(--purple)">Analysis</button>
@@ -631,6 +691,24 @@ const LOCALES = {
       filterAll: '전체',
       searchPlaceholder: '🔍 검색... (⌘F)',
       searchClear: '검색 초기화',
+    },
+    aiflow: {
+      noCaptures: '분석할 캡처 데이터가 없습니다.<br><small>프록시를 시작하고 Claude Code를 실행하세요</small>',
+      ollamaNotRunning: 'Ollama가 실행되지 않았습니다',
+      ollamaNotRunningDesc: 'AI Flow 분석을 위해 Ollama를 먼저 실행해주세요.<br><code>brew install ollama && ollama serve</code>',
+      modelNotFound: 'gemma4 모델이 설치되지 않았습니다',
+      modelNotFoundDesc: '분석에 사용할 gemma4 모델을 다운로드해주세요 (약 9.6GB)',
+      downloadBtn: 'gemma4 다운로드',
+      downloading: '다운로드 중...',
+      analyzeBtn: '세션 흐름 분석하기',
+      analyzing: 'Ollama로 분석 중... (30초~2분 소요)',
+      analyzeFail: '분석 실패: {error}',
+      reanalyze: '다시 분석',
+      captureCount: '선택된 {count}개의 요청을 분석합니다',
+      requestRef: 'Request #{n}',
+      summaryTitle: '세션 흐름 요약',
+      selectAll: '전체 선택',
+      deselectAll: '전체 해제',
     },
     analysis: {
       noMechanisms: '감지된 메커니즘 없음<br><small>일반 API 요청이거나 분석 지원 외 패턴입니다</small>',
@@ -711,7 +789,7 @@ const LOCALES = {
       sub: 'Claude Code가 API에 실제로 보내는 내용을 실시간으로 확인하세요',
       step1: '아래 <b>Start Proxy</b> 버튼 클릭 → 로컬 프록시(localhost:9090) 시작',
       step2: '새 터미널을 열고 아래 명령어로 Claude Code 실행:',
-      step3: '이 화면으로 돌아와 <b>Messages</b> · <b>Request</b> · <b>Analysis</b> 탭에서 캡처된 트래픽 확인',
+      step3: '이 화면으로 돌아와 <b>AI Flow</b> · <b>Request</b> · <b>Analysis</b> 탭에서 캡처된 트래픽 확인',
       note: '💡 프록시는 로컬에서만 동작합니다. 외부로 데이터가 전송되지 않습니다.',
       btn: '시작하기 →',
     },
@@ -750,6 +828,24 @@ const LOCALES = {
       filterAll: 'All',
       searchPlaceholder: '🔍 Search... (⌘F)',
       searchClear: 'Clear search',
+    },
+    aiflow: {
+      noCaptures: 'No capture data to analyze.<br><small>Start the proxy and run Claude Code</small>',
+      ollamaNotRunning: 'Ollama is not running',
+      ollamaNotRunningDesc: 'Please run Ollama for AI Flow analysis.<br><code>brew install ollama && ollama serve</code>',
+      modelNotFound: 'gemma4 model not installed',
+      modelNotFoundDesc: 'Download the gemma4 model for analysis (~9.6GB)',
+      downloadBtn: 'Download gemma4',
+      downloading: 'Downloading...',
+      analyzeBtn: 'Analyze Session Flow',
+      analyzing: 'Analyzing with Ollama... (30s–2min)',
+      analyzeFail: 'Analysis failed: {error}',
+      reanalyze: 'Re-analyze',
+      captureCount: 'Analyzing {count} selected requests',
+      requestRef: 'Request #{n}',
+      summaryTitle: 'Session Flow Summary',
+      selectAll: 'Select all',
+      deselectAll: 'Deselect all',
     },
     analysis: {
       noMechanisms: 'No mechanisms detected<br><small>Plain API request or unsupported pattern</small>',
@@ -830,7 +926,7 @@ const LOCALES = {
       sub: 'See what Claude Code actually sends to the Anthropic API — in real-time',
       step1: 'Click <b>Start Proxy</b> below — starts a local proxy on localhost:9090',
       step2: 'Open a new terminal and run Claude Code through the proxy:',
-      step3: 'Come back here and browse captured traffic in <b>Messages</b> · <b>Request</b> · <b>Analysis</b>',
+      step3: 'Come back here and browse captured traffic in <b>AI Flow</b> · <b>Request</b> · <b>Analysis</b>',
       note: '💡 The proxy runs locally only. No data is sent anywhere except directly to api.anthropic.com.',
       btn: 'Get Started →',
     },
@@ -1056,9 +1152,12 @@ function escAttr(s) {
 // ─── Proxy ────────────────────────────────────────────────────────────────
 let proxyCaptures = [];
 let selectedProxyId = null;
-let proxyDetailTab = 'messages';
-let msgFilter = 'user';
-let msgSearchQuery = '';
+let proxyDetailTab = 'aiflow';
+let aiflowState = 'idle'; // idle|checking|no-ollama|no-model|downloading|ready|analyzing|done|error
+let aiflowResult = null;
+let aiflowError = null;
+let aiflowPullProgress = 0;
+let aiflowSelectedIds = new Set();
 let proxyDetailSearch = '';
 let proxyDetailMechFilter = null;
 let proxyRunning = false;
@@ -1139,7 +1238,11 @@ async function toggleProxy() {
 
       window.electronAPI.onProxyRequest((data) => {
         proxyCaptures.unshift(data);
-        if (proxyCaptures.length > 50) proxyCaptures.pop();
+        aiflowSelectedIds.add(data.id);
+        if (proxyCaptures.length > 50) {
+          const removed = proxyCaptures.pop();
+          if (removed) aiflowSelectedIds.delete(removed.id);
+        }
         debouncedRenderProxyList();
       });
       window.electronAPI.onProxyResponse((data) => {
@@ -1171,14 +1274,25 @@ function renderProxyList() {
     return;
   }
 
-  list.innerHTML = proxyCaptures.map(e => {
+  const showCheck = proxyDetailTab === 'aiflow';
+  const selectAllHtml = showCheck
+    ? `<div style="padding:4px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+        <input type="checkbox" class="aiflow-check" ${aiflowSelectedIds.size === proxyCaptures.length ? 'checked' : ''} onchange="toggleAiFlowSelectAll()">
+        <span style="font-size:10px;color:var(--dim)">${aiflowSelectedIds.size === proxyCaptures.length ? i18n.t('aiflow.deselectAll') : i18n.t('aiflow.selectAll')}</span>
+      </div>`
+    : '';
+  list.innerHTML = selectAllHtml + proxyCaptures.map(e => {
     const model = e.body?.model ? `<div class="prx-model">${esc(e.body.model)}</div>` : '';
     const sel = e.id === selectedProxyId ? ' selected' : '';
     const statusBadge = e.response
       ? `<span style="font-size:10px;font-family:'SF Mono',monospace;flex-shrink:0;color:${e.response.status < 400 ? 'var(--green)' : 'var(--red)'}">${e.response.status || 'ERR'}</span>`
       : `<span style="font-size:10px;color:var(--dim);flex-shrink:0">…</span>`;
+    const checkbox = showCheck
+      ? `<input type="checkbox" class="aiflow-check" ${aiflowSelectedIds.has(e.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleAiFlowSelect(${e.id})">`
+      : '';
     return `<div class="prx-entry${sel}" onclick="selectProxyEntry(${e.id})">
       <div style="display:flex;align-items:center;overflow:hidden">
+        ${checkbox}
         <span class="prx-method">${esc(e.method)}</span>
         <span class="prx-path">${esc(e.path)}</span>
         ${statusBadge}
@@ -1317,122 +1431,7 @@ function renderUserMsgContent(text, typedOnly, query) {
   }).join('');
 }
 
-function renderProxyMessages(entry, container) {
-  const msgs = entry.body?.messages || [];
-  if (msgs.length === 0) {
-    container.innerHTML = `<div class="proxy-empty"><span>${i18n.t('proxy.noMessages')}</span></div>`;
-    return;
-  }
-
-  const typedOnly = msgFilter === 'typed';
-  const baseFiltered = (msgFilter === 'user' || typedOnly) ? msgs.filter(m => m.role === 'user')
-    : msgFilter === 'assistant' ? msgs.filter(m => m.role === 'assistant')
-    : msgs;
-
-  const q = msgSearchQuery;
-
-  const filterHtml = `<div class="msg-filter">
-    <button class="mf-btn${msgFilter==='user'?' active':''}" onclick="setMsgFilter('user')">${i18n.t('messages.filterUser')}</button>
-    <button class="mf-btn${msgFilter==='typed'?' active':''}" onclick="setMsgFilter('typed')">${i18n.t('messages.filterTyped')}</button>
-    <button class="mf-btn${msgFilter==='assistant'?' active':''}" onclick="setMsgFilter('assistant')">${i18n.t('messages.filterAssistant')}</button>
-    <button class="mf-btn${msgFilter==='all'?' active':''}" onclick="setMsgFilter('all')">${i18n.t('messages.filterAll')}</button>
-    <span class="msg-count" id="msgCountEl"></span>
-  </div>`;
-
-  const searchHtml = `<div class="msg-search-bar">
-    <input type="text" id="msgSearchInput" class="msg-search-input"
-      placeholder="${esc(i18n.t('messages.searchPlaceholder'))}" value="${esc(q)}"
-      oninput="setMsgSearch(this.value)"
-      oncompositionstart="_imeComposing=true"
-      oncompositionend="_imeComposing=false;setMsgSearch(this.value)">
-    ${q ? `<button class="msg-search-clear" onclick="setMsgSearch('');document.getElementById('msgSearchInput')?.focus()" title="${esc(i18n.t('messages.searchClear'))}">✕</button>` : ''}
-  </div>`;
-
-  const cards = [];
-  for (const msg of baseFiltered) {
-    const contents = Array.isArray(msg.content)
-      ? msg.content
-      : [{ type: 'text', text: String(msg.content || '') }];
-
-    // "내가 보낸 것" 필터: 사용자가 직접 입력한 텍스트가 없는 메시지 스킵
-    const isUserFilter = msgFilter === 'user' || typedOnly;
-    if (isUserFilter && msg.role === 'user') {
-      const hasTypedText = contents.some(c => {
-        if (c.type !== 'text' || !c.text || !c.text.trim()) return false;
-        const parts = parseUserText(c.text);
-        return parts.some(p => p.type === 'text');
-      });
-      if (!hasTypedText) continue;
-    }
-
-    const bodyParts = [];
-    for (const c of contents) {
-      if (c.type === 'text') {
-        if (msg.role === 'user') {
-          const rendered = renderUserMsgContent(c.text, isUserFilter, q);
-          if (rendered !== null) bodyParts.push(rendered);
-        } else {
-          bodyParts.push(`<div class="msg-text">${highlightSearch(esc(c.text), q)}</div>`);
-        }
-      } else if (c.type === 'tool_use') {
-        if (!isUserFilter) bodyParts.push(`<div class="msg-tool">🔧 ${esc(c.name)}()</div>`);
-      } else if (c.type === 'tool_result') {
-        if (!isUserFilter) {
-          const preview = typeof c.content === 'string' ? c.content.slice(0, 120)
-            : Array.isArray(c.content) ? c.content.map(x => x.text||'').join('').slice(0, 120) : '[object]';
-          bodyParts.push(`<div class="msg-tool-result">📤 ${esc(preview)}${preview.length===120?'…':''}</div>`);
-        }
-      } else {
-        bodyParts.push(`<div class="msg-other">[${esc(c.type)}]</div>`);
-      }
-    }
-
-    if (bodyParts.length === 0) continue;
-    if (q && !bodyParts.join('').includes('class="search-hl"')) continue;
-
-    cards.push(`<div class="msg-card msg-${esc(msg.role)}">
-      <div class="msg-role">${esc(msg.role)}</div>
-      <div class="msg-body">${bodyParts.join('')}</div>
-    </div>`);
-  }
-
-  // flex/overflow 전부 덮어씌워서 단순 스크롤 컨테이너로 전환
-  container.style.cssText = 'flex:1;overflow-y:auto;display:block';
-  container.innerHTML = `<div style="position:sticky;top:0;z-index:1;background:var(--bg)">${filterHtml}${searchHtml}</div>` +
-    `<div style="display:flex;flex-direction:column;gap:8px;padding:12px">${cards.join('') || `<div class="proxy-empty"><span>${i18n.t('proxy.noResults')}</span></div>`}</div>`;
-
-  const countEl = document.getElementById('msgCountEl');
-  if (countEl) countEl.textContent = i18n.t('proxy.msgCount', { count: cards.length, total: msgs.length });
-
-  // Restore focus on search input after re-render
-  {
-    const inp = document.getElementById('msgSearchInput');
-    if (inp && (q || _msgSearchWasFocused)) { inp.focus(); const len = inp.value.length; inp.setSelectionRange(len, len); }
-  }
-}
-
-function setMsgFilter(f) {
-  msgFilter = f;
-  const entry = proxyCaptures.find(e => e.id === selectedProxyId);
-  const detail = document.getElementById('proxyDetailView');
-  if (entry && detail) renderProxyMessages(entry, detail);
-}
-
 let _imeComposing = false;
-let _msgSearchWasFocused = false;
-let _msgSearchTimer = null;
-
-function setMsgSearch(q) {
-  msgSearchQuery = q;
-  if (_imeComposing) return;
-  clearTimeout(_msgSearchTimer);
-  _msgSearchTimer = setTimeout(() => {
-    _msgSearchWasFocused = document.activeElement?.id === 'msgSearchInput';
-    const entry = proxyCaptures.find(e => e.id === selectedProxyId);
-    const detail = document.getElementById('proxyDetailView');
-    if (entry && detail && proxyDetailTab === 'messages') renderProxyMessages(entry, detail);
-  }, 150);
-}
 
 let searchCurrentIdx = -1;
 
@@ -1738,21 +1737,335 @@ function applyDetailHighlight(container, query) {
   }
 }
 
-function renderProxyDetail() {
-  const entry = proxyCaptures.find(e => e.id === selectedProxyId);
-  const detail = document.getElementById('proxyDetailView');
-  if (!detail) return;
+// ─── AI Flow view ─────────────────────────────────────────────────────────
 
-  // Messages 탭에서 변경한 inline style 원복
-  detail.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column';
+function renderAiFlow(container) {
+  container.style.cssText = 'flex:1;overflow-y:auto;display:block';
 
-  if (!entry) {
-    detail.innerHTML = `<div class="proxy-empty"><span style="font-size:28px">🔍</span><span>${i18n.t('proxy.selectRequest')}</span></div>`;
+  if (proxyCaptures.length === 0) {
+    container.innerHTML = `<div class="aiflow-status"><div class="status-icon">📡</div><div class="status-text">${i18n.t('aiflow.noCaptures')}</div></div>`;
     return;
   }
 
-  if (proxyDetailTab === 'messages') {
-    renderProxyMessages(entry, detail);
+  if (aiflowState === 'done' && aiflowResult) { renderAiFlowResult(container); return; }
+
+  if (aiflowState === 'analyzing') {
+    const selected = aiflowSelectedIds.size || proxyCaptures.length;
+    container.innerHTML = `<div class="aiflow-status"><div class="aiflow-spinner"></div><div class="status-text">${i18n.t('aiflow.analyzing')}</div><div class="aiflow-progress-text">${i18n.t('aiflow.captureCount', { count: selected })}</div></div>`;
+    return;
+  }
+
+  if (aiflowState === 'downloading') {
+    container.innerHTML = `<div class="aiflow-status"><div class="status-icon">📥</div><div class="status-text">${i18n.t('aiflow.downloading')}</div><div class="aiflow-progress"><div class="aiflow-progress-bar" style="width:${aiflowPullProgress}%"></div></div><div class="aiflow-progress-text">${aiflowPullProgress}%</div></div>`;
+    return;
+  }
+
+  if (aiflowState === 'error') {
+    container.innerHTML = `<div class="aiflow-status"><div class="status-icon">⚠️</div><div class="aiflow-error">${esc(aiflowError || '')}</div><button class="aiflow-btn aiflow-btn-primary" onclick="startAiFlowCheck()">${i18n.t('aiflow.reanalyze')}</button></div>`;
+    return;
+  }
+
+  if (aiflowState === 'idle' || aiflowState === 'checking') {
+    aiflowState = 'checking';
+    container.innerHTML = `<div class="aiflow-status"><div class="aiflow-spinner"></div><div class="status-text">Checking Ollama...</div></div>`;
+    checkOllamaAndRender(container);
+    return;
+  }
+
+  if (aiflowState === 'no-ollama') {
+    container.innerHTML = `<div class="aiflow-status"><div class="status-icon">🦙</div><div style="font-size:14px;font-weight:600">${i18n.t('aiflow.ollamaNotRunning')}</div><div class="status-text">${i18n.t('aiflow.ollamaNotRunningDesc')}</div><button class="aiflow-btn aiflow-btn-primary" onclick="startAiFlowCheck()">Retry</button></div>`;
+    return;
+  }
+
+  if (aiflowState === 'no-model') {
+    container.innerHTML = `<div class="aiflow-status"><div class="status-icon">🦙</div><div style="font-size:14px;font-weight:600">${i18n.t('aiflow.modelNotFound')}</div><div class="status-text">${i18n.t('aiflow.modelNotFoundDesc')}</div><button class="aiflow-btn aiflow-btn-secondary" onclick="startModelDownload()">${i18n.t('aiflow.downloadBtn')}</button></div>`;
+    return;
+  }
+
+  if (aiflowState === 'ready') {
+    const selected = aiflowSelectedIds.size || proxyCaptures.length;
+    container.innerHTML = `<div class="aiflow-status"><div class="status-icon">🧠</div><div class="aiflow-progress-text">${i18n.t('aiflow.captureCount', { count: selected })}</div><button class="aiflow-btn aiflow-btn-primary" onclick="startAiFlowAnalysis()">${i18n.t('aiflow.analyzeBtn')}</button></div>`;
+    return;
+  }
+}
+
+async function checkOllamaAndRender(container) {
+  try {
+    const status = await window.electronAPI.ollamaStatus();
+    if (!status.available) aiflowState = 'no-ollama';
+    else if (!status.hasGemma4) aiflowState = 'no-model';
+    else aiflowState = 'ready';
+  } catch { aiflowState = 'no-ollama'; }
+  renderAiFlow(container || document.getElementById('proxyDetailView'));
+}
+
+function startAiFlowCheck() {
+  aiflowState = 'idle';
+  renderAiFlow(document.getElementById('proxyDetailView'));
+}
+
+async function startModelDownload() {
+  aiflowState = 'downloading';
+  aiflowPullProgress = 0;
+  const container = document.getElementById('proxyDetailView');
+  renderAiFlow(container);
+
+  window.electronAPI.onOllamaPullProgress((progress) => {
+    if (progress.total && progress.completed) {
+      aiflowPullProgress = Math.round((progress.completed / progress.total) * 100);
+    }
+    const bar = container.querySelector('.aiflow-progress-bar');
+    const text = container.querySelector('.aiflow-progress-text');
+    if (bar) bar.style.width = aiflowPullProgress + '%';
+    if (text) text.textContent = `${aiflowPullProgress}% — ${progress.status || ''}`;
+  });
+
+  const result = await window.electronAPI.ollamaPull('gemma4');
+  window.electronAPI.offOllamaPullProgress();
+
+  if (result.success) aiflowState = 'ready';
+  else { aiflowState = 'error'; aiflowError = result.error || 'Download failed'; }
+  renderAiFlow(container);
+}
+
+async function startAiFlowAnalysis() {
+  aiflowState = 'analyzing';
+  aiflowResult = null;
+  const container = document.getElementById('proxyDetailView');
+  renderAiFlow(container);
+
+  const prompt = buildAiFlowPrompt();
+  const result = await window.electronAPI.ollamaAnalyze({ prompt, model: 'gemma4' });
+
+  if (result.success) {
+    aiflowResult = parseAiFlowResponse(result.response);
+    aiflowState = 'done';
+  } else {
+    aiflowState = 'error';
+    aiflowError = i18n.t('aiflow.analyzeFail', { error: result.error || 'unknown' });
+  }
+  renderAiFlow(container);
+}
+
+function buildAiFlowPrompt() {
+  const lang = i18n.locale === 'ko' ? 'Korean' : 'English';
+  // Use selected captures or all
+  const selected = aiflowSelectedIds.size > 0
+    ? proxyCaptures.filter(e => aiflowSelectedIds.has(e.id))
+    : [...proxyCaptures];
+
+  // Tag sessions: detect sub-agent / team-agent requests
+  let lastMainWithAgent = null;
+  const captures = selected.map((entry, idx) => {
+    const reqNum = selected.length - idx;
+    const summary = { request_num: reqNum, model: entry.body?.model || 'unknown' };
+
+    const msgs = entry.body?.messages || [];
+    summary.messages_count = msgs.length;
+
+    // Extract user messages (truncated)
+    const userMsgs = msgs.filter(m => m.role === 'user').map(m => {
+      const texts = (Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content || '') }])
+        .filter(c => c.type === 'text').map(c => (c.text || '').replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim().slice(0, 200));
+      return texts.filter(Boolean).join(' ');
+    }).filter(Boolean);
+    if (userMsgs.length) summary.user_messages = userMsgs.slice(-2);
+
+    // Extract tool_use from all messages
+    const toolUses = [];
+    let hasAgentCall = false;
+    let hasTeamCreate = false;
+    for (const m of msgs) {
+      const contents = Array.isArray(m.content) ? m.content : [];
+      for (const c of contents) {
+        if (c.type === 'tool_use') {
+          toolUses.push(c.name);
+          if (c.name === 'Agent' || c.name === 'Task') hasAgentCall = true;
+          if (c.name === 'TeamCreate') hasTeamCreate = true;
+        }
+      }
+    }
+    if (toolUses.length) summary.tools = [...new Set(toolUses)];
+
+    // Detect mechanisms
+    const det = detectMechanisms(entry.body);
+    const mechs = [];
+    if (det.claudeMd) mechs.push('CLAUDE.md');
+    if (det.slashCommands.length) mechs.push('/' + det.slashCommands.map(s => s.name).join(', /'));
+    if (det.skills.length) mechs.push('Skill:' + det.skills.map(s => s.input?.skill || '?').join(','));
+    if (det.subAgents.length) mechs.push('SubAgent');
+    if (det.mcpTools.length) mechs.push('MCP:' + det.mcpTools.map(m => m.name.split('__').slice(2).join('__')).join(','));
+    if (mechs.length) summary.mechanisms = mechs;
+
+    // Response tool calls
+    if (entry.response?.body?.content) {
+      const respTools = entry.response.body.content.filter(c => c.type === 'tool_use').map(c => c.name);
+      if (respTools.length) summary.response_tools = [...new Set(respTools)];
+      const respText = entry.response.body.content.filter(c => c.type === 'text').map(c => (c.text || '').slice(0, 150)).filter(Boolean);
+      if (respText.length) summary.response_preview = respText.slice(0, 1);
+    }
+
+    // Session tagging
+    if (msgs.length <= 3 && lastMainWithAgent) {
+      summary.session = `sub-agent(from Request #${lastMainWithAgent})`;
+    } else {
+      summary.session = 'main';
+      if (hasAgentCall || hasTeamCreate) lastMainWithAgent = reqNum;
+    }
+
+    return summary;
+  });
+
+  return `You are analyzing a Claude Code CLI session captured by a proxy inspector.
+Below is a JSON array of ${captures.length} API request/response pairs, ordered newest-first.
+Each has a "request_num" (e.g., Request #1 = oldest, Request #${captures.length} = newest).
+The "session" field indicates: "main" = main conversation, "sub-agent(from Request #N)" = spawned by an Agent/Task tool call in Request #N.
+
+Analyze the session flow and produce a structured summary in ${lang}.
+
+Focus on:
+- MCP tool discovery → schema loading → actual tool calls
+- Skill search → Skill loading → execution chains
+- ToolSearch → ToolUse chains
+- Sub-agent spawning and what they did
+- Slash command → Skill execution flows
+- Multi-turn conversation progression
+
+Output format (strictly follow):
+---
+STEP 1: [short title]
+[Request #N, Request #M]
+[2-3 sentence description]
+
+STEP 2: [short title]
+[Request #N]
+[2-3 sentence description]
+---
+
+Rules:
+- Group related requests into the same step
+- Always reference specific Request #N numbers in brackets
+- If sub-agent requests exist, clearly indicate they are sub-agent calls
+- Number steps sequentially (STEP 1, STEP 2, ...)
+- End with a one-line overall session summary after the last step
+
+Data:
+${JSON.stringify(captures, null, 1)}`;
+}
+
+function parseAiFlowResponse(text) {
+  const steps = [];
+  const stepRegex = /STEP\s+(\d+)\s*:\s*(.+?)(?:\n|\r)/g;
+  let match;
+  const positions = [];
+  while ((match = stepRegex.exec(text)) !== null) {
+    positions.push({ idx: match.index, num: parseInt(match[1]), title: match[2].trim(), end: match.index + match[0].length });
+  }
+
+  for (let i = 0; i < positions.length; i++) {
+    const start = positions[i].end;
+    const end = i + 1 < positions.length ? positions[i + 1].idx : text.length;
+    const body = text.slice(start, end).trim();
+    const refs = [];
+    for (const rm of body.matchAll(/Request\s*#(\d+)/gi)) refs.push(parseInt(rm[1]));
+    steps.push({ num: positions[i].num, title: positions[i].title, body, refs: [...new Set(refs)] });
+  }
+
+  // Extract summary: last non-empty line after all steps
+  let summary = '';
+  if (positions.length > 0) {
+    const lastStart = positions[positions.length - 1].end;
+    const lastBody = text.slice(lastStart).trim();
+    const lines = lastBody.split('\n').map(l => l.trim()).filter(Boolean);
+    // Summary is the last line that doesn't look like a step reference
+    if (lines.length > 0) {
+      const lastLine = lines[lines.length - 1];
+      if (!lastLine.match(/^\[Request/)) summary = lastLine;
+    }
+  }
+
+  return { steps, summary, raw: text };
+}
+
+function renderAiFlowResult(container) {
+  const result = aiflowResult;
+  if (!result) return;
+
+  let html = '<div class="aiflow-container">';
+  html += `<div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:14px;font-weight:700;color:var(--green)">${i18n.t('aiflow.summaryTitle')}</div><button class="aiflow-btn aiflow-btn-secondary" style="padding:4px 12px;font-size:11px" onclick="startAiFlowAnalysis()">${i18n.t('aiflow.reanalyze')}</button></div>`;
+
+  for (const step of result.steps) {
+    const isSub = step.body.toLowerCase().includes('sub-agent');
+    const refBadges = step.refs.map(n =>
+      `<span class="aiflow-ref" onclick="jumpToRequest(${n})" title="Request #${n}">${i18n.t('aiflow.requestRef', { n })}</span>`
+    ).join(' ');
+
+    // Clean body: remove [Request #N...] lines, keep description
+    const bodyLines = step.body.split('\n').filter(l => l.trim());
+    const description = bodyLines.filter(l => !l.match(/^\s*\[Request\s*#/i)).join('\n');
+
+    html += `<div class="aiflow-step"><div class="aiflow-step-header"><div class="aiflow-step-num${isSub ? ' sub' : ''}">${step.num}</div><div class="aiflow-step-title">${esc(step.title)}</div><div style="display:flex;gap:4px;flex-shrink:0">${refBadges}</div></div><div class="aiflow-step-body">${esc(description)}</div></div>`;
+  }
+
+  if (result.summary) {
+    html += `<div style="font-size:12px;color:var(--dim);padding:8px 0;border-top:1px solid var(--border)">${esc(result.summary)}</div>`;
+  }
+
+  html += '</div>';
+  container.style.cssText = 'flex:1;overflow-y:auto;display:block';
+  container.innerHTML = html;
+}
+
+function jumpToRequest(reqNum) {
+  // proxyCaptures is newest-first; reqNum 1 = oldest (last element)
+  const selected = aiflowSelectedIds.size > 0
+    ? proxyCaptures.filter(e => aiflowSelectedIds.has(e.id))
+    : [...proxyCaptures];
+  const idx = selected.length - reqNum;
+  if (idx < 0 || idx >= selected.length) return;
+  selectedProxyId = selected[idx].id;
+  renderProxyList();
+  showDetailTab('request');
+  requestAnimationFrame(() => {
+    document.querySelector('.prx-entry.selected')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+}
+
+function toggleAiFlowSelect(id) {
+  if (aiflowSelectedIds.has(id)) aiflowSelectedIds.delete(id);
+  else aiflowSelectedIds.add(id);
+  // Reset analysis when selection changes
+  if (aiflowState === 'done') { aiflowState = 'ready'; aiflowResult = null; }
+  renderProxyList();
+  renderProxyDetail();
+}
+
+function toggleAiFlowSelectAll() {
+  if (aiflowSelectedIds.size === proxyCaptures.length) {
+    aiflowSelectedIds.clear();
+  } else {
+    aiflowSelectedIds = new Set(proxyCaptures.map(e => e.id));
+  }
+  if (aiflowState === 'done') { aiflowState = 'ready'; aiflowResult = null; }
+  renderProxyList();
+  renderProxyDetail();
+}
+
+function renderProxyDetail() {
+  const detail = document.getElementById('proxyDetailView');
+  if (!detail) return;
+
+  detail.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column';
+
+  // AI Flow operates on all captures, not a single entry
+  if (proxyDetailTab === 'aiflow') {
+    renderAiFlow(detail);
+    return;
+  }
+
+  const entry = proxyCaptures.find(e => e.id === selectedProxyId);
+  if (!entry) {
+    detail.innerHTML = `<div class="proxy-empty"><span style="font-size:28px">🔍</span><span>${i18n.t('proxy.selectRequest')}</span></div>`;
     return;
   }
 
@@ -2093,13 +2406,17 @@ function showDetailTab(tab) {
   document.querySelectorAll('.dtab').forEach(b => b.classList.toggle('active', b.dataset.dtab === tab));
   // Analysis tab copy button - hide it (analysis view는 copy가 의미없음)
   const copyBtn = document.querySelector('[onclick="copyProxyDetail()"]');
-  if (copyBtn) copyBtn.style.display = (tab === 'analysis' || tab === 'messages') ? 'none' : '';
+  if (copyBtn) copyBtn.style.display = (tab === 'analysis' || tab === 'aiflow') ? 'none' : '';
   renderProxyDetail();
 }
 
 function clearProxyCaptures() {
   proxyCaptures = [];
   selectedProxyId = null;
+  aiflowState = 'idle';
+  aiflowResult = null;
+  aiflowError = null;
+  aiflowSelectedIds = new Set();
   renderProxyList();
   renderProxyDetail();
 }
@@ -2265,7 +2582,11 @@ document.getElementById('proxyPanel').style.display = 'flex';
       window.electronAPI?.offProxy?.();
       window.electronAPI.onProxyRequest((data) => {
         proxyCaptures.unshift(data);
-        if (proxyCaptures.length > 50) proxyCaptures.pop();
+        aiflowSelectedIds.add(data.id);
+        if (proxyCaptures.length > 50) {
+          const removed = proxyCaptures.pop();
+          if (removed) aiflowSelectedIds.delete(removed.id);
+        }
         debouncedRenderProxyList();
       });
       window.electronAPI.onProxyResponse((data) => {

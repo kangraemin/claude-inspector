@@ -222,4 +222,76 @@ ipcMain.handle('proxy-stop', () => {
   });
 });
 
+// ─── Ollama IPC ──────────────────────────────────────────────────────────
+ipcMain.handle('ollama-status', async () => {
+  try {
+    const data = await new Promise((resolve, reject) => {
+      http.get('http://127.0.0.1:11434/api/tags', (res) => {
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => {
+          try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
+          catch (e) { reject(e); }
+        });
+      }).on('error', reject);
+    });
+    const models = (data.models || []).map(m => ({ name: m.name, size: m.size }));
+    return { available: true, models, hasGemma4: models.some(m => m.name.startsWith('gemma4')) };
+  } catch (e) {
+    return { available: false, error: e.message };
+  }
+});
+
+ipcMain.handle('ollama-pull', (_event, modelName = 'gemma4') => {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ name: modelName });
+    const req = http.request({
+      hostname: '127.0.0.1', port: 11434, path: '/api/pull', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+    }, (res) => {
+      let buf = '';
+      res.on('data', (chunk) => {
+        buf += chunk.toString();
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const p = JSON.parse(line);
+            if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('ollama-pull-progress', p);
+          } catch {}
+        }
+      });
+      res.on('end', () => resolve({ success: true }));
+    });
+    req.on('error', (e) => resolve({ success: false, error: e.message }));
+    req.end(postData);
+  });
+});
+
+ipcMain.handle('ollama-analyze', (_event, { prompt, model = 'gemma4' }) => {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ model, prompt, stream: false });
+    const req = http.request({
+      hostname: '127.0.0.1', port: 11434, path: '/api/generate', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+      timeout: 120000,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const result = JSON.parse(Buffer.concat(chunks).toString());
+          resolve({ success: true, response: result.response });
+        } catch (e) {
+          resolve({ success: false, error: e.message });
+        }
+      });
+    });
+    req.on('error', (e) => resolve({ success: false, error: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Timeout (120s)' }); });
+    req.end(postData);
+  });
+});
+
 app.on('before-quit', () => { if (proxyServer) proxyServer.close(); });

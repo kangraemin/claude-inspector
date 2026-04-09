@@ -207,3 +207,51 @@ test('빈 body → 모두 null/empty', () => {
   assert.equal(det.skills.length, 0);
   assert.equal(det.subAgents.length, 0);
 });
+
+// ─── parseAiFlowResponse ────────────────────────────────────────────────────
+
+function parseAiFlowResponse(text) {
+  const steps = [];
+  const stepRegex = /STEP\s+(\d+)\s*:\s*(.+?)(?:\n|\r)/g;
+  let match;
+  const positions = [];
+  while ((match = stepRegex.exec(text)) !== null) {
+    positions.push({ idx: match.index, num: parseInt(match[1]), title: match[2].trim(), end: match.index + match[0].length });
+  }
+  for (let i = 0; i < positions.length; i++) {
+    const start = positions[i].end;
+    const end = i + 1 < positions.length ? positions[i + 1].idx : text.length;
+    const body = text.slice(start, end).trim();
+    const refs = [];
+    for (const rm of body.matchAll(/Request\s*#(\d+)/gi)) refs.push(parseInt(rm[1]));
+    steps.push({ num: positions[i].num, title: positions[i].title, body, refs: [...new Set(refs)] });
+  }
+  let summary = '';
+  if (positions.length > 0) {
+    const lastBody = text.slice(positions[positions.length - 1].end).trim();
+    const lines = lastBody.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length > 0 && !lines[lines.length - 1].match(/^\[Request/)) summary = lines[lines.length - 1];
+  }
+  return { steps, summary, raw: text };
+}
+
+test('STEP 포맷 정상 파싱', () => {
+  const text = 'STEP 1: MCP 도구 탐색\n[Request #1, Request #2]\n설명\n\nSTEP 2: 코드 수정\n[Request #3]\n수정 내용';
+  const result = parseAiFlowResponse(text);
+  assert.equal(result.steps.length, 2);
+  assert.equal(result.steps[0].title, 'MCP 도구 탐색');
+  assert.deepEqual(result.steps[0].refs, [1, 2]);
+  assert.deepEqual(result.steps[1].refs, [3]);
+});
+
+test('빈 응답 → 빈 steps', () => {
+  const result = parseAiFlowResponse('');
+  assert.equal(result.steps.length, 0);
+});
+
+test('단일 STEP + summary', () => {
+  const text = 'STEP 1: 초기화\n[Request #5]\n설명 내용\n전체 요약입니다.';
+  const result = parseAiFlowResponse(text);
+  assert.equal(result.steps.length, 1);
+  assert.equal(result.summary, '전체 요약입니다.');
+});
