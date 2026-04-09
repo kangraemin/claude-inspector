@@ -1,6 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 
 // Minimal settings file for claude -p (no hooks, keeps OAuth auth)
 const claudeNoHooksSettings = path.join(os.tmpdir(), 'claude-inspector-nohooks.json');
@@ -30,7 +31,6 @@ Sentry.init({
 const analytics = require('./analytics');
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
-const path = require('path');
 const http = require('node:http');
 const https = require('node:https');
 
