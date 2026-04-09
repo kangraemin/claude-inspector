@@ -2047,9 +2047,15 @@ function parseAiFlowResponse(text) {
     }
   }
 
-  // Extract MERMAID flowchart
+  // Extract MERMAID flowchart (strip markdown code fences)
   const mermaidMatch = text.match(/MERMAID:\s*\n([\s\S]*?)(?:\n---|\s*$)/i);
-  const mermaidCode = mermaidMatch ? mermaidMatch[1].trim() : null;
+  let mermaidCode = null;
+  if (mermaidMatch) {
+    mermaidCode = mermaidMatch[1].trim()
+      .replace(/^```[\w]*\s*\n?/gm, '')
+      .replace(/```\s*$/gm, '')
+      .trim();
+  }
 
   return { steps, summary, mermaid: mermaidCode, raw: text };
 }
