@@ -2424,6 +2424,7 @@ function showDetailTab(tab) {
   // Analysis tab copy button - hide it (analysis view는 copy가 의미없음)
   const copyBtn = document.querySelector('[onclick="copyProxyDetail()"]');
   if (copyBtn) copyBtn.style.display = (tab === 'analysis' || tab === 'aiflow') ? 'none' : '';
+  renderProxyList();
   renderProxyDetail();
 }
 
