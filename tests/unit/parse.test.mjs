@@ -234,10 +234,10 @@ function parseAiFlowResponse(text) {
     const lines = lastBody.split('\n').map(l => l.trim()).filter(Boolean);
     if (lines.length > 0 && !lines[lines.length - 1].match(/^\[Request/)) summary = lines[lines.length - 1];
   }
-  const optMatch = text.match(/OPTIMIZATION:\s*\n([\s\S]*?)(?:\n---|\s*$)/i);
-  const optimization = optMatch ? optMatch[1].trim() : null;
+  const mermaidMatch = text.match(/MERMAID:\s*\n([\s\S]*?)(?:\n---|\s*$)/i);
+  const mermaidCode = mermaidMatch ? mermaidMatch[1].trim() : null;
 
-  return { steps, summary, optimization, raw: text };
+  return { steps, summary, mermaid: mermaidCode, raw: text };
 }
 
 test('STEP 포맷 정상 파싱', () => {
@@ -279,15 +279,15 @@ test('HIGHLIGHT 없으면 null', () => {
   assert.equal(result.steps[0].highlight, null);
 });
 
-test('OPTIMIZATION 섹션 파싱', () => {
-  const text = 'STEP 1: 대화\n[Request #1]\n설명\n\nOPTIMIZATION:\n- 캐시 효율 높음\n- CLAUDE.md 적정 크기\n---';
+test('MERMAID 섹션 파싱', () => {
+  const text = 'STEP 1: 대화\n[Request #1]\n설명\n\nMERMAID:\ngraph TD\n    R1["Request #1"] --> R2["Request #2"]\n---';
   const result = parseAiFlowResponse(text);
-  assert.ok(result.optimization);
-  assert.ok(result.optimization.includes('캐시 효율'));
+  assert.ok(result.mermaid);
+  assert.ok(result.mermaid.includes('graph TD'));
 });
 
-test('OPTIMIZATION 없으면 null', () => {
+test('MERMAID 없으면 null', () => {
   const text = 'STEP 1: 대화\n[Request #1]\n설명만';
   const result = parseAiFlowResponse(text);
-  assert.equal(result.optimization, null);
+  assert.equal(result.mermaid, null);
 });

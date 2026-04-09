@@ -6,6 +6,7 @@
   <title>Claude Inspector</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <style>
     :root {
       --bg: #1e1e1e; --surface: #252526; --surface2: #2d2d2d;
@@ -260,6 +261,8 @@
       background: rgba(244,135,113,.08); border: 1px solid rgba(244,135,113,.3); border-radius: 6px;
     }
     .aiflow-check { width: 14px; height: 14px; accent-color: var(--green); cursor: pointer; flex-shrink: 0; margin-right: 4px; }
+    .aiflow-mermaid { padding: 12px; overflow-x: auto; background: var(--bg); }
+    .aiflow-mermaid .mermaid { text-align: center; }
 
     /* ── Messages view ── */
     .msgs-list { display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto; }
@@ -697,6 +700,7 @@ const LOCALES = {
       selectAll: '전체 선택',
       deselectAll: '전체 해제',
       optimizationTitle: '최적화 조언',
+      requestOptimization: '개선 제안 받기',
     },
     analysis: {
       noMechanisms: '감지된 메커니즘 없음<br><small>일반 API 요청이거나 분석 지원 외 패턴입니다</small>',
@@ -830,6 +834,7 @@ const LOCALES = {
       selectAll: 'Select all',
       deselectAll: 'Deselect all',
       optimizationTitle: 'Optimization Advice',
+      requestOptimization: 'Get Optimization Advice',
     },
     analysis: {
       noMechanisms: 'No mechanisms detected<br><small>Plain API request or unsupported pattern</small>',
@@ -1141,6 +1146,7 @@ let aiflowState = 'idle'; // idle|ready|analyzing|done|error
 let aiflowResult = null;
 let aiflowError = null;
 let aiflowSelectedIds = new Set();
+let aiflowOptimization = null;
 let proxyDetailSearch = '';
 let proxyDetailMechFilter = null;
 let proxyRunning = false;
@@ -1787,23 +1793,19 @@ async function startAiFlowAnalysis() {
   renderAiFlow(container);
 }
 
-function buildAiFlowPrompt() {
-  const lang = i18n.locale === 'ko' ? 'Korean' : 'English';
-  // Use selected captures or all
+function buildCaptureSummaries() {
   const selected = aiflowSelectedIds.size > 0
     ? proxyCaptures.filter(e => aiflowSelectedIds.has(e.id))
     : [...proxyCaptures];
 
-  // Tag sessions: detect sub-agent / team-agent requests
   let lastMainWithAgent = null;
-  const captures = selected.map((entry, idx) => {
+  return selected.map((entry, idx) => {
     const reqNum = selected.length - idx;
     const summary = { request_num: reqNum, model: entry.body?.model || 'unknown' };
 
     const msgs = entry.body?.messages || [];
     summary.messages_count = msgs.length;
 
-    // Extract user messages (truncated)
     const userMsgs = msgs.filter(m => m.role === 'user').map(m => {
       const texts = (Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content || '') }])
         .filter(c => c.type === 'text').map(c => (c.text || '').replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim().slice(0, 200));
@@ -1811,10 +1813,8 @@ function buildAiFlowPrompt() {
     }).filter(Boolean);
     if (userMsgs.length) summary.user_messages = userMsgs.slice(-2);
 
-    // Extract tool_use from all messages
     const toolUses = [];
-    let hasAgentCall = false;
-    let hasTeamCreate = false;
+    let hasAgentCall = false, hasTeamCreate = false;
     for (const m of msgs) {
       const contents = Array.isArray(m.content) ? m.content : [];
       for (const c of contents) {
@@ -1827,7 +1827,6 @@ function buildAiFlowPrompt() {
     }
     if (toolUses.length) summary.tools = [...new Set(toolUses)];
 
-    // Detect mechanisms
     const det = detectMechanisms(entry.body);
     const mechs = [];
     if (det.claudeMd) mechs.push('CLAUDE.md');
@@ -1837,26 +1836,16 @@ function buildAiFlowPrompt() {
     if (det.mcpTools.length) mechs.push('MCP:' + det.mcpTools.map(m => m.name.split('__').slice(2).join('__')).join(','));
     if (mechs.length) summary.mechanisms = mechs;
 
-    // CLAUDE.md / rules sections with sizes
     if (det.claudeMd) {
       const sections = parseClaudeMdSections(det.claudeMd);
-      if (sections.length) {
-        summary.prompt_injections = sections.map(s => ({ label: s.label, chars: s.content.length, scope: s.scope }));
-      }
+      if (sections.length) summary.prompt_injections = sections.map(s => ({ label: s.label, chars: s.content.length, scope: s.scope }));
     }
 
-    // Token usage from response
     const usage = entry.response?.body?.usage;
     if (usage) {
-      summary.tokens = {
-        input: usage.input_tokens || 0,
-        output: usage.output_tokens || 0,
-        cache_read: usage.cache_read_input_tokens || 0,
-        cache_write: usage.cache_creation_input_tokens || 0,
-      };
+      summary.tokens = { input: usage.input_tokens || 0, output: usage.output_tokens || 0, cache_read: usage.cache_read_input_tokens || 0, cache_write: usage.cache_creation_input_tokens || 0 };
     }
 
-    // Response tool calls
     if (entry.response?.body?.content) {
       const respTools = entry.response.body.content.filter(c => c.type === 'tool_use').map(c => c.name);
       if (respTools.length) summary.response_tools = [...new Set(respTools)];
@@ -1864,16 +1853,19 @@ function buildAiFlowPrompt() {
       if (respText.length) summary.response_preview = respText.slice(0, 1);
     }
 
-    // Session tagging
     if (msgs.length <= 3 && lastMainWithAgent) {
       summary.session = `sub-agent(from Request #${lastMainWithAgent})`;
     } else {
       summary.session = 'main';
       if (hasAgentCall || hasTeamCreate) lastMainWithAgent = reqNum;
     }
-
     return summary;
   });
+}
+
+function buildAiFlowPrompt() {
+  const lang = i18n.locale === 'ko' ? 'Korean' : 'English';
+  const captures = buildCaptureSummaries();
 
   return `You are analyzing a Claude Code CLI session captured by a proxy inspector.
 Below is a JSON array of ${captures.length} API request/response pairs, ordered newest-first.
@@ -1917,15 +1909,40 @@ Rules:
 - Number steps sequentially (STEP 1, STEP 2, ...)
 - End with a one-line overall session summary after the last step
 
-After all STEPs, add an OPTIMIZATION section:
+After the summary, output a MERMAID flowchart of the session flow:
 ---
-OPTIMIZATION:
-- Analyze prompt_injections (CLAUDE.md, rules, memory) sizes. Which files are injected and how large are they? Explain HOW Claude Code loads them (system-reminder injection into messages[]).
-- Check cache efficiency: high cache_read = good (reusing cached tokens). Low cache = wasted tokens being reprocessed.
-- Check if any CLAUDE.md sections seem redundant or too verbose for the task at hand.
-- Suggest specific actions to reduce token usage (e.g., "Global CLAUDE.md is 3000 chars — consider trimming unused rules", "Cache hit rate is only 20% — ensure conversation continuity").
-- If token usage is already efficient, say so briefly.
+MERMAID:
+graph TD
+    R1["Request #1: short description"] --> R2["Request #2: short description"]
+    R2 --> R3["Request #3: short description"]
+    R3 -->|sub-agent| R4["Request #4: sub-agent task"]
 ---
+
+Rules for MERMAID:
+- Use graph TD (top-down)
+- Each node is R{N}["Request #{N}: short label"]
+- Connect sequential requests with -->
+- Label sub-agent connections with -->|sub-agent|
+- Label tool chains with -->|ToolSearch→MCP| or similar
+- Keep node labels very short (under 30 chars)
+
+Data:
+${JSON.stringify(captures, null, 1)}`;
+}
+
+function buildOptimizationPrompt() {
+  const lang = i18n.locale === 'ko' ? 'Korean' : 'English';
+  const captures = buildCaptureSummaries();
+  return `Analyze this Claude Code session data and provide optimization advice in ${lang}.
+
+Focus on:
+- prompt_injections (CLAUDE.md, rules, memory) sizes — which files are injected? How large? Explain HOW Claude Code loads them (system-reminder injection into messages[]).
+- Cache efficiency: cache_read vs total input ratio. High = good. Low = wasted tokens.
+- Token usage patterns across requests.
+- Specific actions to reduce cost (e.g., trim verbose CLAUDE.md, improve cache hit rate).
+- If already efficient, say so briefly.
+
+Be concise. Use bullet points.
 
 Data:
 ${JSON.stringify(captures, null, 1)}`;
@@ -1964,11 +1981,11 @@ function parseAiFlowResponse(text) {
     }
   }
 
-  // Extract OPTIMIZATION section
-  const optMatch = text.match(/OPTIMIZATION:\s*\n([\s\S]*?)(?:\n---|\s*$)/i);
-  const optimization = optMatch ? optMatch[1].trim() : null;
+  // Extract MERMAID flowchart
+  const mermaidMatch = text.match(/MERMAID:\s*\n([\s\S]*?)(?:\n---|\s*$)/i);
+  const mermaidCode = mermaidMatch ? mermaidMatch[1].trim() : null;
 
-  return { steps, summary, optimization, raw: text };
+  return { steps, summary, mermaid: mermaidCode, raw: text };
 }
 
 function renderAiFlowResult(container) {
@@ -1996,19 +2013,56 @@ function renderAiFlowResult(container) {
     html += `<div style="font-size:12px;color:var(--dim);padding:8px 0;border-top:1px solid var(--border)">${esc(result.summary)}</div>`;
   }
 
-  if (result.optimization) {
+  // Mermaid flowchart
+  if (result.mermaid) {
+    html += `<div class="aiflow-step" style="border-color:rgba(78,201,176,.3)">
+      <div class="aiflow-step-header" style="background:rgba(78,201,176,.08)">
+        <div class="aiflow-step-num" style="background:var(--green)">⤵</div>
+        <div class="aiflow-step-title" style="color:var(--green)">Flow Chart</div>
+      </div>
+      <div class="aiflow-mermaid"><pre class="mermaid">${esc(result.mermaid)}</pre></div>
+    </div>`;
+  }
+
+  // "개선 제안 받기" 버튼
+  html += `<div style="text-align:center;padding:8px 0">
+    <button class="aiflow-btn aiflow-btn-secondary" style="font-size:11px" onclick="requestOptimization()" id="aiflowOptBtn">${i18n.t('aiflow.requestOptimization')}</button>
+  </div>`;
+
+  if (aiflowOptimization) {
     html += `<div class="aiflow-step" style="border-color:rgba(220,220,170,.3)">
       <div class="aiflow-step-header" style="background:rgba(220,220,170,.08)">
         <div class="aiflow-step-num" style="background:var(--yellow)">!</div>
         <div class="aiflow-step-title" style="color:var(--yellow)">${i18n.t('aiflow.optimizationTitle')}</div>
       </div>
-      <div class="aiflow-step-body">${esc(result.optimization)}</div>
+      <div class="aiflow-step-body">${esc(aiflowOptimization)}</div>
     </div>`;
   }
 
   html += '</div>';
   container.style.cssText = 'flex:1;overflow-y:auto;display:block';
   container.innerHTML = html;
+
+  // Render mermaid
+  if (result.mermaid && typeof mermaid !== 'undefined') {
+    mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { primaryColor: '#2d2d2d', primaryBorderColor: '#4ec9b0', lineColor: '#569cd6', textColor: '#d4d4d4' } });
+    mermaid.run({ querySelector: '.mermaid' });
+  }
+}
+
+async function requestOptimization() {
+  const btn = document.getElementById('aiflowOptBtn');
+  if (btn) { btn.disabled = true; btn.textContent = i18n.t('aiflow.analyzing'); }
+
+  const prompt = buildOptimizationPrompt();
+  const result = await window.electronAPI.aiflowAnalyze({ prompt });
+
+  if (result.success) {
+    aiflowOptimization = result.response;
+  } else {
+    aiflowOptimization = i18n.t('aiflow.analyzeFail', { error: result.error || 'unknown' });
+  }
+  renderAiFlowResult(document.getElementById('proxyDetailView'));
 }
 
 function jumpToRequest(reqNum, toolName) {
@@ -2435,6 +2489,7 @@ function clearProxyCaptures() {
   aiflowResult = null;
   aiflowError = null;
   aiflowSelectedIds = new Set();
+  aiflowOptimization = null;
   renderProxyList();
   renderProxyDetail();
 }
