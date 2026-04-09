@@ -2,12 +2,12 @@
 
 # Claude Inspector
 
-**See what Claude Code actually sends to the API.**
+**See what Claude Code actually sends to the API — then let AI explain it.**
 
-MITM proxy that intercepts Claude Code CLI traffic in real-time<br>
-and visualizes all 5 prompt augmentation mechanisms.
+MITM proxy that intercepts Claude Code CLI traffic in real-time,<br>
+visualizes all prompt augmentation mechanisms, and **analyzes session flows with AI**.
 
-[Install](#install) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#proxy-mode) · [Tech Stack](#tech-stack)
+[Install](#install) · [AI Flow](#ai-flow) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#proxy-mode) · [Tech Stack](#tech-stack)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/kangraemin/claude-inspector)](https://github.com/kangraemin/claude-inspector/releases/latest)
@@ -30,6 +30,38 @@ and visualizes all 5 prompt augmentation mechanisms.
 <p align="center">
   <img src="public/screenshots/en-3.png" width="100%" alt="Proxy — Request view" />
 </p>
+
+## AI Flow
+
+**v1.2.0 NEW** — Select captured requests and let Claude (Sonnet) analyze the session flow.
+
+### What It Does
+
+AI Flow sends your captured request/response data to `claude -p` (Sonnet) and produces:
+
+- **Step-by-step session summary** — what happened, in what order, with mechanism explanations
+- **MCP dynamic loading chain** — how ToolSearch fetches schemas, how deferred tools become callable
+- **Skill loading flow** — how slash commands trigger `<command-message>` → Skill tool_use
+- **Sub-agent patterns** — which requests are main vs sub-agent, and how they relate
+- **Mermaid flowchart** — visual diagram of the internal mechanism flow
+- **Clickable references** — each step links to the actual Request, scrolling to the relevant tool_use
+
+### How to Use
+
+1. Capture some requests via the proxy
+2. Click the **AI Flow** tab
+3. Select requests to analyze (click to toggle, Shift+click for range)
+4. Click **Analyze Session Flow**
+5. Watch real-time streaming progress as Claude processes
+6. Click any **Request #N** badge to jump to that request's tool_use in the JSON tree
+
+### In-app Chat
+
+After analysis, ask Claude follow-up questions about the session. The chat understands the full analysis context.
+
+### Session Detection
+
+Requests are automatically grouped by session using message content fingerprinting. Different sessions (main conversation, sub-agents, stop hooks) get different colored borders in the sidebar.
 
 ## What You'll Learn
 
@@ -97,31 +129,13 @@ Typing `/something` triggers one of three completely different mechanisms:
 
 Claude Code re-sends the **entire** `messages[]` array with every request:
 
-```json
-{
-  "messages": [
-    {"role": "user",      "content": [/* ~12KB CLAUDE.md */ , "hello"]},
-    {"role": "assistant", "content": [/* tool_use, thinking, response */]},
-    {"role": "user",      "content": [/* ~12KB CLAUDE.md */ , "fix the bug"]},
-    {"role": "assistant", "content": [/* tool_use, thinking, response */]},
-    // ... 30 turns = 30 copies of CLAUDE.md + all responses
-  ]
-}
-```
-
 | Turns | Approx. cumulative transfer |
 |-------|---------------------|
 | 1 | ~15KB |
 | 10 | ~200KB |
 | 30 | ~1MB+ |
 
-Most of it is old conversation you no longer need. As it grows:
-
-- **Cost increases** — more input tokens per request means higher API bills
-- **Context window fills up** — once the limit is hit, older messages get auto-compressed and detail is lost
-- **Responses slow down** — larger payloads take longer to process
-
-Running `/clear` resets the context and drops the accumulated weight. Clear early, clear often.
+Most of it is old conversation you no longer need. Running `/clear` resets the context and drops the accumulated weight.
 
 ### 6. Sub-agents run in fully isolated contexts
 
@@ -129,12 +143,12 @@ When Claude Code spawns a sub-agent (via the `Agent` tool), it creates a **compl
 
 | | Parent API call | Sub-agent API call |
 |---|---|---|
-| **`messages[]`** | Full conversation history (all turns) | Only the task prompt — **no parent history** |
+| **`messages[]`** | Full conversation history | Only the task prompt — **no parent history** |
 | **CLAUDE.md** | Included | Included (independently) |
 | **tools[]** | All loaded tools | Fresh set |
 | **Context** | Accumulated | Starts from zero |
 
-The Inspector captures both calls side by side, so you can compare what each one sees.
+The Inspector captures both calls side by side, and AI Flow automatically detects and labels sub-agent sessions.
 
 ## Install
 
@@ -164,15 +178,6 @@ brew update && brew upgrade --cask claude-inspector && sleep 2 && open -a "Claud
 brew uninstall --cask claude-inspector
 ```
 
-## Development
-
-```bash
-git clone https://github.com/kangraemin/claude-inspector.git
-cd claude-inspector
-npm install
-npm start
-```
-
 ## Proxy Mode
 
 Intercept **real** Claude Code CLI traffic via a local MITM proxy.
@@ -190,16 +195,37 @@ ANTHROPIC_BASE_URL=http://localhost:9090 claude
 
 **3.** Every API request/response is captured in real-time.
 
+**4 tabs to explore:**
+
+| Tab | What it shows |
+|-----|--------------|
+| **AI Flow** | AI-powered session analysis with flowchart and chat |
+| **Request** | Full JSON request body with collapsible tree, token cost breakdown |
+| **Response** | Full JSON response with tool_use results |
+| **Analysis** | Detected mechanisms (CLAUDE.md, Skills, MCP, Sub-agents) with colored chips |
+
+## Development
+
+```bash
+git clone https://github.com/kangraemin/claude-inspector.git
+cd claude-inspector
+npm install
+npm start        # Run in dev mode
+npm run test:unit  # Unit tests
+npm run test:e2e   # E2E tests (Playwright)
+```
+
 ## Tech Stack
 
 | Layer | What | Why |
 |-------|------|-----|
-| **Electron** | Desktop shell, IPC between main/renderer | Native macOS titlebar (`hiddenInset`), code-signed + notarized DMG distribution |
-| **Vanilla JS** | Zero frameworks, zero build steps | Entire UI in a single `index.html` — no bundler, no transpiler, no React |
-| **Node `http`/`https`** | MITM proxy on `localhost` | Intercepts Claude Code ↔ Anthropic API traffic, reassembles SSE streams into complete response objects |
-| **highlight.js + marked** | Syntax highlighting & markdown | Renders JSON payloads and markdown content inline |
+| **Electron** | Desktop shell, IPC | Native macOS titlebar, code-signed + notarized DMG |
+| **Vanilla JS** | Zero frameworks | Entire UI in a single `index.html` — no bundler, no React |
+| **Node `http`/`https`** | MITM proxy | Intercepts Claude Code ↔ API traffic, reassembles SSE streams |
+| **Mermaid.js** | Flowchart rendering | AI Flow mechanism diagrams |
+| **claude -p** | AI analysis engine | Session flow analysis + in-app chat via Claude Sonnet |
 
-> **Privacy**: All traffic stays on `localhost`. Nothing is sent anywhere except directly to `api.anthropic.com`.
+> **Privacy**: All proxy traffic stays on `localhost`. AI Flow analysis runs locally via `claude -p` (your own Claude Code CLI).
 
 ## License
 
