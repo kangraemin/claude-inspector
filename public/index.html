@@ -2160,6 +2160,12 @@ function renderAiFlowResult(container) {
       });
     }
   }
+
+  // Restore chat messages if any
+  if (aiflowChatMessages.length > 0) {
+    const chatMsgs = document.getElementById('aiflowChatMessages');
+    if (chatMsgs) renderChatBubbles(chatMsgs);
+  }
 }
 
 // ─── AI Flow Chat ──────────────────────────────────────────────────────────
