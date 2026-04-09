@@ -1,4 +1,12 @@
 require('dotenv').config();
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+// Minimal settings file for claude -p (no hooks, keeps OAuth auth)
+const claudeNoHooksSettings = path.join(os.tmpdir(), 'claude-inspector-nohooks.json');
+fs.writeFileSync(claudeNoHooksSettings, JSON.stringify({ hooks: {} }));
+
 const Sentry = require('@sentry/electron/main');
 Sentry.init({
   dsn: process.env.SENTRY_DSN || process.env.SENTRY_CLIENT_KEY || '',
@@ -237,7 +245,7 @@ ipcMain.handle('proxy-stop', () => {
 ipcMain.handle('aiflow-analyze', (_event, { prompt }) => {
   const { spawn } = require('child_process');
   return new Promise((resolve) => {
-    const child = spawn('claude', ['-p', '--bare', '--model', 'sonnet', prompt], { timeout: 60000 });
+    const child = spawn('claude', ['-p', '--model', 'sonnet', '--settings', claudeNoHooksSettings, prompt], { timeout: 60000 });
     let stdout = '';
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString();
@@ -264,7 +272,7 @@ ipcMain.handle('aiflow-chat', (_event, { systemContext, messages }) => {
     : `${systemContext}\n\n---\n\n${lastMsg}`;
 
   return new Promise((resolve) => {
-    const child = spawn('claude', ['-p', '--bare', '--model', 'sonnet', prompt], { timeout: 60000 });
+    const child = spawn('claude', ['-p', '--model', 'sonnet', '--settings', claudeNoHooksSettings, prompt], { timeout: 60000 });
     let stdout = '';
     child.stdout.on('data', (chunk) => {
       const text = chunk.toString();
