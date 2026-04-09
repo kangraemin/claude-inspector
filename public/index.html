@@ -1277,7 +1277,7 @@ function renderProxyList() {
       ? `<span style="font-size:10px;font-family:'SF Mono',monospace;flex-shrink:0;color:${e.response.status < 400 ? 'var(--green)' : 'var(--red)'}">${e.response.status || 'ERR'}</span>`
       : `<span style="font-size:10px;color:var(--dim);flex-shrink:0">…</span>`;
     const checkbox = showCheck
-      ? `<input type="checkbox" class="aiflow-check" ${aiflowSelectedIds.has(e.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleAiFlowSelect(${e.id})">`
+      ? `<input type="checkbox" class="aiflow-check" ${aiflowSelectedIds.has(e.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleAiFlowSelect(${e.id}, event)">`
       : '';
     return `<div class="prx-entry${sel}" onclick="selectProxyEntry(${e.id})">
       <div style="display:flex;align-items:center;overflow:hidden">
@@ -2089,10 +2089,25 @@ function jumpToRequest(reqNum, toolName) {
   });
 }
 
-function toggleAiFlowSelect(id) {
-  if (aiflowSelectedIds.has(id)) aiflowSelectedIds.delete(id);
-  else aiflowSelectedIds.add(id);
-  // Reset analysis when selection changes
+let _lastCheckedId = null;
+
+function toggleAiFlowSelect(id, event) {
+  if (event && event.shiftKey && _lastCheckedId !== null) {
+    // Shift-click: range select
+    const ids = proxyCaptures.map(e => e.id);
+    const from = ids.indexOf(_lastCheckedId);
+    const to = ids.indexOf(id);
+    if (from >= 0 && to >= 0) {
+      const start = Math.min(from, to);
+      const end = Math.max(from, to);
+      for (let i = start; i <= end; i++) aiflowSelectedIds.add(ids[i]);
+    }
+  } else {
+    // Normal click: toggle
+    if (aiflowSelectedIds.has(id)) aiflowSelectedIds.delete(id);
+    else aiflowSelectedIds.add(id);
+  }
+  _lastCheckedId = id;
   if (aiflowState === 'done') { aiflowState = 'ready'; aiflowResult = null; }
   renderProxyList();
   renderProxyDetail();
