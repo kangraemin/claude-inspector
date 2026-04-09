@@ -1,7 +1,6 @@
 require('dotenv').config();
 const fs = require('fs');
 const os = require('os');
-const path = require('path');
 
 // Minimal settings file for claude -p (no hooks, keeps OAuth auth)
 const claudeNoHooksSettings = path.join(os.tmpdir(), 'claude-inspector-nohooks.json');
