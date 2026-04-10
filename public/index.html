@@ -2020,8 +2020,9 @@ Rules:
 - Always reference specific Request #N numbers in brackets
 - HIGHLIGHT must be a single tool_use name (e.g., "ToolSearch", "mcp__context7__query-docs", "Skill") or "none"
 - When MCP or Skill mechanisms are involved, include a brief explanation of HOW the loading works
-- Use "response_tools" field to explain causality: "Response to Request #N returned [tool] → this enabled/triggered [action] in Request #M"
-- Each step description should answer: what happened in the request, what did the response return, and how did that response cause the next action
+- For each step, explain the full causal chain: what Claude called → what the response returned → how Claude interpreted that response → what Claude decided to do next
+- Use "response_tools" field to identify what tools came back in each response
+- Make Claude's decision explicit: "Claude received X from the response, which meant Y, so it called Z next"
 - If sub-agent requests exist, clearly indicate they are sub-agent calls
 - Number steps sequentially (STEP 1, STEP 2, ...)
 - End with a one-line overall session summary after the last step
@@ -2042,20 +2043,22 @@ graph TD
 
 Rules for MERMAID:
 - Use graph TD (top-down)
-- Show the MECHANISM chain including responses: Request → Response → Next Request
-- Include response nodes to show causality using "response_tools" data:
-  - ToolSearch (Req N) --> Response: schemas returned --> tool_use: mcp__x (Req N+1)
-  - tool_use: X (Req N) --> Response: tool_result Y --> next action (Req N+1)
+- Every chain must follow this 3-step pattern: [Claude calls tool] --> (Response: what came back) --> {Claude decides: why next action} --> [Claude calls next tool]
+- The decision node {} is mandatory: it explains WHY Claude took the next action based on what the response returned. Without this node, causality is missing.
+- Example chain:
+    A["resolve-library-id\n(Req 4)"] --> B("Response: library ID returned")
+    B --> C{"Claude: has ID, needs docs"}
+    C --> D["query-docs\n(Req 5)"]
 - Include these patterns when detected:
-  - ToolSearch → schema loaded → tool_use (deferred tool loading)
-  - command-message → Skill tool_use → skill prompt loaded (skill loading)
+  - ToolSearch → schema returned → Claude: now callable → tool_use (deferred tool loading)
+  - command-message → Skill tool_use → skill prompt injected → Claude: executes skill (skill loading)
   - Agent/Task tool_use → sub-agent spawned → sub-agent result (sub-agent flow)
   - system-reminder injection (CLAUDE.md loading)
 - Use descriptive node labels like "ToolSearch: fetch mcp schema" not "Req 1"
 - Add Request numbers as annotations: e.g., A["ToolSearch: fetch schema\n(Req 1)"]
 - Do NOT use # character in labels
 - Keep labels under 50 characters
-- Use different node shapes: [] for actions, {} for decisions, () for results
+- Use different node shapes: [] for Claude actions, () for responses/results, {} for Claude decisions
 
 Data:
 ${JSON.stringify(captures, null, 1)}`;
