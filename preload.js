@@ -21,4 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('proxy-request');
     ipcRenderer.removeAllListeners('proxy-response');
   },
+  onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_, data) => cb(data)),
+  onUpdateProgress: (cb) => ipcRenderer.on('update-progress', (_, data) => cb(data)),
+  onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', (_, data) => cb(data)),
+  installUpdate: () => ipcRenderer.invoke('update-install'),
 });

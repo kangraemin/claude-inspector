@@ -48,11 +48,17 @@
     },
     "win": {
       "target": "nsis"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "kangraemin",
+      "repo": "claude-inspector"
     }
   },
   "dependencies": {
     "@sentry/electron": "^7.10.0",
-    "dotenv": "^17.3.1"
+    "dotenv": "^17.3.1",
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

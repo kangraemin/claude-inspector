@@ -622,7 +622,7 @@
     <span class="logo-text">Claude Inspector</span>
     <span class="logo-sub" data-i18n="header.logoSub">Prompt Mechanism Visualizer</span>
     <span class="logo-ver" id="buildVer"></span>
-    <a class="update-badge" id="updateBadge" href="#" target="_blank" rel="noopener"></a>
+    <button class="update-badge" id="updateBadge"></button>
   </div>
   <div class="header-right">
     <button id="langToggleBtn" onclick="i18n.setLocale(i18n.locale==='ko'?'en':'ko')"
@@ -2958,34 +2958,26 @@ if (window.electronAPI?.platform === 'darwin') document.body.classList.add('darw
 
 fetch('build-info.json').then(r=>r.json()).then(b=>{
   document.getElementById('buildVer').textContent = `v${b.version} (${b.hash})`;
-  checkForUpdate(b.version);
 }).catch(()=>{});
 
-function checkForUpdate(currentVersion) {
-  if (sessionStorage.getItem('updateChecked')) return;
-  sessionStorage.setItem('updateChecked', '1');
-  fetch('https://api.github.com/repos/kangraemin/claude-inspector/releases/latest', {
-    headers: { 'Accept': 'application/vnd.github.v3+json' }
-  })
-  .then(r => r.ok ? r.json() : null)
-  .then(data => {
-    if (!data?.tag_name) return;
-    const latest = data.tag_name.replace(/^v/, '');
-    if (isNewerVersion(latest, currentVersion)) {
-      const badge = document.getElementById('updateBadge');
-      badge.textContent = `↑ v${latest}`;
-      badge.href = data.html_url;
-      badge.style.display = 'inline';
-    }
-  })
-  .catch(() => {});
-}
-
-function isNewerVersion(latest, current) {
-  const toNum = v => v.split('.').map(Number);
-  const [la, lb, lc] = toNum(latest);
-  const [ca, cb, cc] = toNum(current);
-  return la > ca || (la === ca && lb > cb) || (la === ca && lb === cb && lc > cc);
+// Auto-update via electron-updater (packaged app only)
+if (window.electronAPI?.onUpdateAvailable) {
+  window.electronAPI.onUpdateAvailable(({ version }) => {
+    const badge = document.getElementById('updateBadge');
+    badge.textContent = `↑ v${version} 다운로드 중…`;
+    badge.style.display = 'inline';
+    badge.onclick = null;
+  });
+  window.electronAPI.onUpdateProgress(({ percent }) => {
+    const badge = document.getElementById('updateBadge');
+    badge.textContent = `↑ 업데이트 ${percent}%`;
+  });
+  window.electronAPI.onUpdateDownloaded(({ version }) => {
+    const badge = document.getElementById('updateBadge');
+    badge.textContent = `↑ v${version} 설치 → 재시작`;
+    badge.style.display = 'inline';
+    badge.onclick = (e) => { e.preventDefault(); window.electronAPI.installUpdate(); };
+  });
 }
 
 // Apply initial i18n (after DOM is ready)

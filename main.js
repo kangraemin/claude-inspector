@@ -31,8 +31,41 @@ Sentry.init({
 const analytics = require('./analytics');
 
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const http = require('node:http');
 const https = require('node:https');
+
+// Auto-updater setup: background download, manual install
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = false;
+
+function initAutoUpdater() {
+  if (!app.isPackaged) return; // skip in dev mode
+
+  autoUpdater.on('update-available', (info) => {
+    if (mainWin && !mainWin.isDestroyed()) {
+      mainWin.webContents.send('update-available', { version: info.version });
+    }
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    if (mainWin && !mainWin.isDestroyed()) {
+      mainWin.webContents.send('update-progress', { percent: Math.round(progress.percent) });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    if (mainWin && !mainWin.isDestroyed()) {
+      mainWin.webContents.send('update-downloaded', { version: info.version });
+    }
+  });
+
+  autoUpdater.checkForUpdates().catch(() => {});
+}
+
+ipcMain.handle('update-install', () => {
+  autoUpdater.quitAndInstall();
+});
 
 let mainWin = null;
 let proxyServer = null;
@@ -113,6 +146,7 @@ app.whenReady().then(() => {
     app.dock.setIcon(path.join(__dirname, 'assets/icon.png'));
   }
   createWindow();
+  initAutoUpdater();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
