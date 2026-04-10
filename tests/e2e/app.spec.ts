@@ -192,11 +192,47 @@ test('AI Flow 탭 클릭 → aiflow 컨텐츠 영역 표시', async () => {
 
 // ─── Export/Import ──────────────────────────────────────────────────────────
 
-test('Export/Import 버튼 존재 확인', async () => {
-  const buttons = page.locator('.config-footer .btn-copy');
+test('Save/Load 버튼이 panel-header에 존재', async () => {
+  const buttons = page.locator('.proxy-list .panel-header .copy-small');
   const texts = await buttons.allInnerTexts();
-  expect(texts).toContain('Export');
-  expect(texts).toContain('Import');
+  expect(texts).toContain('Save');
+  expect(texts).toContain('Load');
+});
+
+test('config-footer에 Export/Import 버튼 없음', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
+  // config-footer 영역에 exportCaptures/importCaptures onclick이 없어야 함
+  const footerMatch = html.match(/class="config-footer"[\s\S]*?<\/div>/);
+  if (footerMatch) {
+    expect(footerMatch[0]).not.toContain('exportCaptures');
+    expect(footerMatch[0]).not.toContain('importCaptures');
+  }
+});
+
+test('buildCaptureSummaries diff — 중복 tool은 두 번째 request에서 생략', async () => {
+  const summaries = await page.evaluate(() => {
+    // @ts-ignore
+    proxyCaptures = [
+      // newest-first (unshift 방식)
+      { id: '2', sessionId: 's1', body: { model: 'claude-sonnet-4-6', messages: [
+        { role: 'assistant', content: [{ type: 'tool_use', name: 'Read' }, { type: 'tool_use', name: 'Edit' }] }
+      ] }, response: null },
+      { id: '1', sessionId: 's1', body: { model: 'claude-sonnet-4-6', messages: [
+        { role: 'assistant', content: [{ type: 'tool_use', name: 'Read' }] }
+      ] }, response: null },
+    ];
+    // @ts-ignore
+    aiflowSelectedIds = new Set();
+    // @ts-ignore
+    return buildCaptureSummaries();
+  });
+  // oldest(id=1) → reqNum=1, tools=['Read'] 전체
+  // newest(id=2) → reqNum=2, tools=['Edit'] (Read는 이미 있으므로 생략)
+  const req1 = summaries.find((s: any) => s.request_num === 1);
+  const req2 = summaries.find((s: any) => s.request_num === 2);
+  expect(req1?.tools).toContain('Read');
+  expect(req2?.tools).toContain('Edit');
+  expect(req2?.tools).not.toContain('Read');  // diff: 중복 생략
 });
 
 test('importCaptures 함수 Array.isArray 검증 포함', () => {

@@ -257,7 +257,7 @@ ipcMain.handle('proxy-stop', () => {
 ipcMain.handle('aiflow-analyze', (_event, { prompt }) => {
   const { spawn } = require('child_process');
   return new Promise((resolve) => {
-    const child = spawn('claude', ['-p', '--model', 'sonnet', '--settings', claudeNoHooksSettings, prompt], { timeout: 60000 });
+    const child = spawn('claude', ['-p', '--model', 'sonnet', '--settings', claudeNoHooksSettings, prompt]);
     let stdout = '';
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString();
@@ -284,7 +284,7 @@ ipcMain.handle('aiflow-chat', (_event, { systemContext, messages }) => {
     : `${systemContext}\n\n---\n\n${lastMsg}`;
 
   return new Promise((resolve) => {
-    const child = spawn('claude', ['-p', '--model', 'sonnet', '--settings', claudeNoHooksSettings, prompt], { timeout: 60000 });
+    const child = spawn('claude', ['-p', '--model', 'sonnet', '--settings', claudeNoHooksSettings, prompt]);
     let stdout = '';
     child.stdout.on('data', (chunk) => {
       const text = chunk.toString();

@@ -667,8 +667,6 @@
     </div>
     <div class="config-footer">
       <button class="btn btn-send" id="proxyStartBtn" style="flex:1;justify-content:center" onclick="toggleProxy()" data-i18n="proxy.startProxy">Start Proxy</button>
-      <button class="btn btn-copy" onclick="exportCaptures()" title="Export captures to JSON">Export</button>
-      <button class="btn btn-copy" onclick="importCaptures()" title="Import captures from JSON">Import</button>
       <button class="btn btn-copy" onclick="clearProxyCaptures()" data-i18n="proxy.clear">Clear</button>
     </div>
   </div>
@@ -679,6 +677,10 @@
       <div class="panel-header">
         <span data-i18n="proxy.capturedRequests">캡처된 요청</span>
         <span style="font-size:10px;color:var(--dim)" id="proxyCount">0</span>
+        <div style="margin-left:auto;display:flex;gap:4px">
+          <button class="copy-small" id="exportBtn" onclick="exportCaptures()" title="세션을 JSON 파일로 저장">Save</button>
+          <button class="copy-small" onclick="importCaptures()" title="JSON 파일에서 캡처 불러오기">Load</button>
+        </div>
       </div>
       <div class="hist-list" id="proxyList">
         <div class="hist-empty" data-i18n-html="proxy.noCaptures">캡처된 요청 없음<br><small>프록시를 시작하고<br>Claude Code를 실행하세요</small></div>
@@ -1874,13 +1876,18 @@ async function startAiFlowAnalysis() {
 }
 
 function buildCaptureSummaries() {
-  const selected = aiflowSelectedIds.size > 0
+  const rawSelected = aiflowSelectedIds.size > 0
     ? proxyCaptures.filter(e => aiflowSelectedIds.has(e.id))
     : [...proxyCaptures];
 
+  // proxyCaptures는 newest-first(unshift). oldest-first로 reverse해서 시간순 처리
+  const selected = rawSelected.slice().reverse();
+
   let lastMainWithAgent = null;
+  let prevMain = null;  // diff용: 이전 main request 누적 상태
+
   return selected.map((entry, idx) => {
-    const reqNum = idx + 1;
+    const reqNum = idx + 1;  // oldest=1, newest=N
     const summary = { request_num: reqNum, model: entry.body?.model || 'unknown' };
 
     const msgs = entry.body?.messages || [];
@@ -1905,7 +1912,26 @@ function buildCaptureSummaries() {
         }
       }
     }
-    if (toolUses.length) summary.tools = [...new Set(toolUses)];
+
+    // session 판별 (tools diff 적용 여부 결정에 필요해서 먼저)
+    let isSubAgent = false;
+    if (msgs.length <= 3 && lastMainWithAgent) {
+      isSubAgent = true;
+      summary.session = `sub-agent(from Request #${lastMainWithAgent})`;
+    } else {
+      summary.session = 'main';
+      if (hasAgentCall || hasTeamCreate) lastMainWithAgent = reqNum;
+    }
+
+    // tools diff: main request끼리만 delta 적용. sub-agent는 전체 표시
+    const allTools = [...new Set(toolUses)];
+    if (prevMain && !isSubAgent) {
+      const newTools = allTools.filter(t => !prevMain.toolSet.has(t));
+      if (newTools.length) summary.tools = newTools;
+      // 새 tool 없으면 tools 필드 생략
+    } else {
+      if (allTools.length) summary.tools = allTools;
+    }
 
     const det = detectMechanisms(entry.body);
     const mechs = [];
@@ -1914,9 +1940,17 @@ function buildCaptureSummaries() {
     if (det.skills.length) mechs.push('Skill:' + det.skills.map(s => s.input?.skill || '?').join(','));
     if (det.subAgents.length) mechs.push('SubAgent');
     if (det.mcpTools.length) mechs.push('MCP:' + det.mcpTools.map(m => m.name.split('__').slice(2).join('__')).join(','));
-    if (mechs.length) summary.mechanisms = mechs;
 
-    if (det.claudeMd) {
+    // mechanisms diff: main request끼리만 delta 적용
+    if (prevMain && !isSubAgent) {
+      const newMechs = mechs.filter(m => !prevMain.mechSet.has(m));
+      if (newMechs.length) summary.mechanisms = newMechs;
+    } else {
+      if (mechs.length) summary.mechanisms = mechs;
+    }
+
+    // prompt_injections: 첫 main request만 (이후 동일)
+    if (!prevMain && !isSubAgent && det.claudeMd) {
       const sections = parseClaudeMdSections(det.claudeMd);
       if (sections.length) summary.prompt_injections = sections.map(s => ({ label: s.label, chars: s.content.length, scope: s.scope }));
     }
@@ -1933,12 +1967,14 @@ function buildCaptureSummaries() {
       if (respText.length) summary.response_preview = respText.slice(0, 1);
     }
 
-    if (msgs.length <= 3 && lastMainWithAgent) {
-      summary.session = `sub-agent(from Request #${lastMainWithAgent})`;
-    } else {
-      summary.session = 'main';
-      if (hasAgentCall || hasTeamCreate) lastMainWithAgent = reqNum;
+    // 다음 diff를 위해 main request 누적 상태 갱신
+    if (!isSubAgent) {
+      prevMain = {
+        toolSet: new Set([...(prevMain?.toolSet || []), ...allTools]),
+        mechSet: new Set([...(prevMain?.mechSet || []), ...mechs]),
+      };
     }
+
     return summary;
   });
 }
@@ -1988,6 +2024,7 @@ Rules:
 - If sub-agent requests exist, clearly indicate they are sub-agent calls
 - Number steps sequentially (STEP 1, STEP 2, ...)
 - End with a one-line overall session summary after the last step
+- "tools" and "mechanisms" fields show only NEW entries vs the previous main request (delta). Absence means same as before.
 
 After the summary, output a MERMAID flowchart showing the INTERNAL MECHANISM flow (not just request connections).
 Show how Claude Code's prompt augmentation pipeline works across requests:
@@ -2748,18 +2785,56 @@ function clearProxyCaptures() {
 
 async function exportCaptures() {
   if (!proxyCaptures.length) return;
-  const now = new Date();
-  const ts = now.toISOString().slice(0, 16).replace('T', '-').replace(':', '');
-  const defaultName = `claude-inspector-${ts}.json`;
-  const data = JSON.stringify(proxyCaptures, null, 2);
+
+  // sessionId별 그룹핑
+  const sessionMap = {};
+  for (const c of proxyCaptures) {
+    const sid = c.sessionId || 'unknown';
+    if (!sessionMap[sid]) sessionMap[sid] = [];
+    sessionMap[sid].push(c);
+  }
+  const sessions = Object.entries(sessionMap);
+
+  let targetCaptures, sessionLabel;
+  if (sessions.length === 1) {
+    targetCaptures = sessions[0][1];
+    sessionLabel = sessions[0][0].slice(0, 6);
+  } else {
+    const labels = sessions.map(([sid, caps], i) =>
+      `${i + 1}. 세션 ${i + 1} (${caps.length}건, ID: ${sid.slice(0, 6)})`
+    );
+    labels.push(`${sessions.length + 1}. 전체 (${proxyCaptures.length}건)`);
+    const choice = prompt('저장할 세션을 선택하세요:\n\n' + labels.join('\n') + '\n\n번호를 입력하세요:');
+    const picked = parseInt(choice) - 1;
+    if (isNaN(picked) || picked < 0 || picked > sessions.length) return;
+    if (picked === sessions.length) {
+      targetCaptures = proxyCaptures;
+      sessionLabel = 'all';
+    } else {
+      targetCaptures = sessions[picked][1];
+      sessionLabel = sessions[picked][0].slice(0, 6);
+    }
+  }
+
+  const ts = new Date().toISOString().slice(0, 10);
+  const defaultName = `claude-inspector-${sessionLabel}-${ts}.json`;
+  const data = JSON.stringify(targetCaptures, null, 2);
+
+  const showSaved = () => {
+    const btn = document.getElementById('exportBtn');
+    if (btn) { btn.textContent = 'Saved!'; setTimeout(() => { btn.textContent = 'Save'; }, 800); }
+  };
+
   if (window.electronAPI?.exportCaptures) {
-    await window.electronAPI.exportCaptures({ data, defaultName });
+    const result = await window.electronAPI.exportCaptures({ data, defaultName });
+    if (!result.canceled) showSaved();
   } else {
     const blob = new Blob([data], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = defaultName;
     a.click();
+    showSaved();
   }
 }
 
