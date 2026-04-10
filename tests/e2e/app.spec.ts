@@ -300,17 +300,24 @@ test('update-downloaded IPC → 뱃지에 재시작 안내 + onclick 등록', as
 });
 
 test('update-downloaded 후 뱃지 클릭 시 update-install IPC 호출', async () => {
-  // ipcRenderer.invoke('update-install') 호출 여부를 패치로 확인
-  const invoked = await page.evaluate(async () => {
-    let called = false;
-    const orig = (window as any).electronAPI.installUpdate;
-    (window as any).electronAPI.installUpdate = async () => { called = true; };
-    document.getElementById('updateBadge')?.click();
-    await new Promise(r => setTimeout(r, 100));
-    (window as any).electronAPI.installUpdate = orig;
-    return called;
+  // contextBridge는 frozen이라 renderer 패치 불가 → main process 핸들러 임시 교체
+  await app.evaluate(({ ipcMain }) => {
+    (global as any).__updateInstallCalled = false;
+    ipcMain.removeHandler('update-install');
+    ipcMain.handle('update-install', () => { (global as any).__updateInstallCalled = true; });
   });
-  expect(invoked).toBe(true);
+
+  await page.locator('#updateBadge').click();
+  await page.waitForTimeout(200);
+
+  const called = await app.evaluate(() => (global as any).__updateInstallCalled);
+  expect(called).toBe(true);
+
+  // 핸들러 복원 (autoUpdater.quitAndInstall은 dev 모드에서 어차피 미작동)
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('update-install');
+    ipcMain.handle('update-install', () => {});
+  });
 });
 
 test('프록시 시작→정지 전체 사이클 정상 동작', async () => {
