@@ -71,6 +71,17 @@ body.darwin .header { padding-left: 76px; }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 .btn-send { background: var(--blue); color: #fff; flex: 1; justify-content: center; }
 .btn-send:not(:disabled):hover { opacity: .82; }
+.btn-copy { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-copy:hover { border-color: var(--blue); }
+
+/* ── how-box ── */
+.how-box {
+  background: rgba(86,156,214,.05); border: 1px solid rgba(86,156,214,.18);
+  border-radius: 7px; padding: 11px 13px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.how-title { font-size: 10px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .7px; }
+.how-text { font-size: 12px; color: var(--dim); line-height: 1.55; }
 
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 .copy-small {

@@ -3,13 +3,15 @@ import { useUiStore } from '../../store/uiStore';
 import { RequestTab } from './RequestTab';
 import { ResponseTab } from './ResponseTab';
 import { AnalysisTab } from './AnalysisTab';
+import { AiFlowPanel } from '../AiFlow/AiFlowPanel';
 
-type DetailTab = 'request' | 'response' | 'analysis';
+type DetailTab = 'aiflow' | 'request' | 'response' | 'analysis';
 
-const TABS: { key: DetailTab; label: string }[] = [
-  { key: 'request', label: 'Request' },
+const TABS: { key: DetailTab; label: string; color?: string }[] = [
+  { key: 'aiflow',   label: 'AI Flow',  color: 'var(--green)' },
+  { key: 'request',  label: 'Request' },
   { key: 'response', label: 'Response' },
-  { key: 'analysis', label: 'Analysis' },
+  { key: 'analysis', label: 'Analysis', color: 'var(--purple)' },
 ];
 
 export function ProxyDetail() {
@@ -20,34 +22,31 @@ export function ProxyDetail() {
 
   const capture = captures.find((c) => c.id === selectedId);
 
-  if (!capture) {
-    return (
-      <div className="proxy-detail">
-        <div className="proxy-empty" style={{ flex: 1 }}>
-          Select a request to view its payload
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="proxy-detail">
       <div className="dtabs">
-        {TABS.map(({ key, label }) => (
+        {TABS.map(({ key, label, color }) => (
           <button
             key={key}
             className={`dtab ${detailTab === key ? 'active' : ''}`}
             onClick={() => setDetailTab(key)}
-            style={key === 'analysis' ? { color: 'var(--purple)' } : undefined}
+            style={color ? { color } : undefined}
           >
             {label}
           </button>
         ))}
       </div>
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {detailTab === 'request' && <RequestTab capture={capture} />}
-        {detailTab === 'response' && <ResponseTab capture={capture} />}
-        {detailTab === 'analysis' && <AnalysisTab capture={capture} />}
+        {detailTab === 'aiflow' && <AiFlowPanel />}
+        {detailTab !== 'aiflow' && !capture && (
+          <div className="proxy-empty" style={{ flex: 1 }}>
+            <span style={{ fontSize: 28 }}>🔍</span>
+            <span>요청을 선택하면<br />페이로드가 표시됩니다</span>
+          </div>
+        )}
+        {detailTab === 'request'  && capture && <RequestTab capture={capture} />}
+        {detailTab === 'response' && capture && <ResponseTab capture={capture} />}
+        {detailTab === 'analysis' && capture && <AnalysisTab capture={capture} />}
       </div>
     </div>
   );
