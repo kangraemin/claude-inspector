@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useCaptureStore } from '../../store/captureStore';
 import { useUiStore } from '../../store/uiStore';
+import { useAiflowStore } from '../../store/aiflowStore';
 import { t } from '../../../i18n';
 import type { ProxyCapture } from '../../../domain/entities/ProxyCapture';
 
@@ -16,10 +17,13 @@ function getSessionColor(sessionId: string): string {
 interface CaptureEntryProps {
   capture: ProxyCapture;
   selected: boolean;
-  onClick: () => void;
+  showCheck: boolean;
+  checked: boolean;
+  onSelect: () => void;
+  onCheck: (e: React.MouseEvent) => void;
 }
 
-function CaptureEntry({ capture, selected, onClick }: CaptureEntryProps) {
+function CaptureEntry({ capture, selected, showCheck, checked, onSelect, onCheck }: CaptureEntryProps) {
   const color = getSessionColor(capture.sessionId.toString());
   const status = capture.response as { status?: number } | undefined;
   const statusCode = status?.status;
@@ -35,11 +39,20 @@ function CaptureEntry({ capture, selected, onClick }: CaptureEntryProps) {
 
   return (
     <div
-      className={`prx-entry${selected ? ' selected' : ''}`}
+      className={`prx-entry${selected ? ' selected' : ''}${showCheck && checked ? ' aiflow-checked' : ''}`}
       style={{ borderLeft: `3px solid ${color}` }}
-      onClick={onClick}
+      onClick={onSelect}
     >
       <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+        {showCheck && (
+          <input
+            type="checkbox"
+            checked={checked}
+            onClick={onCheck}
+            onChange={() => {}}
+            style={{ marginRight: 6, flexShrink: 0 }}
+          />
+        )}
         <span className="prx-method">{capture.method}</span>
         <span className="prx-path">{capture.path}</span>
         {statusEl}
@@ -56,6 +69,20 @@ export function ProxyList() {
   const selectedId = useCaptureStore((s) => s.selectedId);
   const selectCapture = useCaptureStore((s) => s.selectCapture);
   const locale = useUiStore((s) => s.locale);
+  const detailTab = useUiStore((s) => s.detailTab);
+
+  const selectedCaptureIds = useAiflowStore((s) => s.selectedCaptureIds);
+  const toggleCaptureSelection = useAiflowStore((s) => s.toggleCaptureSelection);
+  const selectAllCaptures = useAiflowStore((s) => s.selectAllCaptures);
+  const deselectAllCaptures = useAiflowStore((s) => s.deselectAllCaptures);
+
+  const showCheck = detailTab === 'aiflow';
+  const allSelected = captures.length > 0 && captures.every((c) => selectedCaptureIds.has(c.id));
+
+  const handleSelectAll = () => {
+    if (allSelected) deselectAllCaptures();
+    else selectAllCaptures(captures.map((c) => c.id));
+  };
 
   const handleSave = async () => {
     if (!window.electronAPI || captures.length === 0) return;
@@ -82,6 +109,18 @@ export function ProxyList() {
           </button>
         </div>
       </div>
+
+      {showCheck && captures.length > 0 && (
+        <div style={{ padding: '4px 13px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" checked={allSelected} onChange={handleSelectAll} />
+          <span style={{ fontSize: 10, color: 'var(--dim)' }}>
+            {allSelected
+              ? t(locale, 'aiflow.deselectAll')
+              : t(locale, 'aiflow.selectAll')}
+          </span>
+        </div>
+      )}
+
       <div className="hist-list">
         {captures.length === 0 ? (
           <div className="hist-empty" dangerouslySetInnerHTML={{ __html: t(locale, 'proxy.noCaptures') }} />
@@ -91,7 +130,10 @@ export function ProxyList() {
               key={c.id}
               capture={c}
               selected={selectedId === c.id}
-              onClick={() => selectCapture(c.id)}
+              showCheck={showCheck}
+              checked={selectedCaptureIds.has(c.id)}
+              onSelect={() => selectCapture(c.id)}
+              onCheck={(e) => { e.stopPropagation(); toggleCaptureSelection(c.id); }}
             />
           ))
         )}

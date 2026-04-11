@@ -17,6 +17,8 @@ interface AiFlowStoreState {
   chatting: boolean;
   chatPartial: string | null;
 
+  selectedCaptureIds: Set<number>;
+
   setAiflowState: (state: AiFlowState) => void;
   setAiflowPartial: (partial: string | null) => void;
   setAiflowResult: (result: AiFlowResult | null) => void;
@@ -30,6 +32,11 @@ interface AiFlowStoreState {
   setChatPartial: (partial: string | null) => void;
   appendChatChunk: (chunk: string) => void;
   finalizeChatMessage: () => void;
+
+  toggleCaptureSelection: (id: number) => void;
+  selectAllCaptures: (ids: number[]) => void;
+  deselectAllCaptures: () => void;
+  addCaptureToSelection: (id: number) => void;
 }
 
 export const useAiflowStore = create<AiFlowStoreState>((set) => ({
@@ -44,6 +51,8 @@ export const useAiflowStore = create<AiFlowStoreState>((set) => ({
   chatMessages: [],
   chatting: false,
   chatPartial: null,
+
+  selectedCaptureIds: new Set<number>(),
 
   setAiflowState: (aiflowState) => set({ aiflowState }),
   setAiflowPartial: (aiflowPartial) => set({ aiflowPartial }),
@@ -71,5 +80,25 @@ export const useAiflowStore = create<AiFlowStoreState>((set) => ({
         chatting: false,
         chatPartial: null,
       };
+    }),
+
+  toggleCaptureSelection: (id) =>
+    set((s) => {
+      const next = new Set(s.selectedCaptureIds);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return { selectedCaptureIds: next };
+    }),
+
+  selectAllCaptures: (ids) =>
+    set({ selectedCaptureIds: new Set(ids) }),
+
+  deselectAllCaptures: () =>
+    set({ selectedCaptureIds: new Set<number>() }),
+
+  addCaptureToSelection: (id) =>
+    set((s) => {
+      const next = new Set(s.selectedCaptureIds);
+      next.add(id);
+      return { selectedCaptureIds: next };
     }),
 }));

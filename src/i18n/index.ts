@@ -35,6 +35,9 @@ const strings = {
       chatHeader: '💬 이 세션에 대해 Claude에게 물어보세요',
       chatPlaceholder: '이 세션에 대해 무엇이든 물어보세요…',
       chatSend: '전송',
+      selectAll: '전체 선택',
+      deselectAll: '전체 해제',
+      requestRef: 'Req #{n}',
     },
     analysis: {
       noMechanisms: '감지된 메커니즘 없음',
@@ -91,6 +94,9 @@ const strings = {
       chatHeader: '💬 Ask Claude about this session',
       chatPlaceholder: 'Ask anything about this session…',
       chatSend: 'Send',
+      selectAll: 'Select All',
+      deselectAll: 'Deselect All',
+      requestRef: 'Req #{n}',
     },
     analysis: {
       noMechanisms: 'No mechanisms detected',

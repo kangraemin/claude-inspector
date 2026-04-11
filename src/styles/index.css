@@ -187,6 +187,17 @@ body.darwin .header { padding-left: 76px; }
   display: flex; align-items: center; gap: 8px;
   border-bottom: 1px solid var(--border);
 }
+.aiflow-ref {
+  display: inline-block; padding: 1px 6px; border-radius: 3px;
+  font-size: 10px; font-weight: 700; cursor: pointer;
+  background: rgba(86,156,214,.15); color: var(--blue);
+  border: 1px solid rgba(86,156,214,.3); transition: all .15s;
+}
+.aiflow-ref:hover { background: rgba(86,156,214,.3); }
+.aiflow-mermaid { padding: 12px; overflow-x: auto; background: var(--bg); }
+.aiflow-mermaid .mermaid { text-align: center; }
+.prx-entry.aiflow-checked { background: rgba(78,201,176,.08); }
+
 .aiflow-step-num {
   background: var(--green); color: #1e1e1e;
   font-size: 10px; font-weight: 800;
