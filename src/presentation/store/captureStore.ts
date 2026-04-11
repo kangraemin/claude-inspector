@@ -20,7 +20,10 @@ export const useCaptureStore = create<CaptureState>((set) => ({
   proxyPort: undefined,
 
   addCapture: (capture) =>
-    set((s) => ({ captures: [...s.captures, capture] })),
+    set((s) => {
+      const next = [...s.captures, capture];
+      return { captures: next.length > 50 ? next.slice(next.length - 50) : next };
+    }),
 
   setCaptures: (captures) => set({ captures }),
 

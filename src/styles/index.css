@@ -335,3 +335,74 @@ body.darwin .header { padding-left: 76px; }
 }
 .jt-tag:hover { color: var(--text); }
 .jt-tok { color: var(--dim); font-size: 9px; opacity: 0.7; margin-left: 4px; }
+
+/* 1-A. Input dark background */
+input[type=number], input[type=text], select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 6px 9px; font-size: 12px; outline: none; width: 100%;
+}
+input[type=number]:focus, input[type=text]:focus { border-color: var(--blue); }
+input:disabled { opacity: .5; cursor: not-allowed; }
+input[type=number] { width: auto; }
+
+/* 1-B. AI Flow sub-step orange / scroll fix */
+.aiflow-step-num.sub { background: var(--orange); }
+.aiflow-container { min-height: 0; }
+
+/* 1-C. Mech chips */
+.mech-chip { padding: 2px 8px; border-radius: 10px; font-size: 10px; cursor: pointer;
+  border: 1px solid; font-family: 'SF Mono', monospace; font-weight: 600;
+  transition: all .15s; white-space: nowrap; }
+.mech-chip.active { box-shadow: 0 0 0 2px currentColor; }
+.mech-chip.cm  { color: var(--green);  border-color: rgba(78,201,176,.4);  background: rgba(78,201,176,.08); }
+.mech-chip.st  { color: var(--blue);   border-color: rgba(86,156,214,.4);  background: rgba(86,156,214,.08); }
+.mech-chip.sc  { color: var(--yellow); border-color: rgba(220,220,170,.4); background: rgba(220,220,170,.06); }
+.mech-chip.sk  { color: var(--purple); border-color: rgba(197,134,192,.4); background: rgba(197,134,192,.08); }
+.mech-chip.sa  { color: var(--orange); border-color: rgba(206,145,120,.4); background: rgba(206,145,120,.08); }
+.mech-chip.mc  { color: #4fc1ff;       border-color: rgba(79,193,255,.4);  background: rgba(79,193,255,.08); }
+.mech-chips-row { display: flex; gap: 5px; padding: 6px 12px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+
+/* 1-D. Search bar */
+.search-bar-row { display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0; }
+.search-bar-input { flex: 1; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 8px; color: var(--text); font-size: 12px;
+  outline: none; width: auto; }
+.search-bar-input:focus { border-color: var(--blue); }
+.search-hl { background: rgba(220,220,170,.35); border-radius: 2px; }
+.mech-hl-text { background: rgba(78,201,176,.25); border-radius: 2px; }
+
+/* 1-E. Token info badges */
+.token-info-row { display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 6px 12px; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0; }
+.tt-badge { font-size: 10px; font-family: 'SF Mono', monospace;
+  padding: 2px 7px; border-radius: 4px;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--dim); }
+.tt-badge.green { border-color: rgba(78,201,176,.4); color: var(--green); }
+.tt-badge.blue  { border-color: rgba(86,156,214,.4); color: var(--blue); }
+.tt-badge.yellow{ border-color: rgba(220,220,170,.35); color: var(--yellow); }
+
+/* 1-F. Header version / update badge */
+.logo-ver { font-size: 10px; color: var(--dim); opacity: .5; }
+.update-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; cursor: pointer;
+  background: rgba(78,201,176,.12); border: 1px solid rgba(78,201,176,.4);
+  color: var(--green); font-weight: 600; display: none; }
+
+/* 1-G. Onboarding modal */
+.onboard-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.onboard-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 28px 32px; max-width: 420px; width: 90%;
+  display: flex; flex-direction: column; gap: 14px; }
+.onboard-title { font-size: 16px; font-weight: 700; }
+.onboard-sub { font-size: 12px; color: var(--dim); }
+.onboard-steps { padding-left: 18px; font-size: 12px; color: var(--text); line-height: 2; }
+.onboard-cmd { display: block; margin-top: 4px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 4px; padding: 5px 10px;
+  font-family: 'SF Mono', monospace; font-size: 11px; user-select: all; }
+.onboard-note { font-size: 11px; color: var(--dim); line-height: 1.6; }
+.onboard-btn { background: var(--blue); color: #fff; border: none; border-radius: 6px;
+  padding: 9px 0; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; }

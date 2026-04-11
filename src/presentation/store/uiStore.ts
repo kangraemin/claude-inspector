@@ -2,25 +2,24 @@ import { create } from 'zustand';
 
 type DetailTab = 'request' | 'response' | 'analysis' | 'aiflow';
 type Locale = 'ko' | 'en';
-type MechFilter = string[];
 
 interface UiState {
   detailTab: DetailTab;
   search: string;
-  mechFilter: MechFilter;
+  mechFilter: string | null;
   locale: Locale;
   setDetailTab: (tab: DetailTab) => void;
   setSearch: (search: string) => void;
-  setMechFilter: (filter: MechFilter) => void;
+  setMechFilter: (filter: string | null) => void;
   setLocale: (locale: Locale) => void;
 }
 
 const storedLocale = (localStorage.getItem('claude-inspector-locale') ?? 'ko') as Locale;
 
 export const useUiStore = create<UiState>((set) => ({
-  detailTab: 'request',
+  detailTab: 'aiflow',
   search: '',
-  mechFilter: [],
+  mechFilter: null,
   locale: storedLocale,
 
   setDetailTab: (detailTab) => set({ detailTab }),

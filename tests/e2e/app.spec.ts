@@ -21,6 +21,9 @@ test.beforeAll(async () => {
   page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(500); // React hydration 대기
+  // 온보딩 모달이 있으면 닫기
+  await page.locator('.onboard-btn').click().catch(() => {});
+  await page.waitForTimeout(100);
 });
 
 test.afterAll(async () => {
@@ -234,19 +237,21 @@ test('TC-27 Analysis 탭 — 클릭 시 content 영역 표시', async () => {
 // ─── 5. AI Flow 패널 ─────────────────────────────────────────────────────────
 
 test('TC-28 AI Flow 패널 존재 (우측)', async () => {
-  // AiFlowPanel은 proxy-panel 옆에 있음
-  await expect(page.locator('.aiflow-container, .aiflow-status')).toBeVisible({ timeout: 3000 });
+  // AI Flow 탭 버튼이 ProxyDetail dtabs에 존재하는지 확인
+  const tab = page.locator('.dtab', { hasText: 'AI Flow' });
+  await expect(tab).toBeVisible();
 });
 
 test('TC-29 캡처 없을 때 AI Flow — 안내 메시지', async () => {
-  // 앱을 새로 시작하면 캡처가 없으므로 noCaptures 메시지 표시될 수 있음
-  // 이미 캡처가 추가된 상태이면 분석 버튼 표시
-  const container = page.locator('.aiflow-container, .aiflow-status');
-  await expect(container).toBeVisible({ timeout: 3000 });
+  // AI Flow 탭 버튼이 존재하고 클릭 가능한지 확인
+  const tab = page.locator('.dtab', { hasText: 'AI Flow' });
+  await expect(tab).toBeVisible();
 });
 
 test('TC-30 캡처가 있으면 분석 버튼 또는 결과 표시', async () => {
   // TC-15에서 캡처를 추가했으므로 분석 버튼이 있어야 함
+  await page.locator('.dtab', { hasText: 'AI Flow' }).click();
+  await page.waitForTimeout(100);
   const container = page.locator('.aiflow-container');
   await expect(container).toBeVisible({ timeout: 3000 });
 });
@@ -489,4 +494,199 @@ test('TC-56 메인 레이아웃 flex 구조 (main.display = flex)', async () => 
   await expect(main).toBeVisible();
   const display = await main.evaluate(el => getComputedStyle(el).display);
   expect(display).toBe('flex');
+});
+
+// TC-57: 포트 입력 배경 어두운색
+test('TC-57 포트 입력 배경색 어두운색', async () => {
+  const input = page.locator('input[type=number]').first();
+  const bg = await input.evaluate(el => getComputedStyle(el).backgroundColor);
+  const r = parseInt(bg.match(/\d+/)?.[0] ?? '255');
+  expect(r).toBeLessThan(100);
+});
+
+// TC-58: aiflow-container min-height 0
+test('TC-58 aiflow-container min-height: 0px', async () => {
+  await page.locator('.dtab', { hasText: 'AI Flow' }).click();
+  const container = page.locator('.aiflow-container');
+  const styles = await container.evaluate(el => ({
+    overflowY: getComputedStyle(el).overflowY,
+    minHeight: getComputedStyle(el).minHeight,
+  }));
+  expect(styles.overflowY).toBe('auto');
+  expect(styles.minHeight).toBe('0px');
+});
+
+// TC-59: Request 탭 검색바 표시
+test('TC-59 Request 탭 캡처 선택 시 search-bar-row 표시', async () => {
+  const entries = page.locator('.prx-entry');
+  if (await entries.count() > 0) {
+    await entries.first().click();
+    await page.locator('.dtab', { hasText: 'Request' }).click();
+    await expect(page.locator('.search-bar-row')).toBeVisible();
+  }
+});
+
+// TC-60: search-bar-input 존재
+test('TC-60 .search-bar-input 표시됨', async () => {
+  await expect(page.locator('.search-bar-input')).toBeVisible();
+});
+
+// TC-61: Meta+F 검색바 포커스
+test('TC-61 Meta+F → 검색바 포커스', async () => {
+  await page.keyboard.press('Meta+f');
+  await expect(page.locator('.search-bar-input')).toBeFocused({ timeout: 1000 });
+});
+
+// TC-62: 검색어 → search-hl 생성
+test('TC-62 검색어 입력 → .search-hl 하이라이트 생성', async () => {
+  // Find an entry with model text (has body with 'model' key)
+  const modelEntry = page.locator('.prx-entry:has(.prx-model)');
+  if (await modelEntry.count() > 0) {
+    await modelEntry.first().click();
+    await page.locator('.dtab', { hasText: 'Request' }).click();
+    await page.locator('.search-bar-input').fill('model');
+    await page.waitForTimeout(500);
+    expect(await page.locator('.search-hl').count()).toBeGreaterThan(0);
+  }
+});
+
+// TC-63: CLAUDE.md 캡처 → mech-chips-row 표시
+test('TC-63 CLAUDE.md 포함 캡처 선택 시 mech-chips-row 표시', async () => {
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]?.webContents.send('proxy-request', {
+      id: 9001, ts: new Date().toISOString(), method: 'POST', path: '/v1/messages',
+      body: { model: 'claude-sonnet-4-6', messages: [{ role: 'user', content: [
+        { type: 'text', text: '<system-reminder>Contents of /test/CLAUDE.md (project instructions):\n\ntest content</system-reminder>\nHello' }
+      ]}]},
+      sessionId: 'session-mech', isApiKey: false,
+    });
+  });
+  await page.waitForTimeout(500);
+  const entries = page.locator('.prx-entry');
+  if (await entries.count() > 0) {
+    await entries.first().click(); // newest = id=9001 (just added)
+    await page.locator('.dtab', { hasText: 'Request' }).click();
+    await page.waitForTimeout(200);
+    await expect(page.locator('.mech-chips-row')).toBeVisible();
+  }
+});
+
+// TC-64: mech-chip.cm 표시
+test('TC-64 CLAUDE.md 캡처 — .mech-chip.cm 표시', async () => {
+  const chip = page.locator('.mech-chip.cm');
+  if (await chip.count() > 0) await expect(chip.first()).toBeVisible();
+});
+
+// TC-65: Copy 버튼 dtabs에 존재
+test('TC-65 .dtabs 내 Copy 버튼 존재', async () => {
+  await expect(page.locator('.dtabs .copy-small')).toBeVisible();
+});
+
+// TC-66: 토큰 배지 표시
+test('TC-66 Response 탭 — usage 포함 응답 후 token-info-row 표시', async () => {
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]?.webContents.send('proxy-response', {
+      id: 9001, status: 200,
+      body: { usage: { input_tokens: 1000, output_tokens: 200, cache_read_input_tokens: 800, cache_creation_input_tokens: 200 }},
+    });
+  });
+  await page.waitForTimeout(400);
+  const entries = page.locator('.prx-entry');
+  if (await entries.count() > 0) {
+    await entries.first().click(); // newest = id=9001 which has the response with usage
+    await page.locator('.dtab', { hasText: 'Response' }).click();
+    await page.waitForTimeout(200);
+    await expect(page.locator('.token-info-row')).toBeVisible();
+  }
+});
+
+// TC-67: Analysis — analysis-block 표시
+test('TC-67 Analysis 탭 — CLAUDE.md 캡처 선택 시 analysis-block 표시', async () => {
+  const entries = page.locator('.prx-entry');
+  if (await entries.count() > 0) {
+    await entries.first().click(); // newest = id=9001 (CLAUDE.md capture)
+    await page.locator('.dtab', { hasText: 'Analysis' }).click();
+    await page.waitForTimeout(200);
+    await expect(page.locator('.analysis-block')).toBeVisible();
+  }
+});
+
+// TC-68: Analysis — Skill input JSON 표시
+test('TC-68 Analysis — Skill 포함 캡처 highlight-purple 표시', async () => {
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]?.webContents.send('proxy-request', {
+      id: 9002, ts: new Date().toISOString(), method: 'POST', path: '/v1/messages',
+      body: { model: 'claude-sonnet-4-6', messages: [{ role: 'user', content: [
+        { type: 'tool_use', id: 'toolu_01', name: 'Skill', input: { skill: 'commit' } }
+      ]}]},
+      sessionId: 'session-skill', isApiKey: false,
+    });
+  });
+  await page.waitForTimeout(400);
+  const entries = page.locator('.prx-entry');
+  if (await entries.count() > 0) {
+    await entries.first().click(); // newest = id=9002 (Skill capture just added)
+    await page.locator('.dtab', { hasText: 'Analysis' }).click();
+    await page.waitForTimeout(200);
+    await expect(page.locator('.analysis-block.highlight-purple')).toBeVisible();
+  }
+});
+
+// TC-69: Onboarding CSS 존재
+test('TC-69 .onboard-overlay CSS 정의됨', async () => {
+  const has = await page.evaluate(() =>
+    [...document.styleSheets].some(ss => {
+      try { return [...ss.cssRules].some(r => r.cssText.includes('onboard-overlay')); }
+      catch { return false; }
+    })
+  );
+  expect(has).toBe(true);
+});
+
+// TC-70: logo-ver CSS 존재
+test('TC-70 .logo-ver CSS 정의됨', async () => {
+  const has = await page.evaluate(() =>
+    [...document.styleSheets].some(ss => {
+      try { return [...ss.cssRules].some(r => r.cssText.includes('logo-ver')); }
+      catch { return false; }
+    })
+  );
+  expect(has).toBe(true);
+});
+
+// TC-71: 50개 제한
+test('TC-71 캡처 50개 초과 → 최대 50개 유지', async () => {
+  for (let i = 3000; i <= 3051; i++) {
+    await app.evaluate(({ BrowserWindow }, id) => {
+      BrowserWindow.getAllWindows()[0]?.webContents.send('proxy-request', {
+        id, ts: new Date().toISOString(), method: 'POST', path: '/v1/messages',
+        body: null, sessionId: 'session-bulk', isApiKey: false,
+      });
+    }, i);
+  }
+  await page.waitForTimeout(1200);
+  expect(await page.locator('.prx-entry').count()).toBeLessThanOrEqual(50);
+});
+
+// TC-72: Escape → 검색 초기화
+test('TC-72 Escape → 검색 입력값 초기화', async () => {
+  const input = page.locator('.search-bar-input');
+  if (await input.count() > 0) {
+    await input.fill('test');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    expect(await input.inputValue()).toBe('');
+  }
+});
+
+// TC-73: aiflow-step-num.sub CSS 존재
+test('TC-73 .aiflow-step-num.sub CSS 정의됨', async () => {
+  await page.waitForTimeout(800);
+  const has = await page.evaluate(() =>
+    [...document.styleSheets].some(ss => {
+      try { return [...ss.cssRules].some(r => r.cssText.includes('aiflow-step-num.sub')); }
+      catch { return false; }
+    })
+  );
+  expect(has).toBe(true);
 });

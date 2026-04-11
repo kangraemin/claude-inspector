@@ -129,12 +129,60 @@ function jtStrToggle(id: string) {
   if (btn) btn.style.display = open ? '' : 'none';
 }
 
+function clearHighlight(container: HTMLElement, cls: string) {
+  container.querySelectorAll(`span.${cls}`).forEach(el => {
+    el.replaceWith(document.createTextNode(el.textContent ?? ''));
+  });
+  container.normalize();
+}
+
+function applySearchHighlight(container: HTMLElement, query: string) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  let node: Node | null;
+  while ((node = walker.nextNode())) nodes.push(node as Text);
+  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  for (const tn of nodes) {
+    if (!re.test(tn.textContent ?? '')) { re.lastIndex = 0; continue; }
+    re.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let last = 0, m: RegExpExecArray | null;
+    const text = tn.textContent ?? '';
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const span = document.createElement('span');
+      span.className = 'search-hl';
+      span.textContent = m[0];
+      frag.appendChild(span);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    tn.parentNode?.replaceChild(frag, tn);
+  }
+}
+
+function applyMechHighlight(container: HTMLElement, mechKey: string) {
+  const tagMap: Record<string, string> = {
+    cm: 'system-reminder',
+    sc: 'command-message',
+  };
+  const tag = tagMap[mechKey];
+  if (!tag) return;
+  applySearchHighlight(container, tag);
+  container.querySelector('.search-hl')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  container.querySelectorAll('.search-hl').forEach(el => {
+    (el as HTMLElement).className = 'mech-hl-text';
+  });
+}
+
 interface JsonTreeProps {
   data: unknown;
   className?: string;
+  search?: string;
+  mechKey?: string | null;
 }
 
-export function JsonTree({ data, className }: JsonTreeProps) {
+export function JsonTree({ data, className, search, mechKey }: JsonTreeProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -154,6 +202,18 @@ export function JsonTree({ data, className }: JsonTreeProps) {
     ref.current.addEventListener('click', handler);
     return () => ref.current?.removeEventListener('click', handler);
   }, [data]);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    clearHighlight(ref.current, 'search-hl');
+    if (search?.trim()) applySearchHighlight(ref.current, search.trim());
+  }, [search, data]);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    clearHighlight(ref.current, 'mech-hl-text');
+    if (mechKey) applyMechHighlight(ref.current, mechKey);
+  }, [mechKey, data]);
 
   return (
     <div

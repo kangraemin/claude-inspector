@@ -9,6 +9,8 @@ interface Props {
 
 export function RequestTab({ capture }: Props) {
   const locale = useUiStore((s) => s.locale);
+  const search = useUiStore((s) => s.search);
+  const mechFilter = useUiStore((s) => s.mechFilter);
 
   return (
     <div style={{ flex: 1, overflow: 'auto' }}>
@@ -18,7 +20,7 @@ export function RequestTab({ capture }: Props) {
         <span>{capture.path}</span>
       </div>
       {capture.body ? (
-        <JsonTree data={capture.body} />
+        <JsonTree data={capture.body} search={search || undefined} mechKey={mechFilter} />
       ) : (
         <div className="proxy-empty">{t(locale, 'proxy.noBody')}</div>
       )}

@@ -36,9 +36,17 @@ export function AnalysisTab({ capture }: Props) {
           <div className="analysis-section-title" style={{ color: 'var(--green)' }}>
             📋 {t(locale, 'analysis.claudeMdTitle')}
           </div>
-          <div className="analysis-block highlight-green" style={{ maxHeight: 300, overflow: 'auto' }}>
-            {detection.claudeMd}
-          </div>
+          {(() => {
+            const sections = parser.parseClaudeMdSections(detection.claudeMd!);
+            return sections.length > 0 ? sections.map((s, i) => (
+              <div key={i} style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: 'var(--dim)', marginBottom: 3, fontWeight: 600 }}>{s.label}</div>
+                <div className="analysis-block highlight-green" style={{ maxHeight: 200, overflow: 'auto' }}>{s.content}</div>
+              </div>
+            )) : (
+              <div className="analysis-block highlight-green" style={{ maxHeight: 300, overflow: 'auto' }}>{detection.claudeMd}</div>
+            );
+          })()}
         </div>
       )}
 
@@ -73,7 +81,10 @@ export function AnalysisTab({ capture }: Props) {
           </div>
           {detection.skills.map((sk) => (
             <div key={sk.id} className="analysis-block highlight-purple" style={{ fontSize: 11 }}>
-              {sk.id}
+              <div style={{ color: 'var(--purple)', fontWeight: 700, marginBottom: 4 }}>id: {sk.id}</div>
+              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--dim)', fontSize: 10 }}>
+                {JSON.stringify(sk.input, null, 2)}
+              </pre>
             </div>
           ))}
         </div>
@@ -86,7 +97,10 @@ export function AnalysisTab({ capture }: Props) {
           </div>
           {detection.subAgents.map((sa) => (
             <div key={sa.id} className="analysis-block highlight-orange" style={{ fontSize: 11 }}>
-              {sa.name}
+              <div style={{ color: 'var(--orange)', fontWeight: 700, marginBottom: 4 }}>{sa.name}</div>
+              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--dim)', fontSize: 10 }}>
+                {JSON.stringify(sa.input, null, 2)}
+              </pre>
             </div>
           ))}
         </div>

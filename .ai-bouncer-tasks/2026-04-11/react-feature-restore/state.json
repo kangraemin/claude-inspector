@@ -1,0 +1,18 @@
+{
+  "workflow_phase": "verification",
+  "mode": "normal",
+  "planning": { "no_question_streak": 0 },
+  "plan_approved": true,
+  "team_name": "react-feature-restore",
+  "current_dev_phase": 10,
+  "current_step": 1,
+  "dev_phases": {
+    "1": "css-additions", "2": "capture-limit", "3": "mechfilter-type",
+    "4": "jsontree-search", "5": "proxydetail-ui", "6": "requesttab-search",
+    "7": "responsetab-tokens", "8": "analysistab-sections",
+    "9": "header-version", "10": "app-onboarding"
+  },
+  "verification": { "rounds_passed": 0 },
+  "task_dir": ".ai-bouncer-tasks/2026-04-11/react-feature-restore",
+  "active_file": ".ai-bouncer-tasks/2026-04-11/react-feature-restore/.active"
+}
