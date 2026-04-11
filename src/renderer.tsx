@@ -12,6 +12,10 @@ function Root() {
   );
 }
 
+if (window.electronAPI?.platform === 'darwin') {
+  document.body.classList.add('darwin');
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <Root />
