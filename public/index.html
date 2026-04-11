@@ -1232,6 +1232,7 @@ let aiflowError = null;
 let aiflowSelectedIds = new Set();
 let aiflowOptimization = null;
 let aiflowOptimizing = false;
+let aiflowOptPartial = null;
 let cachedTips = null;
 let autoOptimize = localStorage.getItem('ci-auto-optimize') !== 'false'; // 기본 ON
 let aiflowCancelled = false;
@@ -2458,9 +2459,9 @@ function renderChatBubbles(container, streaming = false) {
 }
 
 async function cancelOptimization() {
-  if (window._cancelCurrentOptimization) window._cancelCurrentOptimization();
-  if (window._optTimerHandle) { clearInterval(window._optTimerHandle); window._optTimerHandle = null; }
   aiflowOptimizing = false;
+  aiflowOptPartial = null;
+  window.electronAPI.offAiflowProgress();
   if (window.electronAPI?.aiflowAnalyzeCancel) await window.electronAPI.aiflowAnalyzeCancel();
   const el = document.getElementById('aiflowOptContent');
   if (el) el.innerHTML = _optSectionInnerHTML();
@@ -2477,12 +2478,15 @@ function toggleAutoOptimize() {
 
 function _optSectionInnerHTML() {
   if (aiflowOptimizing) {
+    const partialHtml = aiflowOptPartial
+      ? `<div style="white-space:pre-wrap;font-size:11px;color:var(--dim);margin-top:6px;max-height:200px;overflow-y:auto;font-family:'SF Mono',monospace">${escapeHtml(aiflowOptPartial)}</div>`
+      : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
       <div class="aiflow-spinner" style="width:16px;height:16px;border-width:2px"></div>
       <span style="font-size:12px;color:var(--dim)">${i18n.t('aiflow.analyzing')}</span>
       <span style="font-size:11px;color:var(--dim);font-family:'SF Mono',monospace" id="optElapsed"></span>
       <button class="copy-small" style="margin-left:4px" onclick="cancelOptimization()">${i18n.t('aiflow.cancelAnalysis')}</button>
-    </div>`;
+    </div>${partialHtml}`;
   } else if (aiflowOptimization) {
     return `<div class="aiflow-summary-text" style="white-space:pre-wrap">${escapeHtml(aiflowOptimization)}</div>
       <button class="copy-small" style="margin-top:8px" onclick="requestOptimization()" id="aiflowOptBtn">${i18n.t('aiflow.reanalyze')}</button>`;
@@ -2495,69 +2499,59 @@ function _optSectionInnerHTML() {
 async function requestOptimization() {
   if (aiflowOptimizing) return;
   aiflowOptimizing = true;
-  let _cancelled = false;
-  window._cancelCurrentOptimization = () => { _cancelled = true; };
+  aiflowOptPartial = null;
 
+  // 초기 스피너 렌더링
   const optEl = document.getElementById('aiflowOptContent');
-  if (optEl) {
-    optEl.innerHTML = _optSectionInnerHTML();
-  } else {
-    renderAiFlowResult(document.getElementById('proxyDetailView'));
-  }
+  if (optEl) optEl.innerHTML = _optSectionInnerHTML();
+  else renderAiFlowResult(document.getElementById('proxyDetailView'));
 
-  // 경과 시간 타이머 (claude -p는 스트리밍 없이 완료 시 한 번에 출력 — 타이머로 진행 표시)
+  // 타이머
   const optStart = Date.now();
   const optTimer = setInterval(() => {
     const el = document.getElementById('optElapsed');
     if (el) el.textContent = `${Math.floor((Date.now() - optStart) / 1000)}s`;
-  }, 1000);
-  window._optTimerHandle = optTimer;
+  }, 500);
 
+  // 스트리밍 progress
   window.electronAPI.offAiflowProgress();
   window.electronAPI.onAiflowProgress((partial) => {
+    aiflowOptPartial = partial;
     const el = document.getElementById('aiflowOptContent');
-    if (el && aiflowOptimizing) {
-      const elapsed = Math.floor((Date.now() - optStart) / 1000);
-      el.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
-        <div class="aiflow-spinner" style="width:16px;height:16px;border-width:2px"></div>
-        <span style="font-size:12px;color:var(--dim)">${i18n.t('aiflow.analyzing')}</span>
-        <span style="font-size:11px;color:var(--dim);font-family:'SF Mono',monospace" id="optElapsed">${elapsed}s</span>
-        <button class="copy-small" style="margin-left:4px" onclick="cancelOptimization()">${i18n.t('aiflow.cancelAnalysis')}</button>
-      </div>
-      ${partial ? `<div style="white-space:pre-wrap;font-size:11px;color:var(--dim);margin-top:6px;max-height:200px;overflow-y:auto;font-family:'SF Mono',monospace">${escapeHtml(partial)}</div>` : ''}`;
-    }
+    if (el && aiflowOptimizing) el.innerHTML = _optSectionInnerHTML();
   });
 
   const prompt = buildOptimizationPrompt();
   const result = await window.electronAPI.aiflowAnalyze({ prompt });
-  clearInterval(optTimer);
-  window._optTimerHandle = null;
-  window.electronAPI.offAiflowProgress();
-  if (_cancelled) return;
 
+  clearInterval(optTimer);
+  window.electronAPI.offAiflowProgress();
   aiflowOptimizing = false;
-  if (result.success && result.response && result.response.trim()) {
+  aiflowOptPartial = null;
+
+  if (result.success && result.response?.trim()) {
     aiflowOptimization = result.response;
   } else if (result.success) {
-    aiflowOptimization = '(응답 없음 — 분석 재시도 필요)';
+    aiflowOptimization = '(응답 없음 — 재시도 필요)';
   } else {
     aiflowOptimization = i18n.t('aiflow.analyzeFail', { error: result.error || 'unknown' });
   }
 
-  const optEl3 = document.getElementById('aiflowOptContent');
-  if (optEl3) {
-    optEl3.innerHTML = _optSectionInnerHTML();
-    optEl3.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // 결과 렌더링: DOM 상태와 무관하게 항상 표시
+  const el2 = document.getElementById('aiflowOptContent');
+  if (el2) {
+    el2.innerHTML = _optSectionInnerHTML();
+    el2.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   } else if (aiflowResult) {
     const container = document.getElementById('proxyDetailView');
     if (container) {
       renderAiFlowResult(container);
       requestAnimationFrame(() => {
-        const el = document.getElementById('aiflowOptContent');
-        if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        document.getElementById('aiflowOptContent')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       });
     }
   }
+  // aiflowResult=null이어도 aiflowOptimization 저장됨 → AI Flow 탭 재진입 시 자동 렌더링
 }
 
 function jumpToRequest(reqNum, toolName) {
@@ -2611,7 +2605,11 @@ function getSessionColor(sessionId) {
 let _lastCheckedId = null;
 
 function _resetAiFlowIfDone() {
-  if (aiflowState === 'done') { aiflowState = 'ready'; aiflowResult = null; }
+  if (aiflowState === 'done' && !aiflowOptimizing) {
+    aiflowState = 'ready';
+    aiflowResult = null;
+    aiflowOptimization = null;
+  }
 }
 
 // Checkbox direct click: always toggle
