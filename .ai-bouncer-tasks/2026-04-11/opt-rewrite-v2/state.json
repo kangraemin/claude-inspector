@@ -1,0 +1,25 @@
+{
+  "workflow_phase": "development",
+  "mode": "normal",
+  "planning": {
+    "no_question_streak": 0
+  },
+  "plan_approved": true,
+  "team_name": "claude-inspector-rewrite",
+  "current_dev_phase": 5,
+  "current_step": 3,
+  "dev_phases": {
+    "1": { "name": "project-setup", "steps": {"1": "npm 패키지 설치", "2": "설정 파일 및 엔트리 생성", "3": "main.js Vite dev 분기 추가"} },
+    "2": { "name": "domain-layer", "steps": {"1": "entities 및 value-objects", "2": "repository 인터페이스", "3": "domain services"} },
+    "3": { "name": "application-layer", "steps": {"1": "ports 인터페이스", "2": "use cases 구현"} },
+    "4": { "name": "infrastructure-layer", "steps": {"1": "Electron 어댑터", "2": "InMemory 레포지토리"} },
+    "5": { "name": "presentation-layer", "steps": {"1": "DI 컨테이너 및 Zustand 스토어", "2": "hooks", "3": "App 최상위 구조"} },
+    "6": { "name": "ui-components", "steps": {"1": "ProxyPanel + ProxyList", "2": "ProxyDetail 탭", "3": "AiFlow + Optimization + Chat", "4": "shared 컴포넌트 + CSS"} },
+    "7": { "name": "build-and-test", "steps": {"1": "단위 테스트 + E2E 테스트", "2": "빌드 검증"} }
+  },
+  "verification": {
+    "rounds_passed": 0
+  },
+  "task_dir": ".ai-bouncer-tasks/2026-04-11/opt-rewrite-v2",
+  "active_file": ".ai-bouncer-tasks/2026-04-11/opt-rewrite-v2/.active"
+}
