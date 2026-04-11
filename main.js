@@ -122,9 +122,11 @@ function createWindow() {
   if (isDev) {
     win.loadURL('http://localhost:5173');
   } else {
+    const reactBuild = path.join(__dirname, 'dist/renderer/index.html');
+    const legacyHtml = path.join(__dirname, 'public/index.html');
     const htmlPath = app.isPackaged
-      ? path.join(__dirname, 'dist/renderer/index.html')
-      : path.join(__dirname, 'public/index.html');
+      ? reactBuild
+      : (require('fs').existsSync(reactBuild) ? reactBuild : legacyHtml);
     win.loadFile(htmlPath);
   }
 

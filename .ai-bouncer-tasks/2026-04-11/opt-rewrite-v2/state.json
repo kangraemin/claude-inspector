@@ -1,13 +1,13 @@
 {
-  "workflow_phase": "development",
+  "workflow_phase": "verification",
   "mode": "normal",
   "planning": {
     "no_question_streak": 0
   },
   "plan_approved": true,
   "team_name": "claude-inspector-rewrite",
-  "current_dev_phase": 6,
-  "current_step": 4,
+  "current_dev_phase": 7,
+  "current_step": 2,
   "dev_phases": {
     "1": { "name": "project-setup", "steps": {"1": "npm 패키지 설치", "2": "설정 파일 및 엔트리 생성", "3": "main.js Vite dev 분기 추가"} },
     "2": { "name": "domain-layer", "steps": {"1": "entities 및 value-objects", "2": "repository 인터페이스", "3": "domain services"} },
