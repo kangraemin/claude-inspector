@@ -2069,14 +2069,14 @@ function buildOptimizationPrompt() {
   const captures = buildCaptureSummaries();
   return `Analyze this Claude Code session data and provide optimization advice in ${lang}.
 
-Focus on:
-- prompt_injections (CLAUDE.md, rules, memory) sizes — which files are injected? How large? Explain HOW Claude Code loads them (system-reminder injection into messages[]).
-- Cache efficiency: cache_read vs total input ratio. High = good. Low = wasted tokens.
-- Token usage patterns across requests.
-- Specific actions to reduce cost (e.g., trim verbose CLAUDE.md, improve cache hit rate).
-- If already efficient, say so briefly.
+Focus ONLY on things the user can control and fix:
+- prompt_injections: which files are injected via system-reminder? Report each file name and size (chars). Flag anything over 2000 chars as potentially bloated.
+- Specific trimming advice: which sections are redundant, verbose, or rarely triggered? Give concrete examples.
+- rules files: are any rules duplicated across multiple files?
+- If everything looks lean already, say so briefly.
 
-Be concise. Use bullet points.
+Do NOT mention cache efficiency — it is controlled by Claude Code internally and not actionable by the user.
+Be concise. Use bullet points. Give specific file names and sizes.
 
 Data:
 ${JSON.stringify(captures, null, 1)}`;
@@ -2167,6 +2167,22 @@ function renderAiFlowResult(container) {
       <div class="aiflow-mermaid"><pre class="mermaid" id="aiflowMermaidPre"></pre></div>
     </div>`;
   }
+
+  // Optimization 섹션
+  html += `<div class="aiflow-step" style="border-color:rgba(86,156,214,.3)">
+    <div class="aiflow-step-header" style="background:rgba(86,156,214,.08)">
+      <div class="aiflow-step-num" style="background:var(--blue)">⚡</div>
+      <div class="aiflow-step-title" style="color:var(--blue)">${i18n.t('aiflow.optimizationTitle')}</div>
+    </div>
+    <div style="padding:12px">`;
+  if (aiflowOptimization) {
+    html += `<div class="aiflow-summary-text" style="white-space:pre-wrap">${escapeHtml(aiflowOptimization)}</div>
+      <button class="copy-small" style="margin-top:8px" onclick="requestOptimization()" id="aiflowOptBtn">${i18n.t('aiflow.reanalyze')}</button>`;
+  } else {
+    html += `<div style="color:var(--dim);font-size:12px;margin-bottom:8px">${i18n.locale === 'ko' ? 'CLAUDE.md, rules 파일 크기 및 토큰 최적화 기회를 분석합니다.' : 'Analyze CLAUDE.md, rules file sizes, and token optimization opportunities.'}</div>
+      <button class="copy-small" onclick="requestOptimization()" id="aiflowOptBtn">⚡ ${i18n.t('aiflow.optimizationTitle')}</button>`;
+  }
+  html += `</div></div>`;
 
   // Chat UI
   html += `<div class="aiflow-chat" id="aiflowChat">
