@@ -2536,17 +2536,27 @@ async function requestOptimization() {
   if (_cancelled) return;
 
   aiflowOptimizing = false;
-  if (result.success) {
+  if (result.success && result.response && result.response.trim()) {
     aiflowOptimization = result.response;
+  } else if (result.success) {
+    aiflowOptimization = '(응답 없음 — 분석 재시도 필요)';
   } else {
     aiflowOptimization = i18n.t('aiflow.analyzeFail', { error: result.error || 'unknown' });
   }
 
-  const optEl2 = document.getElementById('aiflowOptContent');
-  if (optEl2) {
-    optEl2.innerHTML = _optSectionInnerHTML();
-  } else {
-    renderAiFlowResult(document.getElementById('proxyDetailView'));
+  const optEl3 = document.getElementById('aiflowOptContent');
+  if (optEl3) {
+    optEl3.innerHTML = _optSectionInnerHTML();
+    optEl3.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } else if (aiflowResult) {
+    const container = document.getElementById('proxyDetailView');
+    if (container) {
+      renderAiFlowResult(container);
+      requestAnimationFrame(() => {
+        const el = document.getElementById('aiflowOptContent');
+        if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
+    }
   }
 }
 
