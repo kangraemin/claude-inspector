@@ -32,6 +32,12 @@ function AppInner() {
   const [onboarded, setOnboarded] = useState(() => !!localStorage.getItem('ci-onboarded'));
 
   useEffect(() => {
+    if ((window as any).electronAPI?.platform === 'darwin') {
+      document.body.classList.add('darwin');
+    }
+  }, []);
+
+  useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();

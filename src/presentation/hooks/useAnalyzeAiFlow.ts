@@ -9,6 +9,7 @@ export function useAnalyzeAiFlow() {
   const setAiflowState = useAiflowStore((s) => s.setAiflowState);
   const setAiflowPartial = useAiflowStore((s) => s.setAiflowPartial);
   const setAiflowResult = useAiflowStore((s) => s.setAiflowResult);
+  const setAiflowError = useAiflowStore((s) => s.setAiflowError);
   const captures = useCaptureStore((s) => s.captures);
   const locale = useUiStore((s) => s.locale);
 
@@ -24,11 +25,12 @@ export function useAnalyzeAiFlow() {
       setAiflowState('done');
       setAiflowPartial(null);
       setAiflowResult(result);
-    } catch {
+    } catch (e) {
       setAiflowState('error');
       setAiflowPartial(null);
+      setAiflowError(e instanceof Error ? e.message : String(e));
     }
-  }, [analyzeAiFlow, captures.length, locale, setAiflowPartial, setAiflowResult, setAiflowState]);
+  }, [analyzeAiFlow, captures.length, locale, setAiflowError, setAiflowPartial, setAiflowResult, setAiflowState]);
 
   const cancel = useCallback(() => {
     cancelAnalysis.execute();

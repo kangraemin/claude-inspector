@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { MechanismDetection } from '../../../domain/services/ResponseParserService';
 
 // ── module-level globals (same as index.html) ──
 let _jtId = 0;
@@ -161,18 +162,63 @@ function applySearchHighlight(container: HTMLElement, query: string) {
   }
 }
 
-function applyMechHighlight(container: HTMLElement, mechKey: string) {
+function expandAncestors(el: Element) {
+  let cur = el.parentElement;
+  while (cur) {
+    if (cur.id && cur.id.endsWith('-b') && (cur as HTMLElement).style.display === 'none') {
+      jtStrToggle(cur.id.replace(/-b$/, ''));
+    }
+    cur = cur.parentElement;
+  }
+}
+
+function highlightToolUseById(container: HTMLElement, toolUseId: string) {
+  const strEls = container.querySelectorAll<HTMLElement>('.jt-str, .jt-str-long');
+  for (const el of strEls) {
+    if ((el.textContent ?? '').replace(/^"|"$/g, '') !== toolUseId) continue;
+    let row: HTMLElement | null = el;
+    while (row && !row.classList.contains('jt-row')) row = row.parentElement;
+    if (!row) break;
+    expandAncestors(row);
+    row.classList.add('mech-hl-row');
+    requestAnimationFrame(() => row!.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    return;
+  }
+}
+
+function applyMechHighlight(container: HTMLElement, mechKey: string, mechDetection?: MechanismDetection | null) {
   const tagMap: Record<string, string> = {
     cm: 'system-reminder',
     sc: 'command-message',
   };
-  const tag = tagMap[mechKey];
-  if (!tag) return;
-  applySearchHighlight(container, tag);
-  container.querySelector('.search-hl')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  container.querySelectorAll('.search-hl').forEach(el => {
-    (el as HTMLElement).className = 'mech-hl-text';
-  });
+  const prefix = mechKey.split('_')[0];
+  const tag = tagMap[prefix] ?? tagMap[mechKey];
+  if (tag) {
+    applySearchHighlight(container, tag);
+    container.querySelector('.search-hl')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    container.querySelectorAll('.search-hl').forEach(el => {
+      (el as HTMLElement).className = 'mech-hl-text';
+    });
+    return;
+  }
+  if (prefix === 'sk' && mechDetection) {
+    const idx = mechKey.includes('_') ? parseInt(mechKey.split('_')[1]) : 0;
+    const sk = mechDetection.skills[idx];
+    if (sk?.id) highlightToolUseById(container, sk.id);
+    return;
+  }
+  if (prefix === 'sa' && mechDetection) {
+    const idx = mechKey.includes('_') ? parseInt(mechKey.split('_')[1]) : 0;
+    const sa = mechDetection.subAgents[idx];
+    if (sa?.id) highlightToolUseById(container, sa.id);
+    return;
+  }
+  if (prefix === 'mc' && mechDetection) {
+    const idx = mechKey.includes('_') ? parseInt(mechKey.split('_')[1]) : 0;
+    const mc = mechDetection.mcpTools[idx];
+    if (mc?.id) highlightToolUseById(container, mc.id);
+    return;
+  }
 }
 
 interface JsonTreeProps {
@@ -180,9 +226,12 @@ interface JsonTreeProps {
   className?: string;
   search?: string;
   mechKey?: string | null;
+  navIdx?: number;
+  onMatchTotal?: (n: number) => void;
+  mechDetection?: MechanismDetection | null;
 }
 
-export function JsonTree({ data, className, search, mechKey }: JsonTreeProps) {
+export function JsonTree({ data, className, search, mechKey, navIdx, onMatchTotal, mechDetection }: JsonTreeProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -206,13 +255,28 @@ export function JsonTree({ data, className, search, mechKey }: JsonTreeProps) {
   useEffect(() => {
     if (!ref.current) return;
     clearHighlight(ref.current, 'search-hl');
-    if (search?.trim()) applySearchHighlight(ref.current, search.trim());
-  }, [search, data]);
+    ref.current.querySelectorAll('.search-current').forEach(el => el.classList.remove('search-current'));
+    if (!search?.trim()) { onMatchTotal?.(0); return; }
+    applySearchHighlight(ref.current, search.trim());
+    const total = ref.current.querySelectorAll('.search-hl').length;
+    onMatchTotal?.(total);
+  }, [search, data, onMatchTotal]);
+
+  useEffect(() => {
+    if (!ref.current || navIdx == null) return;
+    const marks = ref.current.querySelectorAll<HTMLElement>('.search-hl');
+    marks.forEach(m => m.classList.remove('search-current'));
+    if (marks.length === 0) return;
+    const idx = ((navIdx % marks.length) + marks.length) % marks.length;
+    marks[idx].classList.add('search-current');
+    marks[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [navIdx]);
 
   useEffect(() => {
     if (!ref.current) return;
     clearHighlight(ref.current, 'mech-hl-text');
-    if (mechKey) applyMechHighlight(ref.current, mechKey);
+    ref.current.querySelectorAll('.mech-hl-row').forEach(el => el.classList.remove('mech-hl-row'));
+    if (mechKey) applyMechHighlight(ref.current, mechKey, mechDetection);
   }, [mechKey, data]);
 
   return (

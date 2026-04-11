@@ -17,9 +17,14 @@ interface AiFlowStoreState {
   chatting: boolean;
   chatPartial: string | null;
 
+  aiflowError: string | null;
+  lastCheckedId: number | null;
+
   selectedCaptureIds: Set<number>;
 
   setAiflowState: (state: AiFlowState) => void;
+  setAiflowError: (error: string | null) => void;
+  setLastCheckedId: (id: number | null) => void;
   setAiflowPartial: (partial: string | null) => void;
   setAiflowResult: (result: AiFlowResult | null) => void;
 
@@ -52,9 +57,14 @@ export const useAiflowStore = create<AiFlowStoreState>((set) => ({
   chatting: false,
   chatPartial: null,
 
+  aiflowError: null,
+  lastCheckedId: null,
+
   selectedCaptureIds: new Set<number>(),
 
   setAiflowState: (aiflowState) => set({ aiflowState }),
+  setAiflowError: (aiflowError) => set({ aiflowError }),
+  setLastCheckedId: (lastCheckedId) => set({ lastCheckedId }),
   setAiflowPartial: (aiflowPartial) => set({ aiflowPartial }),
   setAiflowResult: (aiflowResult) => set({ aiflowResult }),
 

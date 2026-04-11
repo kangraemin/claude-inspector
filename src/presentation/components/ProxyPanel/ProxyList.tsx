@@ -75,6 +75,8 @@ export function ProxyList() {
   const toggleCaptureSelection = useAiflowStore((s) => s.toggleCaptureSelection);
   const selectAllCaptures = useAiflowStore((s) => s.selectAllCaptures);
   const deselectAllCaptures = useAiflowStore((s) => s.deselectAllCaptures);
+  const lastCheckedId = useAiflowStore((s) => s.lastCheckedId);
+  const setLastCheckedId = useAiflowStore((s) => s.setLastCheckedId);
 
   const showCheck = detailTab === 'aiflow';
   const allSelected = captures.length > 0 && captures.every((c) => selectedCaptureIds.has(c.id));
@@ -86,15 +88,32 @@ export function ProxyList() {
 
   const handleSave = async () => {
     if (!window.electronAPI || captures.length === 0) return;
-    const data = JSON.stringify(captures, null, 2);
     const now = new Date().toISOString().slice(0, 10);
-    const result = await window.electronAPI.exportCaptures({
-      data,
-      defaultName: `claude-inspector-${now}.json`,
-    });
-    if (result.saved) {
-      setSaveLabel('Saved!');
-      setTimeout(() => setSaveLabel('Save'), 1200);
+    const sessionMap = new Map<string, typeof captures>();
+    for (const c of captures) {
+      const sid = c.sessionId?.toString() ?? 'default';
+      if (!sessionMap.has(sid)) sessionMap.set(sid, []);
+      sessionMap.get(sid)!.push(c);
+    }
+    if (sessionMap.size > 1 && (window.electronAPI as any).exportCaptureSessions) {
+      const payload = [...sessionMap.entries()].map(([sid, caps], i) => ({
+        filename: `claude-inspector-s${i + 1}-${sid.slice(0, 6)}-${now}.json`,
+        data: JSON.stringify(caps, null, 2),
+      }));
+      const result = await (window.electronAPI as any).exportCaptureSessions(payload);
+      if (!result.canceled) {
+        setSaveLabel('Saved!');
+        setTimeout(() => setSaveLabel('Save'), 1200);
+      }
+    } else {
+      const result = await window.electronAPI.exportCaptures({
+        data: JSON.stringify(captures, null, 2),
+        defaultName: `claude-inspector-${now}.json`,
+      });
+      if (result.saved) {
+        setSaveLabel('Saved!');
+        setTimeout(() => setSaveLabel('Save'), 1200);
+      }
     }
   };
 
@@ -133,7 +152,21 @@ export function ProxyList() {
               showCheck={showCheck}
               checked={selectedCaptureIds.has(c.id)}
               onSelect={() => selectCapture(c.id)}
-              onCheck={(e) => { e.stopPropagation(); toggleCaptureSelection(c.id); }}
+              onCheck={(e) => {
+                e.stopPropagation();
+                const id = c.id;
+                if (e.shiftKey && lastCheckedId !== null) {
+                  const ids = [...captures].sort((a, b) => a.id - b.id).map(x => x.id);
+                  const from = ids.indexOf(lastCheckedId), to = ids.indexOf(id);
+                  if (from >= 0 && to >= 0) {
+                    const [s, e2] = [Math.min(from, to), Math.max(from, to)];
+                    selectAllCaptures(ids.slice(s, e2 + 1));
+                  }
+                } else {
+                  toggleCaptureSelection(id);
+                }
+                setLastCheckedId(id);
+              }}
             />
           ))
         )}

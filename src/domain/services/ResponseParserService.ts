@@ -13,8 +13,9 @@ export interface MechanismDetection {
   claudeMd: string | null;
   outputStyle: string[] | null;
   slashCommand: { tag: string; full: string } | null;
-  skills: Array<{ id: string; input: unknown }>;
-  subAgents: Array<{ id: string; name: string; input: unknown }>;
+  skills: Array<{ id: string; input: unknown; result?: string }>;
+  subAgents: Array<{ id: string; name: string; input: unknown; result?: string }>;
+  mcpTools: Array<{ id: string; name: string; input: unknown; result?: string }>;
 }
 
 /** ResponseParserService — AI 응답 및 프록시 데이터 파싱 (기존 index.html 로직 이관) */
@@ -49,7 +50,7 @@ export class ResponseParserService {
   /** API 요청 body에서 Claude Code 5가지 메커니즘 탐지 */
   detectMechanisms(body: Record<string, unknown> | null): MechanismDetection {
     const found: MechanismDetection = {
-      claudeMd: null, outputStyle: null, slashCommand: null, skills: [], subAgents: [],
+      claudeMd: null, outputStyle: null, slashCommand: null, skills: [], subAgents: [], mcpTools: [],
     };
     if (!body) return found;
 
@@ -63,7 +64,7 @@ export class ResponseParserService {
     for (const msg of msgs) {
       const contents = Array.isArray(msg.content) ? msg.content
         : (typeof msg.content === 'string' ? [{ type: 'text', text: msg.content }] : []);
-      for (const c of contents as Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>) {
+      for (const c of contents as Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown; tool_use_id?: string; content?: unknown }>) {
         if (c.type === 'text' && typeof c.text === 'string') {
           const srMatch = c.text.match(/<system-reminder>([\s\S]*?)<\/system-reminder>/);
           if (srMatch && !found.claudeMd) found.claudeMd = srMatch[1].trim();
@@ -75,6 +76,18 @@ export class ResponseParserService {
         }
         if (c.type === 'tool_use' && (c.name === 'Task' || c.name === 'Agent')) {
           found.subAgents.push({ id: c.id ?? '', name: c.name, input: c.input });
+        }
+        if (c.type === 'tool_use' && typeof c.name === 'string' && c.name.startsWith('mcp__')) {
+          found.mcpTools.push({ id: c.id ?? '', name: c.name, input: c.input });
+        }
+        if (c.type === 'tool_result' && c.tool_use_id) {
+          const resultText = typeof c.content === 'string'
+            ? c.content
+            : JSON.stringify(c.content, null, 2);
+          const skill = found.skills.find(s => s.id === c.tool_use_id);
+          if (skill) skill.result = resultText;
+          const mcp = found.mcpTools.find(m => m.id === c.tool_use_id);
+          if (mcp) mcp.result = resultText;
         }
       }
     }
