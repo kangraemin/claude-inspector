@@ -2479,7 +2479,7 @@ function toggleAutoOptimize() {
 function _optSectionInnerHTML() {
   if (aiflowOptimizing) {
     const partialHtml = aiflowOptPartial
-      ? `<div style="white-space:pre-wrap;font-size:11px;color:var(--dim);margin-top:6px;max-height:200px;overflow-y:auto;font-family:'SF Mono',monospace">${escapeHtml(aiflowOptPartial)}</div>`
+      ? `<div style="white-space:pre-wrap;font-size:11px;color:var(--dim);margin-top:6px;max-height:200px;overflow-y:auto;font-family:'SF Mono',monospace">${esc(aiflowOptPartial)}</div>`
       : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
       <div class="aiflow-spinner" style="width:16px;height:16px;border-width:2px"></div>
@@ -2488,7 +2488,7 @@ function _optSectionInnerHTML() {
       <button class="copy-small" style="margin-left:4px" onclick="cancelOptimization()">${i18n.t('aiflow.cancelAnalysis')}</button>
     </div>${partialHtml}`;
   } else if (aiflowOptimization) {
-    return `<div class="aiflow-summary-text" style="white-space:pre-wrap">${escapeHtml(aiflowOptimization)}</div>
+    return `<div class="aiflow-summary-text" style="white-space:pre-wrap">${esc(aiflowOptimization)}</div>
       <button class="copy-small" style="margin-top:8px" onclick="requestOptimization()" id="aiflowOptBtn">${i18n.t('aiflow.reanalyze')}</button>`;
   } else {
     return `<div style="color:var(--dim);font-size:12px;margin-bottom:8px">${i18n.t('aiflow.optimizationDesc')}</div>
