@@ -2527,7 +2527,8 @@ function renderChatBubbles(container, streaming = false) {
     const typingDots = '<div class="chat-typing"><span></span><span></span><span></span></div>';
     const content = m.content || (isStreaming ? '' : '');
     const cursor = isStreaming ? (m.content ? '<span style="opacity:.6">▋</span>' : typingDots) : '';
-    return `<div class="chat-bubble ${m.role}${isStreaming ? ' streaming' : ''}">${esc(content)}${cursor}</div>`;
+    const rendered = m.role === 'assistant' ? markdownToHtml(content) : esc(content);
+    return `<div class="chat-bubble ${m.role}${isStreaming ? ' streaming' : ''}">${rendered}${cursor}</div>`;
   }).join('');
   container.scrollTop = container.scrollHeight;
 }
