@@ -625,8 +625,8 @@
     <button class="update-badge" id="updateBadge"></button>
   </div>
   <div class="header-right">
-    <button id="langToggleBtn" onclick="i18n.setLocale(i18n.locale==='ko'?'en':'ko')"
-      style="padding:4px 10px;border-radius:5px;font-size:11px;background:none;border:1px solid var(--border);color:var(--dim);cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:700;">EN</button>
+    <button id="langToggleBtn" onclick="i18n.setLocale(i18n.locale==='ko'?'en':'ko')" title="Click to toggle language"
+      style="padding:4px 10px;border-radius:5px;font-size:11px;background:none;border:1px solid var(--border);color:var(--dim);cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:700;">KO</button>
   </div>
 </header>
 
@@ -757,6 +757,17 @@ const LOCALES = {
       deselectAll: '전체 해제',
       selectToAnalyze: '왼쪽에서 분석할 요청을 선택하세요',
       optimizationTitle: '최적화 조언',
+      cancelAnalysis: '취소',
+      tips: [
+        '/compact 로 컨텍스트를 압축하면 토큰 사용이 줄어요',
+        'CLAUDE.md를 간결하게 유지하면 매 요청마다 토큰이 절약됩니다',
+        '! 커맨드 prefix로 셸 명령을 Claude 컨텍스트 소비 없이 실행할 수 있어요',
+        '캐시 히트율이 높을수록 API 비용이 크게 줄어듭니다',
+        'Sub-Agent는 메인 컨텍스트와 분리된 독립 세션으로 실행됩니다',
+        'Stop hook으로 대화 종료 시 워크로그, 커밋 등을 자동화할 수 있어요',
+        'system prompt 블록이 많을수록 캐시 효율이 좋아집니다',
+        'Skill은 CC 런타임 전용 — 직접 API 호출로는 동작하지 않아요',
+      ],
     },
     analysis: {
       noMechanisms: '감지된 메커니즘 없음<br><small>일반 API 요청이거나 분석 지원 외 패턴입니다</small>',
@@ -891,6 +902,17 @@ const LOCALES = {
       deselectAll: 'Deselect all',
       selectToAnalyze: 'Select requests to analyze from the left panel',
       optimizationTitle: 'Optimization Advice',
+      cancelAnalysis: 'Cancel',
+      tips: [
+        'Use /compact to compress context and reduce token usage',
+        'Keeping CLAUDE.md concise saves tokens on every request',
+        'Use ! prefix to run shell commands without consuming Claude context',
+        'Higher cache hit rates significantly reduce API costs',
+        'Sub-Agents run as isolated sessions, separate from main context',
+        'Stop hooks let you automate worklog, commit, etc. when a session ends',
+        'More system prompt blocks → better cache efficiency',
+        'Skills only work inside Claude Code runtime, not via direct API',
+      ],
     },
     analysis: {
       noMechanisms: 'No mechanisms detected<br><small>Plain API request or unsupported pattern</small>',
@@ -1006,7 +1028,7 @@ function applyI18n() {
   });
   // lang toggle button text
   const btn = document.getElementById('langToggleBtn');
-  if (btn) btn.textContent = i18n.locale === 'ko' ? 'EN' : '한';
+  if (btn) btn.textContent = i18n.locale === 'ko' ? 'KO' : 'EN';
   // re-render proxy content that depends on locale
   if (proxyCaptures.length > 0) {
     renderProxyList();
@@ -1203,6 +1225,8 @@ let aiflowResult = null;
 let aiflowError = null;
 let aiflowSelectedIds = new Set();
 let aiflowOptimization = null;
+let aiflowCancelled = false;
+let aiflowTipsTimer = null;
 let proxyDetailSearch = '';
 let proxyDetailMechFilter = null;
 let proxyRunning = false;
@@ -1818,9 +1842,17 @@ function renderAiFlow(container) {
   if (aiflowState === 'done' && aiflowResult) { renderAiFlowResult(container); return; }
 
   if (aiflowState === 'analyzing') {
-    container.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;padding:16px';
-    container.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><div class="aiflow-spinner"></div><span class="status-text">${i18n.t('aiflow.analyzing')}</span><span id="aiflowElapsed" style="font-size:11px;color:var(--dim);font-family:'SF Mono',monospace"></span></div>
-      <pre id="aiflowProgressText" style="flex:1;overflow-y:auto;font-size:11px;color:var(--dim);font-family:'SF Mono',monospace;white-space:pre-wrap;word-break:break-word;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-top:12px"></pre>`;
+    container.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column';
+    container.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:40px 20px;text-align:center">
+      <div class="aiflow-spinner" style="width:48px;height:48px;border-width:4px"></div>
+      <div>
+        <div style="font-size:13px;color:var(--text);font-weight:500;margin-bottom:6px">${i18n.t('aiflow.analyzing')}</div>
+        <div style="font-size:11px;color:var(--dim);font-family:'SF Mono',monospace" id="aiflowElapsed"></div>
+      </div>
+      <div id="aiflowTip" style="font-size:12px;color:var(--dim);max-width:340px;line-height:1.7;opacity:0.65;min-height:2.5em;transition:opacity 0.4s ease"></div>
+      <button onclick="cancelAiFlow()" style="padding:5px 18px;border-radius:5px;font-size:12px;background:none;border:1px solid var(--border);color:var(--dim);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--dim)'">${i18n.t('aiflow.cancelAnalysis')}</button>
+    </div>`;
+    startAiFlowTips();
     return;
   }
 
@@ -1839,7 +1871,35 @@ function renderAiFlow(container) {
   container.innerHTML = `<div class="aiflow-status"><div class="status-icon">🧠</div><div class="status-text">${i18n.t('aiflow.aiflowDesc')}</div><div class="aiflow-info-text">${countText}</div><button class="aiflow-btn aiflow-btn-primary"${btnDisabled} onclick="startAiFlowAnalysis()">${i18n.t('aiflow.analyzeBtn')}</button></div>`;
 }
 
+function startAiFlowTips() {
+  const tips = i18n.t('aiflow.tips');
+  if (!Array.isArray(tips) || tips.length === 0) return;
+  let idx = Math.floor(Math.random() * tips.length);
+  const el = document.getElementById('aiflowTip');
+  if (el) el.textContent = tips[idx];
+  clearInterval(aiflowTipsTimer);
+  aiflowTipsTimer = setInterval(() => {
+    const tipEl = document.getElementById('aiflowTip');
+    if (!tipEl) { clearInterval(aiflowTipsTimer); return; }
+    tipEl.style.opacity = '0';
+    setTimeout(() => {
+      idx = (idx + 1) % tips.length;
+      tipEl.textContent = tips[idx];
+      tipEl.style.opacity = '0.65';
+    }, 400);
+  }, 10000);
+}
+
+function cancelAiFlow() {
+  aiflowCancelled = true;
+  clearInterval(aiflowTipsTimer);
+  window.electronAPI.offAiflowProgress();
+  aiflowState = 'ready';
+  renderAiFlow(document.getElementById('proxyDetailView'));
+}
+
 async function startAiFlowAnalysis() {
+  aiflowCancelled = false;
   aiflowState = 'analyzing';
   aiflowResult = null;
   aiflowChatMessages = [];
@@ -1853,16 +1913,16 @@ async function startAiFlowAnalysis() {
     if (el) el.textContent = `${Math.floor((Date.now() - startTime) / 1000)}s`;
   }, 1000);
 
-  // 실시간 프로그레스
-  window.electronAPI.onAiflowProgress((text) => {
-    const pre = document.getElementById('aiflowProgressText');
-    if (pre) { pre.textContent = text; pre.scrollTop = pre.scrollHeight; }
-  });
+  // 실시간 프로그레스 (숨김 — 팁 UI로 대체)
+  window.electronAPI.onAiflowProgress(() => {});
 
   const prompt = buildAiFlowPrompt();
   const result = await window.electronAPI.aiflowAnalyze({ prompt });
   clearInterval(elapsedTimer);
+  clearInterval(aiflowTipsTimer);
   window.electronAPI.offAiflowProgress();
+
+  if (aiflowCancelled) return;
 
   if (result.success) {
     aiflowResult = parseAiFlowResponse(result.response);
