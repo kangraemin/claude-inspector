@@ -7,6 +7,9 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --enable-logging",
+    "dev:vite": "vite",
+    "dev:electron": "VITE_DEV=1 electron . --enable-logging",
+    "dev:full": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "predist": "node -e \"const {execSync}=require('child_process');const fs=require('fs');const hash=execSync('git rev-parse --short HEAD').toString().trim();const pkg=require('./package.json');fs.writeFileSync('public/build-info.json',JSON.stringify({version:pkg.version,hash,built:new Date().toISOString()}))\"",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
@@ -58,11 +61,20 @@
   "dependencies": {
     "@sentry/electron": "^7.10.0",
     "dotenv": "^17.3.1",
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.8"
   }
 }

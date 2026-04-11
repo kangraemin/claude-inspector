@@ -118,12 +118,24 @@ function createWindow() {
     show: false,
   });
 
-  win.loadFile(path.join(__dirname, 'public/index.html'));
+  const isDev = !app.isPackaged && process.env.VITE_DEV === '1';
+  if (isDev) {
+    win.loadURL('http://localhost:5173');
+  } else {
+    const htmlPath = app.isPackaged
+      ? path.join(__dirname, 'dist/renderer/index.html')
+      : path.join(__dirname, 'public/index.html');
+    win.loadFile(htmlPath);
+  }
 
   // Retry on load failure (macOS quarantine scan can lock the asar on first launch)
   win.webContents.on('did-fail-load', () => {
     setTimeout(() => {
-      if (!win.isDestroyed()) win.loadFile(path.join(__dirname, 'public/index.html'));
+      if (!win.isDestroyed()) {
+        const isDev2 = !app.isPackaged && process.env.VITE_DEV === '1';
+        if (isDev2) win.loadURL('http://localhost:5173');
+        else win.loadFile(path.join(__dirname, 'public/index.html'));
+      }
     }, 1500);
   });
 
