@@ -1,36 +1,20 @@
 const https = require('node:https');
-const fs = require('node:fs');
-const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 
 const MEASUREMENT_ID = process.env.GA4_MEASUREMENT_ID || 'G-Q72NP8CB65';
 const API_SECRET     = process.env.GA4_API_SECRET     || 'ZfvhJ6CeTbuUZIfecLo4JA';
 
-let _clientId = null;
-let _userDataPath = '';
 let _sessionId = null;
 
-function init(userDataPath) {
-  _userDataPath = userDataPath;
-  _sessionId = Date.now().toString();
-}
-
-function getClientId() {
-  if (_clientId) return _clientId;
-  const file = path.join(_userDataPath, 'analytics.json');
-  try {
-    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (data.clientId) { _clientId = data.clientId; return _clientId; }
-  } catch {}
-  _clientId = randomUUID();
-  try { fs.writeFileSync(file, JSON.stringify({ clientId: _clientId })); } catch {}
-  return _clientId;
+function init() {
+  // 세션마다 새 UUID — 파일 저장 없음, 유저 추적 불가
+  _sessionId = randomUUID();
 }
 
 function trackEvent(eventName, params = {}) {
   if (!MEASUREMENT_ID || !API_SECRET) return;
   const body = JSON.stringify({
-    client_id: getClientId(),
+    client_id: _sessionId, // 세션 단위 임시 ID, 영구 저장 안 함
     events: [{ name: eventName, params: { ...params, session_id: _sessionId, engagement_time_msec: 100, app_version: require('./package.json').version } }],
   });
   const req = https.request({

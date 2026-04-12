@@ -142,7 +142,7 @@ function createWindow() {
 let _appOpenTime = null;
 
 app.whenReady().then(() => {
-  analytics.init(app.getPath('userData'));
+  analytics.init();
   _appOpenTime = Date.now();
   analytics.trackEvent('app_open');
   if (process.platform === 'darwin') {
