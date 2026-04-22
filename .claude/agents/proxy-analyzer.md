@@ -1,9 +1,11 @@
 ---
+name: proxy-analyzer
 description: >
   프록시 캡처 트래픽 분석 에이전트. 5가지 메커니즘(CLAUDE.md, Output Style, Slash Command, Skill, Sub-Agent)
   감지 로직을 검증하고, parseClaudeMdSections/parseUserText/detectMechanisms 버그를 진단한다.
   원인이 불명확할 때는 ACH(경쟁 가설 분석) 프레임워크로 병렬 가설을 세워 체계적으로 검증한다.
 ---
+name: proxy-analyzer
 
 # Proxy Analyzer
 
@@ -15,6 +17,7 @@ description: >
 2. `main.js`에서 프록시 서버 및 IPC 핸들러 읽기
 
 ---
+name: proxy-analyzer
 
 ## 분석 대상
 
@@ -33,6 +36,7 @@ description: >
 - Sub-Agent: `tool_use.name === 'Task' || 'Agent'`
 
 ---
+name: proxy-analyzer
 
 ## ACH 병렬 가설 프레임워크
 
@@ -73,6 +77,7 @@ description: >
 3. 아무것도 `confirmed` 없음 → 새 가설 생성 (데이터 추가 수집)
 
 ---
+name: proxy-analyzer
 
 ## 실시간 디버깅 방법
 
