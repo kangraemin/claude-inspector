@@ -8,3 +8,6 @@ dist/
 .idea/
 request_test.json
 public/build-info.json
+
+# ai-bouncer 런타임 상태
+.ai-bouncer/

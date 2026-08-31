@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+d="$PWD"
+while [ "$d" != "/" ]; do
+  if [ -f "$d/.claude/ai-bouncer/engine/bouncer.sh" ]; then
+    exec bash "$d/.claude/ai-bouncer/engine/bouncer.sh" "$@"
+  fi
+  d="$(dirname "$d")"
+done
+printf 'ai-bouncer: 이 프로젝트에 설치되어 있지 않다 (./install.sh 로 설치).\n' >&2
+exit 1

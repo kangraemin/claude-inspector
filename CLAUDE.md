@@ -11,3 +11,15 @@
 - `#proxyDetailView`는 inline style로 `flex:1;overflow:hidden;display:flex;flex-direction:column` 지정됨
 - **Messages 탭**: `container.style.cssText`로 `display:block;overflow-y:auto`로 전체 전환 (부분 override 불가)
 - **다른 탭 전환 시**: `cssText`로 원래 flex 스타일 복원
+
+<!-- ai-bouncer:start -->
+## ai-bouncer
+
+코드 수정·기능 구현·버그 수정·리팩터링 등 **개발 작업은 `/dev-bounce`로 시작한다.**
+스킬을 거치지 않고 Edit / Write / Bash로 소스를 고치지 않는다.
+
+- 작업이 시작되면 hook이 단계별 규칙을 강제한다. 시작 전에는 아무것도 막지 않는다.
+- 진행 중인 작업이 있는지 `bouncer status`로 먼저 확인하고, 있으면 이어서 한다.
+- 질문·설명 요청은 해당 없다. 그냥 답하면 된다.
+- hook이 차단하면 우회하지 말고 차단 사유에 적힌 조건을 충족시켜라.
+<!-- ai-bouncer:end -->

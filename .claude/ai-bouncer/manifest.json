@@ -1,0 +1,14 @@
+{
+  "files": [
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/engine/compile.py",
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/engine/bouncer.sh",
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/engine/lib/common.sh",
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/session-start.sh",
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/pre-tool.sh",
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/post-tool.sh",
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/stop.sh",
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/session-end.sh",
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/scripts/update-check.sh",
+    "/Users/ram/programming/vibecoding/claudeInspector/.claude/skills/dev-bounce/SKILL.md"
+  ]
+}

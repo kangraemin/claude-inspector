@@ -1,0 +1,108 @@
+# ai-bouncer 워크플로우 정의
+#
+# 이 파일을 고치면 다음 세션 시작 때 자동으로 재컴파일된다.
+# 스키마: docs/SCHEMA.md
+
+version: 1
+
+# ─────────────────────────────────────────────────────────────
+# 엔진 설정. 적지 않으면 아래 기본값이 쓰인다.
+# ─────────────────────────────────────────────────────────────
+settings:
+  update_branch: main        # 자동 업데이트 기준 브랜치 (dev 등으로 바꿀 수 있다)
+  # update_check: true       # 업데이트 확인 on/off
+  # max_attempts: 3          # blocking 실패를 몇 번 재시도한 뒤 on_fail로 보낼지
+  # max_continue: 10         # 한 단계에서 연속으로 밀어붙일 상한. 넘으면 사용자에게 묻는다
+  # stale_lock_hours: 12     # 이 시간 넘게 멈춘 잠금을 정리
+
+# ─────────────────────────────────────────────────────────────
+# 워크플로우 — /dev-bounce 실행 시 이 목록이 그대로 모드 선택지가 된다.
+# ─────────────────────────────────────────────────────────────
+workflows:
+
+  plan:
+    label: 계획을 세우고 승인받은 뒤 구현
+    stages: [plan, implement, verify, finalize, done]
+
+  simple:
+    label: 계획 없이 바로 구현
+    stages: [implement, verify, finalize, done]
+
+
+stages:
+
+  # ── 계획 ──────────────────────────────────────────────────
+  # 유일하게 Claude Code의 실제 승인 UI(plan mode)를 쓰는 스테이지.
+  plan:
+    steps:
+      - label: 계획 수립과 승인
+        blocking: plan_approved
+        inject_file: prompts/plan.md
+    forbid:
+      edit_files: true
+      push: true
+      reason: 계획 승인 전에는 코드를 수정할 수 없다.
+
+  # ── 구현 ──────────────────────────────────────────────────
+  implement:
+    steps:
+      - label: 구현
+        inject: |
+          [implement] 구현 단계다.
+          승인된 계획의 After 코드를 그대로 구현한다. 범위를 임의로 넓히거나 줄이지 않는다.
+          구현이 끝나도 멈추지 말고 검증까지 진행한다.
+    forbid:
+      push: true
+      reason: 검증 전에는 push할 수 없다.
+
+  # ── 검증 ──────────────────────────────────────────────────
+  verify:
+    on_fail: implement
+    steps:
+      - label: 검증 보고
+        blocking: true
+        inject: |
+          [verify] 검증 단계다. 추측 금지 — 실제로 실행해서 확인한다.
+            1. 이 프로젝트의 테스트 / 빌드 / 린트를 실행한다.
+            2. 실행한 명령어와 출력을 사용자에게 보고한다.
+            3. 실패한 것을 통과로 보고하지 않는다.
+
+      # 프로젝트 검증 명령을 여기에 추가하면 hook이 실행 결과를 직접 관찰한다.
+      # 자기 보고와 달리 모델이 우회할 수 없다.
+      #
+      # - label: 유닛 테스트
+      #   run: "npm test -- --run"
+      #   timeout: 900
+      #   blocking: true
+      #
+      # - label: e2e
+      #   run: "npx playwright test"
+      #   timeout: 1800
+      #   blocking: true
+      #   optional: true          # 시작할 때 할지 말지 물어본다
+    forbid:
+      push: true
+      reason: 검증이 끝나기 전에는 push할 수 없다.
+
+  # ── 마무리 ────────────────────────────────────────────────
+  finalize:
+    steps:
+      - label: 커밋과 푸시
+        inject: |
+          [finalize] 마무리 단계다.
+            1. 변경 파일을 개별 git add 한다. `git add .` / `-A` 금지.
+            2. 커밋한다 — type은 영어, 설명은 한글, 50자 이내.
+            3. push한다.
+
+      - label: 워킹트리 정리 확인
+        run: 'test -z "$(git status --porcelain)"'
+        by: engine
+        blocking: true
+
+  # ── 종단 ──────────────────────────────────────────────────
+  done:
+    steps:
+      - label: 완료 보고
+        inject: |
+          [done] 작업이 끝났다. 무엇을 바꿨는지 한 번 요약해 보고하고 멈춘다.
+          사용자 지시 없이 새 작업을 시작하지 않는다.
