@@ -210,8 +210,8 @@ while IFS= read -r step; do
     # 반면 순수 inject blocking은 모델의 자기신고이므로 실제 사용자 턴이 있어야 인정한다.
     if [ "$DONE" = "true" ]; then
       case "$BLOCKING" in
-        plan_approved|skill:*|checklist|done) continue ;;
-        *) [ "$USER_TURN_HAPPENED" = "true" ] && continue ;;
+        # 사람 확인 게이트는 없앴다 — inject 의 blocking: true 도 모델의 done 표시로 통과한다.
+        *) continue ;;
       esac
     fi
 
@@ -239,17 +239,14 @@ while IFS= read -r step; do
           bouncer_state_update "$TASK" --arg k "$ID" '.evidence[$k] = true'
           continue
         fi ;;
-      done)
+      *)
         # 사람을 기다리지 않는다 — 모델이 할 일을 마치고 직접 표시한다.
+        # (예전엔 inject + blocking: true 가 "사용자 확인 대기"였다. 작업 도중 매번
+        #  승인을 묻게 만들어 없앴다. true 와 done 은 이제 같다.)
         add_inject "→ 위를 마쳤으면 실행: bouncer done '$ID'   ($LABEL)"
         add_failure "아직 완료 표시 안 됨 ($LABEL)"; add_blocking_id "$ID"
         PENDING_DONE=1 ;;
-      *)
-        if [ "$DONE" != "true" ]; then
-          add_inject "→ 위를 마쳤으면 실행: bouncer done '$ID'   ($LABEL)"
-        fi
-        add_failure "사용자 확인 대기 중 ($LABEL)"; add_blocking_id "$ID"
-        HUMAN_WAIT=1 ;;
+
     esac
     continue
   fi

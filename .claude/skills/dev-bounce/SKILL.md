@@ -195,7 +195,7 @@ Step 1에 `OTHER`가 있었으면 그냥 `start`하면 거부된다. 사용자�
 | `bouncer todo drop <n>` | 범위에서 뺀다 (기록에 남으니 사유를 사용자에게 알린다) |
 | `bouncer status` | 현재 단계와 남은 조건 (각 step의 `id:` 도 함께 나온다) |
 | `bouncer run <step-id>` | 검증 명령 실행 후 결과 기록. 명령 문자열은 엔진이 소유한다 |
-| `bouncer done <step-id>` | 사람 확인이 필요한 step 완료 처리 |
+| `bouncer done <step-id>` | 할 일을 마친 step 완료 표시 (사람 확인은 없다) |
 | `bouncer cancel` | 작업 취소 |
 | `bouncer skip <step-id>` | 엔진이 포기한 조건을 이번 작업에서만 건너뛴다 (사용자가 요청할 때만) |
 | `bouncer release [--force]` | 죽은 세션이 남긴 잠금 확인 / 회수 |
