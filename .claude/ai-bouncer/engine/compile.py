@@ -17,10 +17,18 @@ from datetime import datetime, timezone
 
 
 def _strip_comment(line):
-    out, quote = [], None
+    out, quote, esc = [], None, False
     for i, ch in enumerate(line):
         if quote:
             out.append(ch)
+            if esc:
+                esc = False
+                continue
+            # 겹따옴표 안의 `\"` 는 닫는 따옴표가 아니다. 이걸 모르면
+            # `"a \" # b"` 에서 문자열이 일찍 끝난 줄 알고 ` # ` 부터 잘라낸다.
+            if quote == '"' and ch == '\\':
+                esc = True
+                continue
             if ch == quote:
                 quote = None
         elif ch in "\"'":
@@ -59,10 +67,49 @@ def _split_flow(s):
     return [p.strip() for p in parts if p.strip()]
 
 
+_DQ_ESC = {'0': '\0', 'a': '\a', 'b': '\b', 't': '\t', '\t': '\t', 'n': '\n',
+           'v': '\v', 'f': '\f', 'r': '\r', 'e': '\x1b', ' ': ' ', '"': '"',
+           '/': '/', '\\': '\\', 'N': '\x85', '_': '\xa0'}
+
+
+def _unquote(v):
+    r"""따옴표 스칼라의 이스케이프를 YAML 규칙대로 푼다.
+
+    예전에는 따옴표만 벗겨냈다. 그러면 `"curl .*\\| *(bash|sh)"` 가
+    pyyaml에서는 `\|`(리터럴 파이프), 내장 파서에서는 `\\|`(파이프 대체)가 되어
+    **같은 파일이 머신마다 다른 정규식**이 됐다 — 에러도 경고도 없이.
+    앵커를 거부하면서까지 막으려던 바로 그 문제다.
+    """
+    q, body = v[0], v[1:-1]
+    if q == "'":
+        return body.replace("''", "'")          # 홑따옴표는 '' 만 이스케이프
+    out, i = [], 0
+    while i < len(body):
+        c = body[i]
+        if c != '\\':
+            out.append(c); i += 1; continue
+        if i + 1 >= len(body):
+            raise ConfigError('문자열이 백슬래시로 끝난다: %s' % v)
+        e = body[i + 1]
+        if e in _DQ_ESC:
+            out.append(_DQ_ESC[e]); i += 2; continue
+        if e in 'xuU':
+            n = {'x': 2, 'u': 4, 'U': 8}[e]
+            hexs = body[i + 2:i + 2 + n]
+            if len(hexs) != n or any(h not in '0123456789abcdefABCDEF' for h in hexs):
+                raise ConfigError('잘못된 이스케이프 `\\%s%s` — %s' % (e, hexs, v))
+            out.append(chr(int(hexs, 16))); i += 2 + n; continue
+        # 모르는 이스케이프를 그냥 통과시키면 pyyaml과 결과가 갈린다. 거부한다.
+        raise ConfigError(
+            '겹따옴표 문자열에서 `\\%s` 는 YAML 이스케이프가 아니다: %s\n'
+            '정규식처럼 백슬래시를 그대로 쓰려면 홑따옴표를 써라: \'...\'' % (e, v))
+    return ''.join(out)
+
+
 def _scalar(v):
     v = v.strip()
     if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
-        return v[1:-1]
+        return _unquote(v)
     if v.startswith('[') and v.endswith(']'):
         return [_scalar(x) for x in _split_flow(v[1:-1])]
     if v.startswith('{') and v.endswith('}'):          # 플로우 매핑
@@ -70,7 +117,13 @@ def _scalar(v):
         for item in _split_flow(v[1:-1]):
             k, sep, val = item.partition(':')
             if sep:
-                out[_scalar(k.strip())] = _scalar(val)
+                key = _scalar(k.strip())
+                if key in out:
+                    # 블록 스타일과 같은 이유로 거부한다 — forbid 를 두 번 쓰면
+                    # 뒤엣것이 이겨서 가드가 에러 없이 사라진다.
+                    raise ConfigError('중복된 키: `%s` — 같은 매핑에 두 번 있다. '
+                                      '뒤엣것이 앞엣것을 조용히 덮어쓰므로 거부한다.' % key)
+                out[key] = _scalar(val)
         return out
     low = v.lower()
     if low in ('true', 'yes'):
@@ -172,6 +225,11 @@ def mini_yaml(text):
                 break
             pos[0] += 1
             key = _scalar(key.strip())
+            if key in out:
+                # YAML은 중복 키를 조용히 덮어쓴다. 그러면 forbid 같은 가드가
+                # 에러 없이 사라진다. 이 도구에서는 그게 최악의 실패 모드다.
+                raise ConfigError('중복된 키: `%s` — 같은 블록에 두 번 있다. '
+                                  '뒤엣것이 앞엣것을 조용히 덮어쓰므로 거부한다.' % key)
             val = val.strip()
             if val in ('|', '|-', '>', '>-'):
                 out[key] = block_scalar(ind, val)
@@ -189,10 +247,28 @@ def load_yaml(path, force_mini=False):
         text = fh.read()
     if not force_mini:
         try:
-            import yaml  # noqa
-            return yaml.safe_load(text), 'pyyaml'
+            import yaml
         except ImportError:
-            pass
+            yaml = None
+        if yaml is not None:
+            class _NoDupLoader(yaml.SafeLoader):
+                pass
+
+            def _no_dup(loader, node, deep=False):
+                mapping = {}
+                for key_node, value_node in node.value:
+                    key = loader.construct_object(key_node, deep=deep)
+                    if key in mapping:
+                        raise ConfigError(
+                            '중복된 키: `%s` (%d행) — 같은 블록에 두 번 있다. '
+                            '뒤엣것이 앞엣것을 조용히 덮어쓰므로 거부한다.'
+                            % (key, key_node.start_mark.line + 1))
+                    mapping[key] = loader.construct_object(value_node, deep=deep)
+                return mapping
+
+            _NoDupLoader.add_constructor(
+                yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_dup)
+            return yaml.load(text, Loader=_NoDupLoader), 'pyyaml'
     # 내장 파서는 앵커를 조용히 먹어버린다 — 머신마다 뜻이 달라지므로 거부한다.
     for n, line in enumerate(text.split('\n'), 1):
         s = _strip_comment(line)
@@ -211,12 +287,18 @@ STAGE_KEYS = {'steps', 'forbid', 'on_fail'}
 STEP_KEYS = {'label', 'inject', 'inject_file', 'run', 'by', 'timeout', 'blocking', 'optional'}
 ENGINE_TIMEOUT_MAX = 60   # Stop hook 예산을 먹지 않게. 넘으면 by: model을 써야 한다.
 FORBID_KEYS = {'edit_files', 'push', 'bash', 'reason'}
-BLOCKING_VALUES = (True, 'plan_approved')
-SKILL_RE = re.compile(r'^skill:[A-Za-z0-9][\w.-]*$')
+BLOCKING_VALUES = (True, 'plan_approved', 'checklist', 'done')
+# 플러그인 스킬은 이름에 콜론이 들어간다 (예: telegram:access)
+SKILL_RE = re.compile(r'^skill:[A-Za-z0-9][\w.:-]*$')
 
 
 def _valid_blocking(v):
-    return v in BLOCKING_VALUES or (isinstance(v, str) and SKILL_RE.match(v))
+    # 파이썬에서 1 == True 라 정수 1이 조용히 통과한다. 타입을 정확히 본다.
+    if isinstance(v, bool):
+        return v is True
+    if isinstance(v, str):
+        return v in ('plan_approved', 'checklist', 'done') or bool(SKILL_RE.match(v))
+    return False
 
 
 class ConfigError(Exception):
@@ -250,7 +332,7 @@ def _compile_steps(stage, items, base_dir, sources):
 
         blocking = item.get('blocking')
         if blocking is not None and not _valid_blocking(blocking):
-            _err(where, 'blocking 값은 true / plan_approved / skill:<이름> 만 가능하다 '
+            _err(where, 'blocking 값은 true / plan_approved / checklist / done / skill:<이름> 만 가능하다 '
                         '(현재: %r)' % blocking)
         if blocking != True and blocking is not None and kind == 'run':
             _err(where, '%r는 inject 전용이다 — 도구 사용을 hook이 관찰하는 방식이라 '
@@ -355,6 +437,7 @@ SETTINGS = {
     'update_check_interval_hours': 6,
     'max_attempts': 3,
     'max_continue': 10,
+    'max_loops': 3,
     'stale_lock_hours': 12,
     'repo': 'kangraemin/ai-bouncer',
 }
@@ -435,6 +518,18 @@ def compile_config(raw, base_dir, sources):
             if chain.index(target) >= idx:
                 _err('stages.%s.on_fail' % sname,
                      '`%s`는 앞선 스테이지가 아니다 — 되돌아가기만 허용된다' % target)
+
+    # 종단 스테이지에 통과 조건을 걸면 작업이 영원히 안 끝나고 잠금이 남는다.
+    # 넘어갈 다음 단계가 없으므로 조건을 충족해도 갈 곳이 없기 때문이다.
+    for wname, wf in workflows.items():
+        last = wf['stages'][-1]
+        blocking = [st['label'] for st in stages[last]['steps'] if st.get('blocking')]
+        if blocking:
+            _err('stages.%s' % last,
+                 '워크플로우 `%s`의 마지막 스테이지인데 통과 조건이 걸려 있다: %s\n'
+                 '  마지막 스테이지는 넘어갈 곳이 없어서, 조건을 걸면 작업이 끝나지 않고\n'
+                 '  잠금이 남는다. 조건이 필요하면 그 앞에 스테이지를 하나 두고 거기에 걸어라.'
+                 % (wname, ', '.join(blocking)))
 
     used = {s for w in workflows.values() for s in w['stages']}
     orphans = sorted(set(stages) - used)

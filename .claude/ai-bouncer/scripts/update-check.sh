@@ -50,14 +50,15 @@ fi
 
 # ── 트랙이 바뀐 경우 ─────────────────────────────────────────
 if [ -n "$local_branch" ] && [ "$local_branch" != "$BRANCH" ]; then
-  printf 'ai-bouncer: 업데이트 트랙이 %s → %s 로 바뀌었습니다. `bouncer-update`로 전환하세요.\n' \
-    "$local_branch" "$BRANCH"
+  printf 'ai-bouncer: 업데이트 트랙이 %s → %s 로 바뀌었습니다. 전환하려면:\n' "$local_branch" "$BRANCH"
+  printf '  curl -fsSL https://raw.githubusercontent.com/%s/main/get.sh | bash -s update\n' "$REPO"
   exit 0
 fi
 
 [ "$local_sha" = "$remote" ] && exit 0
 
 short_l="${local_sha:0:7}"; short_r="${remote:0:7}"
-printf 'ai-bouncer: 새 버전이 있습니다 (%s: %s → %s). 적용하려면 `bouncer-update`.\n' \
+printf 'ai-bouncer: 새 버전이 있습니다 (%s: %s → %s). 적용하려면:\n' \
   "$BRANCH" "${short_l:-미상}" "$short_r"
+printf '  curl -fsSL https://raw.githubusercontent.com/%s/main/get.sh | bash -s update\n' "$REPO"
 exit 0

@@ -60,7 +60,7 @@ stages:
     on_fail: implement
     steps:
       - label: 검증 보고
-        blocking: true
+        blocking: done
         inject: |
           [verify] 검증 단계다. 추측 금지 — 실제로 실행해서 확인한다.
             1. 이 프로젝트의 테스트 / 빌드 / 린트를 실행한다.

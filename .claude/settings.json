@@ -38,6 +38,18 @@
         "matcher": "ExitPlanMode|Skill"
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/ai-bouncer/hooks/user-prompt.sh",
+            "args": [],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

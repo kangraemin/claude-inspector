@@ -24,6 +24,21 @@ description: 코드를 고치거나 새로 짜는 작업을 단계별 워크플�
 문구가 명확해 보여도(예: "앞으로 항상") 추측으로 진행하면
 사용자가 원한 적 없는 영구 변경이 남는다. 되돌리는 비용이 묻는 비용보다 훨씬 크다.
 
+### plan mode를 쓸 수 없는 세션
+
+`blocking: plan_approved`는 **ExitPlanMode가 실제로 승인된 것**만 인정한다.
+그런데 비대화 세션(`claude -p` 등)에는 `EnterPlanMode` / `ExitPlanMode`가 아예 없다.
+그 세션에서 `plan` 워크플로우를 시작하면 **충족할 방법이 없는 조건에 갇힌다.**
+
+도구가 없다는 걸 확인했으면 조용히 멈춰 있지 말고 **막힌 이유와 빠져나갈 길을 알려라**:
+
+- `plan` 대신 `simple` 워크플로우로 시작한다 (계획 단계가 없다), 또는
+- 대화형 세션에서 다시 실행한다
+
+승인을 위조하거나 `bouncer done`으로 우회하지 않는다 — 그러면 게이트가 있으나 마나다.
+아직 시작하지 않았다면 `bouncer start`를 하지 말고, 이미 시작했다면 `bouncer cancel`로
+정리한 뒤 안내한다. 갇힌 작업을 그대로 두면 다음 세션까지 잠금이 남는다.
+
 ---
 
 ## Step 1 — 상태 확인
@@ -39,6 +54,8 @@ bouncer scan
 STATE    MINE  <경로> <워크플로우> <단계>     이 세션이 이어서 할 작업
 STATE    OTHER <경로> <단계> <나이>           다른 세션이 잡고 있는 작업
 STATE    NONE                                아무것도 없음
+ORPHAN   <task-id> <워크플로우> <단계>         잠금이 풀린 미완 작업 (이어받을 수 있다)
+ERROR    <메시지>                             설정을 읽을 수 없다 — 사용자에게 그대로 알린다
 WORKFLOW <이름> <설명>                        모드 선택지
 OPTION   <워크플로우> <단계> <id> <이름>       시작할 때 물어볼 선택 항목
 ```
@@ -46,11 +63,18 @@ OPTION   <워크플로우> <단계> <id> <이름>       시작할 때 물어볼 
 | 결과 | 다음 |
 |---|---|
 | `MINE` | 이미 진행 중이다. 요청이 그 작업의 연장이면 `bouncer status`로 남은 조건을 보고 이어서 한다. Step 2~4는 건너뛴다 |
-| `OTHER`만 있음 | 다른 세션이 작업 중이다. Step 2로 가되 Step 4에서 병렬 여부를 묻는다 |
+| `OTHER`만 있음 | 다른 세션이 작업 중이다. Step 2로 가되 Step 4에서 병렬 여부를 묻는다. 그 세션이 죽은 것 같으면 `bouncer release`로 누가 잡고 있는지 보여주고 회수 여부를 **사용자에게 묻는다** |
+| `ORPHAN` 줄이 있음 | 잠금이 풀린 미완 작업이다 (세션이 죽었거나 회수됨). 요청이 그 작업의 연장인지 **사용자에게 확인하고**, 맞으면 `bouncer resume <task-id>` 로 이어받는다 |
 | `NONE` | Step 2 |
 
-**`bouncer: command not found`가 나오면** 이 프로젝트에 ai-bouncer가 설치되지 않은 것이다.
-스킬을 쓰지 말고 사용자에게 알린 뒤 평소대로 작업한다. 설치를 임의로 진행하지 않는다.
+**`bouncer: command not found`가 나오면** 두 가지 경우다. 먼저 구분해라:
+
+- `.claude/ai-bouncer/engine/bouncer.sh` 가 **있다** → 설치는 됐고 `~/.local/bin` 이
+  PATH에 없는 것뿐이다. 그 경로로 직접 부르고, 사용자에게 PATH 추가를 알린다.
+- **없다** → 이 프로젝트에 설치되지 않았다. 스킬을 쓰지 말고 사용자에게 알린 뒤
+  평소대로 작업한다. 설치를 임의로 진행하지 않는다.
+
+설치돼 있는데 "설치 안 됨"으로 오진하면 워크플로우 없이 작업하게 된다.
 
 ## Step 2 — 요청이 개발 작업인지 판별
 
@@ -86,7 +110,7 @@ Step 1에 `OTHER`가 있었으면 그냥 `start`하면 거부된다. 사용자�
 
 | 선택 | 처리 |
 |---|---|
-| 병렬로 진행 | `bouncer start <모드> "<슬러그>" --parallel`<br>별도 브랜치와 레포 밖 worktree가 만들어지고 base 브랜치가 이 시점에 기록된다.<br>끝나면 `bouncer worktree finalize`로 base에 FF 머지된다 |
+| 병렬로 진행 | `bouncer start <모드> "<슬러그>" --parallel`<br>별도 브랜치와 레포 밖 worktree가 만들어지고 base 브랜치가 이 시점에 기록된다.<br>**출력에 나온 worktree 경로로 먼저 `cd` 하고, 이후 편집·검증·커밋을 전부 거기서 한다.** 메인 레포를 고치면 엔진이 막는다 — 검증이 손대지 않은 트리를 보게 되기 때문이다.<br>끝나면 `bouncer worktree finalize`로 base에 FF 머지된다 |
 | 기존 작업 이어하기 | 그 세션의 작업이므로 건드리지 않는다. 해당 세션에서 계속하라고 안내한다 |
 
 ## Step 5 — 이후
@@ -145,10 +169,14 @@ Step 1에 `OTHER`가 있었으면 그냥 `start`하면 거부된다. 사용자�
    - 성격이 뚜렷이 다른 묶음이면 새 스테이지로 만들고 체인 배열에 끼워넣는다
 2. 자동 검증이 가능하면 `run`, 사람 판단이 필요하면 `inject`로 쓴다.
    강제할 것이면 `blocking: true`, 매번 물어볼 성격이면 `optional: true`
-3. 수정 전에 추가할 yaml을 사용자에게 그대로 보여주고, **승인을 받은 뒤에** 고친다
-4. Edit 도구로 `.claude/ai-bouncer/workflow.yaml`을 수정한다
-5. `bouncer check`로 검증한다. 실패하면 되돌린다
-6. 다음 세션부터 적용된다고 알린다 (이번 작업의 규칙은 시작 시점에 고정돼 있다)
+3. 추가할 yaml을 사용자에게 그대로 보여주고 **승인을 받는다**
+4. **지금 고치지 않는다.** 진행 중에는 엔진이 설정 파일 수정을 막는다 —
+   이번 작업의 규칙은 시작 시점에 고정돼 있고, 고쳐도 다음 세션부터 적용되므로
+   중간에 바꾸면 "무슨 규칙으로 검증했는지"가 흐려진다.
+   승인받은 yaml을 기억해뒀다가, 이번 작업이 `done`으로 끝난 뒤에 적용한다.
+5. 작업 종료 후 Edit 도구로 `.claude/ai-bouncer/workflow.yaml`을 수정한다
+6. `bouncer check`로 검증한다. 실패하면 되돌린다
+7. 다음 세션부터 적용된다고 알린다
 
 `forbid`를 약화시키는 방향(차단 해제)은 사용자가 명시적으로 요구할 때만 한다.
 게이트가 귀찮다는 이유로 규칙을 무르면 그 규칙을 만든 이유가 사라진다.
@@ -161,10 +189,19 @@ Step 1에 `OTHER`가 있었으면 그냥 `start`하면 거부된다. 사용자�
 |---|---|
 | `bouncer scan` | 상태·모드·선택항목 (시작 전 1회) |
 | `bouncer start <모드> "<슬러그>"` | 작업 시작 |
-| `bouncer status` | 현재 단계와 남은 조건 |
+| `bouncer todo` | 할 일 목록 보기 (plan 모드면 승인된 계획에서 자동으로 채워진다) |
+| `bouncer todo add '<항목>' …` | 요청 범위를 목록으로 세운다 (checklist 게이트가 이걸 센다) |
+| `bouncer todo done <n>` | 그 항목을 **실제로 구현한 뒤** 체크 |
+| `bouncer todo drop <n>` | 범위에서 뺀다 (기록에 남으니 사유를 사용자에게 알린다) |
+| `bouncer status` | 현재 단계와 남은 조건 (각 step의 `id:` 도 함께 나온다) |
 | `bouncer run <step-id>` | 검증 명령 실행 후 결과 기록. 명령 문자열은 엔진이 소유한다 |
 | `bouncer done <step-id>` | 사람 확인이 필요한 step 완료 처리 |
 | `bouncer cancel` | 작업 취소 |
+| `bouncer skip <step-id>` | 엔진이 포기한 조건을 이번 작업에서만 건너뛴다 (사용자가 요청할 때만) |
+| `bouncer release [--force]` | 죽은 세션이 남긴 잠금 확인 / 회수 |
+| `bouncer resume` | 이어받을 수 있는 미완 작업 목록 (인자 없으면 조회) |
+| `bouncer resume <task-id>` | 그 작업을 이어받는다 (`scan`의 `ORPHAN` 줄) |
+| `bouncer workflows` | 정의된 모드 목록 |
 | `bouncer worktree finalize` | 병렬 작업을 base로 FF 머지하고 정리 |
 | `bouncer check` | `workflow.yaml`을 고친 뒤 유효한지 검사 |
 
@@ -173,6 +210,8 @@ Step 1에 `OTHER`가 있었으면 그냥 `start`하면 거부된다. 사용자�
 - 모드를 사용자 대신 고르기
 - 물을 수단이 없다는 이유로 사용자 몫의 결정을 대신 내리기
 - `state.json` / `.active` / `workflow.compiled.json` 직접 수정
+- 작업 진행 중에 `workflow.yaml` 고치기 (엔진이 막는다 — 끝난 뒤에 한다)
+- 사용자가 요청하지 않았는데 `bouncer skip` / `bouncer release --force` 쓰기
 - 검증 명령을 직접 타이핑해 실행하고 "통과했다"고 보고하기
   → `bouncer run`으로 해야 결과가 증거로 남는다. 직접 실행한 것은 기록되지 않아
     엔진이 계속 미충족으로 판정한다

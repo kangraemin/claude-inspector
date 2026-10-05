@@ -40,7 +40,14 @@ STALE_H="$(bouncer_config stale_lock_hours 12 "$CWD")"
 TASKS="$(bouncer_tasks_dir "$CWD")"
 if [ -d "$TASKS" ]; then
   for active in "$TASKS"/*/.active; do
-    [ -f "$active" ] || continue
+    [ -e "$active" ] || continue
+    bouncer_sweep_tmp "$(dirname "$active")"
+    # 소유자를 읽을 수 없는 락은 아무도 해제할 수 없다 — 시간과 무관하게 회수한다.
+    if bouncer_lock_broken "$active"; then
+      rm -rf "$active"
+      printf 'ℹ️ ai-bouncer: 손상된 잠금을 정리했다 — %s\n' "$(basename "$(dirname "$active")")"
+      continue
+    fi
     age="$(bouncer_lock_age "$active")"
     [ "$age" -gt $(( STALE_H * 3600 )) ] 2>/dev/null || continue
     rm -f "$active"

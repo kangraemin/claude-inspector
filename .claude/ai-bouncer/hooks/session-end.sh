@@ -7,6 +7,7 @@
 # 작업 자체는 state.json에 남으므로, lock 해제로 잃는 것은 없다.
 
 set -uo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../engine/lib/common.sh"
 
 INPUT="$(cat)"
 command -v jq >/dev/null 2>&1 || exit 0
@@ -16,7 +17,10 @@ CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // empty')"
 [ -n "$SESSION" ] || exit 0
 [ -n "$CWD" ] || CWD="$PWD"
 
-TASKS="$CWD/.ai-bouncer/tasks"
+# 하위 디렉토리에서 세션이 시작되면 CWD 밑에는 tasks가 없다.
+# 다른 hook 5개는 전부 위로 올라가는데 여기만 안 올라가서,
+# 모노레포처럼 하위 경로에서 일하면 매 세션 좀비 잠금이 쌓였다.
+TASKS="$(bouncer_tasks_dir "$CWD")"
 [ -d "$TASKS" ] || exit 0
 
 for active in "$TASKS"/*/.active; do

@@ -1,14 +1,17 @@
 {
   "files": [
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/engine/compile.py",
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/engine/bouncer.sh",
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/engine/lib/common.sh",
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/session-start.sh",
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/pre-tool.sh",
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/post-tool.sh",
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/stop.sh",
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/hooks/session-end.sh",
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/ai-bouncer/scripts/update-check.sh",
-    "/Users/ram/programming/vibecoding/claudeInspector/.claude/skills/dev-bounce/SKILL.md"
-  ]
+    ".claude/ai-bouncer/engine/compile.py",
+    ".claude/ai-bouncer/engine/bouncer.sh",
+    ".claude/ai-bouncer/engine/lib/common.sh",
+    ".claude/ai-bouncer/engine/lib/guard.py",
+    ".claude/ai-bouncer/hooks/session-start.sh",
+    ".claude/ai-bouncer/hooks/pre-tool.sh",
+    ".claude/ai-bouncer/hooks/post-tool.sh",
+    ".claude/ai-bouncer/hooks/user-prompt.sh",
+    ".claude/ai-bouncer/hooks/stop.sh",
+    ".claude/ai-bouncer/hooks/session-end.sh",
+    ".claude/ai-bouncer/scripts/update-check.sh",
+    ".claude/skills/dev-bounce/SKILL.md"
+  ],
+  "gitignore_added": false
 }
