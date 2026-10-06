@@ -1,9 +1,11 @@
 ---
+name: ui-debugger
 description: >
   index.html UI 버그 진단 전문 에이전트. CSS/JS 문제를 분석하고 수정 방안을 제시한다.
   진단 먼저 수정은 한 번에 원칙: 부모→자식 CSS 체인 전체를 분석한 후 단일 수정 제안.
   추측 금지. 확인된 원인에만 수정 적용.
 ---
+name: ui-debugger
 
 # UI Debugger
 
@@ -15,6 +17,7 @@ description: >
 2. `CLAUDE.md` 읽기 — UI 버그 수정 원칙 숙지 (proxyDetailView 구조 포함)
 
 ---
+name: ui-debugger
 
 ## 과학적 디버깅 프로세스
 
@@ -57,6 +60,7 @@ description: >
 사용자 확인 후 커밋.
 
 ---
+name: ui-debugger
 
 ## 디버깅 체크리스트 (막혔을 때)
 
@@ -73,6 +77,7 @@ description: >
 ```
 
 ---
+name: ui-debugger
 
 ## proxyDetailView 특수 규칙
 
@@ -81,6 +86,7 @@ description: >
 - `#proxyDetailView`의 inline style과 충돌하지 않도록 항상 cssText로 처리
 
 ---
+name: ui-debugger
 
 ## 수정 원칙
 
