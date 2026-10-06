@@ -313,12 +313,18 @@ if [ -z "$FAILURES" ]; then
     if [ -n "$RET_TREE" ] && [ "$RET_TREE" = "$NOW_TREE" ]; then
       bouncer_state_update "$TASK" '.continue_streak = (.continue_streak // 0) + 1'
       NS="$(bouncer_state "$TASK" '.continue_streak')"; [ -n "$NS" ] || NS=1
+      # 직전 차단 뒤 도구를 하나도 안 쓰고 또 멈추려 한다 = 고칠 게 없다고 판단한 것이다.
+      # 다시 막아봐야 같은 답만 상한까지 반복하므로 (지운 스크립트를 부르는 게이트 등)
+      # 그 자리에서 사용자에게 넘긴다.
+      _seq_now="$(cat "$TASK/.tool_seq" 2>/dev/null)"; case "$_seq_now" in ''|*[!0-9]*) _seq_now=0 ;; esac
+      _seq_blk="$(cat "$TASK/.tool_seq_at_block" 2>/dev/null)"; case "$_seq_blk" in ''|*[!0-9]*) _seq_blk=-1 ;; esac
+      _idle=0; [ "$REENTRY" = "true" ] && [ "$_seq_now" = "$_seq_blk" ] && _idle=1
       # 여기서 그냥 막으면 아래 상한 검사에 영영 도달하지 못한다.
       # 고칠 의사가 없거나 고칠 수 없는 상황이면 세션을 사용자에게 돌려줘야 한다.
-      if [ "$NS" -ge "$MAX_CONTINUE" ] 2>/dev/null; then
+      if [ "$_idle" = "1" ] || [ "$NS" -ge "$MAX_CONTINUE" ] 2>/dev/null; then
         bouncer_state_update "$TASK" \
           '.allowed_stop = true | .continue_streak = 0 | .returned_to = null | .returned_tree = null'
-        jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] 되돌아온 뒤 ${NS}번 동안 작업 트리가 그대로다.
+        jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] 되돌아온 뒤 ${NS}번 동안 작업 트리가 그대로다$([ "$_idle" = "1" ] && printf ' (직전 차단 뒤 도구 호출 0회)').
 고칠 수 없거나 고칠 것이 없는 상태로 보인다. 사용자에게 넘긴다.
 
 직전 실패:
@@ -332,6 +338,7 @@ $(skip_hint)
         offer_skip
         exit 0
       fi
+      printf '%s' "$_seq_now" > "$TASK/.tool_seq_at_block" 2>/dev/null || true
       guarded_block "[$STAGE] 되돌아온 뒤 작업 트리가 그대로다 — 아무것도 바뀌지 않았다. (${NS}/${MAX_CONTINUE})
 
 이대로 다시 검증에 보내면 같은 결과가 나온다. 무엇이 틀렸는지 다시 보고 실제로 고쳐라.
