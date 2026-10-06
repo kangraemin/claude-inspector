@@ -157,7 +157,8 @@ if [ ! -d "$WORK_ROOT" ]; then
   · worktree를 되살린다:    git worktree prune && git worktree add $WORK_ROOT $(bouncer_state "$TASK" '.worktree.branch')
     (prune 없이 add만 하면 '이미 등록된 worktree' 라며 실패한다)"
 fi
-add_failure() { FAILURES="${FAILURES}${FAILURES:+$'\n'}- $1"; }
+N_FAIL=0; N_PENDING=0  # 미충족 조건 수 / 그중 done 표시만 남은 수
+add_failure() { FAILURES="${FAILURES}${FAILURES:+$'\n'}- $1"; N_FAIL=$((N_FAIL+1)); }
 # 막고 있는 step 의 id 를 모아둔다. "건너뛴다"를 제안하면서 id 를 안 주면
 # 모델이 compiled.json 을 직접 읽지 않는 한 그 제안을 실행할 수 없다.
 # step id 는 `<stage>/<label>` 이고 라벨에 공백이 있다. 공백으로 이어붙였다가
@@ -245,7 +246,7 @@ while IFS= read -r step; do
         #  승인을 묻게 만들어 없앴다. true 와 done 은 이제 같다.)
         add_inject "→ 위를 마쳤으면 실행: bouncer done '$ID'   ($LABEL)"
         add_failure "아직 완료 표시 안 됨 ($LABEL)"; add_blocking_id "$ID"
-        PENDING_DONE=1 ;;
+        PENDING_DONE=1; N_PENDING=$((N_PENDING+1)) ;;
 
     esac
     continue
@@ -546,6 +547,21 @@ if [ "$HUMAN_WAIT" = "1" ]; then
       '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
   fi
   exit 0
+fi
+
+# 남은 게 done 표시뿐이면 한 번만 막는다. 백그라운드 작업을 기다리며 가벼운
+# 도구로 폴링하면 매 Stop 마다 같은 "완료 표시 안 됨" 차단이 반복됐다.
+# 스테이지나 남은 조건이 바뀌면 키가 달라져 다시 한 번 막는다.
+if [ "$N_FAIL" -gt 0 ] && [ "$N_FAIL" = "$N_PENDING" ] \
+   && [ "$HARD_FAIL" != "1" ] && [ "$HUMAN_WAIT" != "1" ]; then
+  _pkey="$STAGE:$(printf '%s' "$FAILURES" | cksum | cut -d' ' -f1)"
+  if [ "$(bouncer_state "$TASK" '.pending_notice')" = "$_pkey" ]; then
+    bouncer_state_update "$TASK" '.continue_streak = 0 | .reentry_count = 0'
+    jq -n --arg m "[ai-bouncer] [$STAGE] 완료 표시 대기 중 — 끝났으면 실행: bouncer done '$(printf '%s' "$BLOCKING_IDS" | head -1)'" \
+      '{systemMessage:$m}'
+    exit 0
+  fi
+  bouncer_state_update "$TASK" --arg k "$_pkey" '.pending_notice = $k'
 fi
 
 # 직전 차단 이후 도구를 하나도 안 썼는데 또 멈추려 한다 = 기다리는 중이다

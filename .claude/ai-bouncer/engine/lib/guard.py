@@ -1481,7 +1481,66 @@ def check_readonly_cmd(exe, cmd):
             out(err)
 
 
-def check_push_cmd(exe, cmd, struct=()):
+PLANS_DIR = os.path.join(os.path.expanduser('~'), '.claude', 'plans')
+
+
+def is_plan_file(p):
+    """Claude Code plan 모드가 쓰는 계획 파일인가 (`~/.claude/plans/<이름>.md`).
+
+    plan 단계는 `edit_files: true` 라 이것까지 막혀서, 계획을 쓸 수 없어
+    plan 모드 자체가 진행되지 않았다. 바로 아래 `.md` 만 연다.
+    """
+    a = abspath(p)
+    return bool(a) and a.endswith('.md') \
+        and os.path.dirname(a) == (_real(PLANS_DIR) or PLANS_DIR)
+
+
+def _under(a, root):
+    return bool(root) and (a == root or a.startswith(root + '/'))
+
+
+def push_target_outside(cmd, env):
+    """이 `git push` 가 프로젝트와 무관한 레포를 향하는가.
+
+    push 금지는 **이 작업의** 검증 전 push 를 막으려는 것이다. library 처럼
+    다른 레포에 기록하고 push 하는 것까지 막아서 매번 차단됐다.
+    대상을 확실히 알 때만 연다 — 조금이라도 애매하면 False.
+    """
+    if cwd_unknown() or any(n.startswith('GIT_') for n in env):
+        return False
+    base = cwd_now()
+    i = 1
+    while i < len(cmd):
+        t = cmd[i]
+        if t == '-C':
+            if i + 1 >= len(cmd):
+                return False
+            d = cmd[i + 1]
+            if '$' in d or '`' in d or SUB_TOKEN in d:
+                return False
+            d = os.path.expanduser(d.strip('"\''))
+            base = os.path.normpath(d if os.path.isabs(d) else os.path.join(base, d))
+            i += 2
+            continue
+        if t in ('--git-dir', '--work-tree', '--namespace') \
+           or t.startswith(('--git-dir=', '--work-tree=', '--namespace=')):
+            return False
+        if not t.startswith('-'):
+            break
+        i += 1
+    top = _real(base)
+    while top and top != '/' and not os.path.exists(os.path.join(top, '.git')):
+        top = os.path.dirname(top)
+    if not top or top == '/':
+        return False
+    for root in (PROJECT, WORKTREE):
+        r = _real(root) if root else ''
+        if r and (_under(top, r) or _under(r, top)):
+            return False
+    return True
+
+
+def check_push_cmd(exe, cmd, struct=(), env=()):
     if SUB_TOKEN in exe:
         out(SUB_EXE_MSG)
     if exe in OPAQUE_EXE:
@@ -1519,6 +1578,8 @@ def check_push_cmd(exe, cmd, struct=()):
     if sub in GIT_PUSH_SUBS:
         if sub == 'push' and any(a in ('-n', '--dry-run') for a in cmd):
             return                      # 아무것도 보내지 않는다
+        if sub == 'push' and push_target_outside(cmd, env):
+            return                      # 이 작업과 무관한 다른 레포
         out("push가 차단되었다.")
     if sub == 'subtree' and 'push' in cmd:
         out("push가 차단되었다.")
@@ -1531,6 +1592,8 @@ if CHECK_PATH:
     # `…/worktrees/../tasks/x/state.json` 이 예외를 타고 통과했다.
     if is_engine_path(TARGET):
         sys.stdout.write(ENGINE_MSG)
+    elif is_plan_file(TARGET):
+        pass                    # Claude Code plan 모드 자체 파일 — 프로젝트 소스가 아니다
     elif outside_worktree(TARGET):
         sys.stdout.write(
             "이 작업은 별도 worktree에서 진행 중이다:\n    %s\n"
@@ -1675,7 +1738,7 @@ def run_passes(SEGMENTS, TOKENS):
                     "값을 먼저 구해서 명령을 그대로 적어라.")
             check_env(env, False)
             check_outside(clean, redirs, exe, cmd[1:])
-            check_push_cmd(exe, cmd, struct)
+            check_push_cmd(exe, cmd, struct, env)
             track_cd(exe, cmd[1:], struct)
 
     reset_cwd()
