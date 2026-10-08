@@ -555,10 +555,15 @@ fi
 if [ "$N_FAIL" -gt 0 ] && [ "$N_FAIL" = "$N_PENDING" ] \
    && [ "$HARD_FAIL" != "1" ] && [ "$HUMAN_WAIT" != "1" ]; then
   _pkey="$STAGE:$(printf '%s' "$FAILURES" | cksum | cut -d' ' -f1)"
-  if [ "$(bouncer_state "$TASK" '.pending_notice')" = "$_pkey" ]; then
+  _pnote="$(bouncer_state "$TASK" '.pending_notice')"
+  if [ "$_pnote" = "$_pkey" ] || [ "$_pnote" = "$_pkey:told" ]; then
     bouncer_state_update "$TASK" '.continue_streak = 0 | .reentry_count = 0'
-    jq -n --arg m "[ai-bouncer] [$STAGE] 완료 표시 대기 중 — 끝났으면 실행: bouncer done '$(printf '%s' "$BLOCKING_IDS" | head -1)'" \
-      '{systemMessage:$m}'
+    # 안내는 한 번만. 백그라운드 알림마다 Stop 이 돌아서 같은 줄이 화면에 계속 쌓였다.
+    if [ "$_pnote" = "$_pkey" ]; then
+      bouncer_state_update "$TASK" --arg k "$_pkey:told" '.pending_notice = $k'
+      jq -n --arg m "[ai-bouncer] [$STAGE] 완료 표시 대기 중 — 끝났으면 실행: bouncer done '$(printf '%s' "$BLOCKING_IDS" | head -1)'" \
+        '{systemMessage:$m}'
+    fi
     exit 0
   fi
   bouncer_state_update "$TASK" --arg k "$_pkey" '.pending_notice = $k'
