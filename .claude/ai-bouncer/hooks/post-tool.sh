@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # PostToolUse — 모델이 위조할 수 없는 증거를 기록한다.
 #
-# 기록 대상 둘뿐:
+# 기록 대상 둘:
 #   ExitPlanMode 성공  → blocking: plan_approved 충족
 #   Skill 성공         → blocking: skill:<이름> 충족
 # (실패하면 PostToolUse가 아예 안 뜨므로, 여기 도달했다는 것 자체가 성공 증거다.)
+#
+# 그리고 읽기 전용 단계의 Bash(성공·실패 모두): 작업 트리가 단계 진입 때와 달라졌으면 알린다.
 
 set -uo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../engine/lib/common.sh"
@@ -13,7 +15,7 @@ INPUT="$(cat)"
 command -v jq >/dev/null 2>&1 || exit 0
 
 TOOL="$(jq -r '.tool_name // empty' <<<"$INPUT")"
-case "$TOOL" in ExitPlanMode|Skill) ;; *) exit 0 ;; esac
+case "$TOOL" in ExitPlanMode|Skill|Bash) ;; *) exit 0 ;; esac
 
 SESSION="$(jq -r '.session_id // empty' <<<"$INPUT")"
 CWD="$(jq -r '.cwd // empty'            <<<"$INPUT")"
@@ -23,6 +25,20 @@ CWD="$(jq -r '.cwd // empty'            <<<"$INPUT")"
 TASK="$(bouncer_my_task "$CWD" "$SESSION")" || exit 0
 STAGE="$(bouncer_state "$TASK" '.current_stage')"
 [ -n "$STAGE" ] || exit 0
+
+if [ "$TOOL" = "Bash" ]; then
+  # 읽기 전용(`edit_files: true`)은 **작업 트리 수정**만 막는다. 도구 설치·캐시·/tmp 쓰기,
+  # npm/npx/테스트 실행은 명령 이름으로 미리 막지 않고, 실행 뒤 트리가 바뀌었는지로 본다.
+  [ "$(bouncer_stage "$CWD" "$STAGE" | jq -r '.forbid.edit_files // null')" = "true" ] || exit 0
+  CH="$(bouncer_ro_changes "$TASK" "$STAGE")"
+  [ -n "$CH" ] || exit 0
+  bouncer_block "⛔ [ai-bouncer / $STAGE] 방금 명령이 프로젝트 작업 트리를 바꿨다:
+$(printf '%s\n' "$CH" | head -20 | sed 's/^/    /')
+
+이 단계에서는 프로젝트 코드를 고칠 수 없다. 지금 바로 되돌려라:
+    bouncer restore
+(되돌리기 전 내용은 git 객체로 남는다. 수정이 필요하면 구현 단계로 돌아가서 한다.)"
+fi
 
 if [ "$TOOL" = "ExitPlanMode" ]; then
   WANT="plan_approved"

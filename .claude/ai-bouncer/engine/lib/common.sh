@@ -206,6 +206,56 @@ bouncer_tree_hash() {
   } | shasum -a 256 | cut -d' ' -f1
 }
 
+# 작업 트리 전체(추적 파일 + 무시되지 않은 새 파일)를 git tree 객체로 찍는다.
+# 읽기 전용 단계는 "이 명령이 무엇을 쓸 수 있나"를 미리 맞히는 대신
+# 실행 전후의 이 값을 비교해 "작업 트리를 바꿨나"로 판정한다.
+# 진짜 인덱스는 건드리지 않는다 — 전용 인덱스($2)에 add 한다. 그 인덱스를 계속 쓰면
+# 다음 호출은 stat 캐시로 바뀐 파일만 다시 읽는다.
+# .claude/ 는 뺀다 — 엔진 상태와 Claude Code 자체 설정(settings.local.json)이 산다.
+bouncer_tree_obj() {
+  local w="$1" idx="$2" gi
+  git -C "$w" rev-parse --git-dir >/dev/null 2>&1 || return 1
+  if [ ! -f "$idx" ]; then
+    gi="$(git -C "$w" rev-parse --path-format=absolute --git-path index 2>/dev/null)"
+    [ -f "$gi" ] && cp "$gi" "$idx" 2>/dev/null
+  fi
+  # 제외는 pathspec 이 아니라 인덱스에서 빼는 것으로 한다. 무시된 경로를 pathspec 에
+  # 적으면 add 가 "ignored" 로 실패한다 (.ai-bouncer/ 는 보통 무시돼 있다).
+  GIT_INDEX_FILE="$idx" git -C "$w" add -A -- ':(top)' >/dev/null 2>&1 || return 1
+  GIT_INDEX_FILE="$idx" git -C "$w" rm -r -q --cached --ignore-unmatch -- \
+    ':(top).claude' ':(top).ai-bouncer' >/dev/null 2>&1 || return 1
+  GIT_INDEX_FILE="$idx" git -C "$w" write-tree 2>/dev/null
+}
+
+# 두 tree 사이에 바뀐 경로 (상태 문자 + 경로, 탭 구분)
+bouncer_tree_changes() {
+  git -C "$1" diff-tree -r --no-renames --name-status "$2" "$3" 2>/dev/null
+}
+
+# 읽기 전용 단계의 기준선. 단계에 **들어올 때마다** 새로 잡는다 (방문 키 = 단계:history 길이).
+# 기준선이 없으면 지금 찍는다 — 호출부는 도구가 실행되기 **전**(PreToolUse)이다.
+bouncer_ro_key() { printf '%s:%s' "$2" "$(jq -r '(.history // []) | length' "$1/state.json" 2>/dev/null)"; }
+bouncer_ro_ensure_base() {
+  local task="$1" w="$2" stage="$3" key tree
+  key="$(bouncer_ro_key "$task" "$stage")"
+  [ "$(bouncer_state "$task" '.ro_base.key')" = "$key" ] && return 0
+  rm -f "$task/.ro.index"
+  tree="$(bouncer_tree_obj "$w" "$task/.ro.index")" || return 1
+  [ -n "$tree" ] || return 1
+  bouncer_state_update "$task" --arg k "$key" --arg t "$tree" --arg w "$w" \
+    '.ro_base = {key:$k, tree:$t, root:$w}'
+}
+# 기준선 대비 바뀐 경로. 바뀐 게 없거나 판정할 수 없으면 빈 출력.
+bouncer_ro_changes() {
+  local task="$1" stage="$2" base w now
+  [ "$(bouncer_state "$task" '.ro_base.key')" = "$(bouncer_ro_key "$task" "$stage")" ] || return 0
+  base="$(bouncer_state "$task" '.ro_base.tree')"; w="$(bouncer_state "$task" '.ro_base.root')"
+  [ -n "$base" ] && [ -d "$w" ] || return 0
+  now="$(bouncer_tree_obj "$w" "$task/.ro.index")" || return 0
+  [ "$now" = "$base" ] && return 0
+  bouncer_tree_changes "$w" "$base" "$now"
+}
+
 # ── hook 출력 ────────────────────────────────────────────────
 bouncer_block()   { jq -n --arg r "$1" '{decision:"block", reason:$r}'; exit 0; }   # PreToolUse 차단 / Stop 계속
 bouncer_notice()  { jq -n --arg c "$1" '{hookSpecificOutput:{additionalContext:$c}}'; exit 0; }

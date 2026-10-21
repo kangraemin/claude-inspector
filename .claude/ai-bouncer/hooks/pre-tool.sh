@@ -113,6 +113,12 @@ ROOT="$(bouncer_project_root "$CWD")"
 WT="$(bouncer_state "$TASK" '.worktree.path')"
 [ "$(bouncer_state "$TASK" '.work_root')" = "$WT" ] || WT=""
 
+# 읽기 전용 단계는 명령 이름이 아니라 "작업 트리를 바꿨나"로 판정한다 (post-tool / stop).
+# 그 비교 기준을 이 단계의 첫 도구가 실행되기 전에 찍어둔다.
+if [ "$EDIT" = "true" ]; then
+  bouncer_ro_ensure_base "$TASK" "${WT:-$ROOT}" "$STAGE" || true
+fi
+
 case "$TOOL" in
   Edit|Write|MultiEdit|NotebookEdit)
     if [ -f "$GUARD" ] && command -v python3 >/dev/null 2>&1; then

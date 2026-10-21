@@ -199,6 +199,7 @@ Step 1에 `OTHER`가 있었으면 그냥 `start`하면 거부된다. 사용자�
 | `bouncer run <step-id>` | 검증 명령 실행 후 결과 기록. 명령 문자열은 엔진이 소유한다 |
 | `bouncer done <step-id>` | 할 일을 마친 step 완료 표시 (사람 확인은 없다) |
 | `bouncer cancel` | 작업 취소 |
+| `bouncer restore` | 읽기 전용 단계(verify 등)에서 작업 트리를 바꿨다고 알림이 오면, 단계 진입 시점으로 되돌린다 |
 | `bouncer skip <step-id>` | 엔진이 포기한 조건을 이번 작업에서만 건너뛴다 (사용자가 요청할 때만) |
 | `bouncer release [--force]` | 죽은 세션이 남긴 잠금 확인 / 회수 |
 | `bouncer resume` | 이어받을 수 있는 미완 작업 목록 (인자 없으면 조회) |

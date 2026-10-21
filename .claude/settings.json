@@ -35,7 +35,20 @@
             "timeout": 10
           }
         ],
-        "matcher": "ExitPlanMode|Skill"
+        "matcher": "ExitPlanMode|Skill|Bash"
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/ai-bouncer/hooks/post-tool.sh",
+            "args": [],
+            "timeout": 10
+          }
+        ],
+        "matcher": "Bash"
       }
     ],
     "UserPromptSubmit": [

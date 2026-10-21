@@ -157,6 +157,19 @@ if [ ! -d "$WORK_ROOT" ]; then
   · worktree를 되살린다:    git worktree prune && git worktree add $WORK_ROOT $(bouncer_state "$TASK" '.worktree.branch')
     (prune 없이 add만 하면 '이미 등록된 worktree' 라며 실패한다)"
 fi
+# 읽기 전용 단계는 명령을 미리 막지 않는 대신, 끝낼 때 작업 트리가 진입 시점 그대로여야 한다.
+# (post-tool 이 명령마다 알리지만, 실패한 명령이나 hook 누락분까지 여기서 한 번 더 본다)
+if [ "$(jq -r '.forbid.edit_files // null' <<<"$STAGE_JSON")" = "true" ]; then
+  RO_CH="$(bouncer_ro_changes "$TASK" "$STAGE")"
+  if [ -n "$RO_CH" ]; then
+    guarded_block "⛔ [$STAGE] 이 단계에서 프로젝트 작업 트리가 바뀌었다:
+$(printf '%s\n' "$RO_CH" | head -20 | sed 's/^/    /')
+
+이 단계에서는 프로젝트 코드를 고칠 수 없다. 되돌린 뒤 계속하라:
+    bouncer restore
+수정이 필요하면 검증 실패로 구현 단계에 돌아가서 한다."
+  fi
+fi
 N_FAIL=0; N_PENDING=0  # 미충족 조건 수 / 그중 done 표시만 남은 수
 add_failure() { FAILURES="${FAILURES}${FAILURES:+$'\n'}- $1"; N_FAIL=$((N_FAIL+1)); }
 # 막고 있는 step 의 id 를 모아둔다. "건너뛴다"를 제안하면서 id 를 안 주면
@@ -286,7 +299,17 @@ while IFS= read -r step; do
       bouncer_state_update "$TASK" --arg k "$ID" '.shown[$k] = true'
     fi
     if [ -n "$BLOCKING" ]; then
-      add_failure "$LABEL — 아직 통과하지 못했다 (\`bouncer run '$ID'\`)"
+      # `bouncer run` 이 실패를 기록했으면 "아직 안 돌림"이 아니라 실패다.
+      # 미실행으로 취급하면 HARD_FAIL 이 안 켜져, done 표시만 남은 스텝과 함께 있을 때
+      # on_fail 반송도 skip 제안도 영영 안 나오고 같은 차단만 반복된다
+      # (읽기 전용 verify 에서 .venv 가 없어 스크린샷이 exit 127 로 실패한 채 갇혔다).
+      RUN_FAILS="$(jq -r --arg k "$ID" '.attempts[$k] // 0' "$TASK/state.json" 2>/dev/null)"
+      case "$RUN_FAILS" in ''|*[!0-9]*) RUN_FAILS=0 ;; esac
+      if [ "$RUN_FAILS" -gt 0 ]; then
+        add_failure "$LABEL — \`bouncer run '$ID'\` 실패 (${RUN_FAILS}회)"; HARD_FAIL=1
+      else
+        add_failure "$LABEL — 아직 통과하지 못했다 (\`bouncer run '$ID'\`)"
+      fi
       add_blocking_id "$ID"
     fi
   fi
@@ -318,14 +341,23 @@ if [ -z "$FAILURES" ]; then
       # 다시 막아봐야 같은 답만 상한까지 반복하므로 (지운 스크립트를 부르는 게이트 등)
       # 그 자리에서 사용자에게 넘긴다.
       _seq_now="$(cat "$TASK/.tool_seq" 2>/dev/null)"; case "$_seq_now" in ''|*[!0-9]*) _seq_now=0 ;; esac
+      # 실패 원인이 코드가 아니라 환경(지워진 브라우저 캐시, 없는 venv)일 수 있다.
+      # 되돌아온 뒤 도구를 썼다면(설치·정리 등) 트리가 그대로여도 검증을 다시 시도하게 둔다.
+      # 같은 실패가 반복되면 반송 횟수 상한(max_loops)이 사용자에게 넘긴다.
+      _seq_ret="$(cat "$TASK/.tool_seq_at_return" 2>/dev/null)"; case "$_seq_ret" in ''|*[!0-9]*) _seq_ret=-1 ;; esac
+      RETRY_SAME_TREE=0
+      [ "$_seq_now" -gt "$_seq_ret" ] && RETRY_SAME_TREE=1
       _seq_blk="$(cat "$TASK/.tool_seq_at_block" 2>/dev/null)"; case "$_seq_blk" in ''|*[!0-9]*) _seq_blk=-1 ;; esac
       _idle=0; [ "$REENTRY" = "true" ] && [ "$_seq_now" = "$_seq_blk" ] && _idle=1
-      # 여기서 그냥 막으면 아래 상한 검사에 영영 도달하지 못한다.
-      # 고칠 의사가 없거나 고칠 수 없는 상황이면 세션을 사용자에게 돌려줘야 한다.
-      if [ "$_idle" = "1" ] || [ "$NS" -ge "$MAX_CONTINUE" ] 2>/dev/null; then
-        bouncer_state_update "$TASK" \
-          '.allowed_stop = true | .continue_streak = 0 | .returned_to = null | .returned_tree = null'
-        jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] 되돌아온 뒤 ${NS}번 동안 작업 트리가 그대로다$([ "$_idle" = "1" ] && printf ' (직전 차단 뒤 도구 호출 0회)').
+      if [ "$RETRY_SAME_TREE" = 1 ] && [ "$_idle" = 0 ]; then
+        add_inject "ℹ️ [$STAGE] 작업 트리는 그대로지만 되돌아온 뒤 도구를 썼다 (환경 정리 등). 검증을 다시 시도한다."
+      else
+        # 여기서 그냥 막으면 아래 상한 검사에 영영 도달하지 못한다.
+        # 고칠 의사가 없거나 고칠 수 없는 상황이면 세션을 사용자에게 돌려줘야 한다.
+        if [ "$_idle" = "1" ] || [ "$NS" -ge "$MAX_CONTINUE" ] 2>/dev/null; then
+          bouncer_state_update "$TASK" \
+            '.allowed_stop = true | .continue_streak = 0 | .returned_to = null | .returned_tree = null'
+          jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] 되돌아온 뒤 ${NS}번 동안 작업 트리가 그대로다$([ "$_idle" = "1" ] && printf ' (직전 차단 뒤 도구 호출 0회)').
 고칠 수 없거나 고칠 것이 없는 상태로 보인다. 사용자에게 넘긴다.
 
 직전 실패:
@@ -336,15 +368,16 @@ AskUserQuestion으로 물어라 (도구가 없으면 텍스트로 제시하고 �
   2. 이 조건을 이번 작업에서만 건너뛴다:
 $(skip_hint)
   3. 작업을 중단한다 (bouncer cancel)" '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
-        offer_skip
-        exit 0
-      fi
-      printf '%s' "$_seq_now" > "$TASK/.tool_seq_at_block" 2>/dev/null || true
-      guarded_block "[$STAGE] 되돌아온 뒤 작업 트리가 그대로다 — 아무것도 바뀌지 않았다. (${NS}/${MAX_CONTINUE})
+          offer_skip
+          exit 0
+        fi
+        printf '%s' "$_seq_now" > "$TASK/.tool_seq_at_block" 2>/dev/null || true
+        guarded_block "[$STAGE] 되돌아온 뒤 작업 트리가 그대로다 — 아무것도 바뀌지 않았다. (${NS}/${MAX_CONTINUE})
 
 이대로 다시 검증에 보내면 같은 결과가 나온다. 무엇이 틀렸는지 다시 보고 실제로 고쳐라.
 직전 실패:
 $(bouncer_state "$TASK" '.last_failure')${INJECT:+$'\n\n'}$INJECT"
+      fi
     fi
     # returned_from 도 같이 지운다. 안 지우면 반송 판정이 계속 켜져 있다.
     bouncer_state_update "$TASK" '.returned_to = null | .returned_tree = null | .returned_from = null'
@@ -409,6 +442,22 @@ worktree가 정리된다. 지금 멈추면 커밋이 그 브랜치에 갇힌다.
        | select((.optional | not)
                 or (if ($st[0].choices | has($sid)) then $st[0].choices[$sid] else true end)) | $sid')
   fi
+  # 종단 단계(done 등)에 blocking 조건이 없으면 진입과 동시에 끝낸다.
+  # 예전엔 "done 진입 → 다음 Stop 에서 잠금 해제"라, 일이 다 끝났는데도
+  # 한 턴 동안 잠금이 남아 workflow.yaml 수정·새 작업 시작이 막혔다.
+  if bouncer_is_last_stage "$CWD" "$WORKFLOW" "$NEXT" \
+     && [ -z "$(bouncer_stage "$CWD" "$NEXT" | jq -r '.steps[]? | select(.blocking) | .id')" ] \
+     && { [ -z "$(bouncer_state "$TASK" '.worktree.path')" ] \
+          || [ "$(bouncer_state "$TASK" '.worktree.merged')" = "true" ]; }; then
+    if bouncer_state_update "$TASK" --arg n "$NEXT" --arg t "$(date -u +%FT%TZ)" \
+      '.current_stage = $n | .finished_at = $t | .allowed_stop = false
+       | .history += [{stage:$n, at:$t}]'; then
+      rm -f "$TASK/.active"
+      jq -n --arg c "${INJECT:+$INJECT$'\n\n'}✅ [$STAGE] 완료 → [$NEXT] 작업 종료(잠금 해제)${NEXT_TXT:+$'\n\n'}$NEXT_TXT" \
+        '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
+      exit 0
+    fi
+  fi
   # 갱신이 실패하면(잠금 경합 등) 단계는 그대로인데 "완료" 를 보고하게 된다.
   # 모델은 다음 단계라고 믿고 forbid 는 이전 단계 것을 강제한다.
   if ! bouncer_state_update "$TASK" --arg n "$NEXT" --arg t "$(date -u +%FT%TZ)" --arg s "$STAGE" \
@@ -421,6 +470,10 @@ worktree가 정리된다. 지금 멈추면 커밋이 그 브랜치에 갇힌다.
      | .history += [{stage:$n, at:$t}]'; then
     guarded_block "⛔ [ai-bouncer] 단계 전이를 기록하지 못했다 (상태 파일 잠금 경합).
 잠시 뒤 다시 시도하면 된다. 계속 반복되면 \`bouncer status\` 로 확인하라."
+  fi
+  # 읽기 전용 단계로 들어가면 그 순간의 작업 트리를 기준선으로 찍는다.
+  if [ "$(bouncer_stage "$CWD" "$NEXT" | jq -r '.forbid.edit_files // null')" = "true" ]; then
+    bouncer_ro_ensure_base "$TASK" "$WORK_ROOT" "$NEXT" || true
   fi
   # 이 턴에 쌓인 지시·게이트 출력을 함께 내보낸다. 버리면 `.shown` 은 이미
   # true 라 반송 뒤 재전달이 영영 안 되고, run 게이트 출력도 늘 사라진다.
@@ -505,6 +558,7 @@ $(skip_hint)
     # 되돌려 보낸 시점의 작업 트리를 기억해둔다. 아무것도 안 바뀌었는데
     # 다시 전진시키면 같은 검사를 같은 코드에 돌리는 헛바퀴가 된다.
     TREE="$(bouncer_tree_hash "$WORK_ROOT")"
+    cp "$TASK/.tool_seq" "$TASK/.tool_seq_at_return" 2>/dev/null || printf 0 > "$TASK/.tool_seq_at_return"
     # 전진 전이와 같은 이유로 rc 를 봐야 한다. 갱신이 실패하면 단계는
     # 그대로인데 "되돌아간다" 를 보고하고, loops·evidence 초기화도 유실된다.
     if ! bouncer_state_update "$TASK" --arg back "$ON_FAIL" --argjson ids "$IDS" \
@@ -516,6 +570,7 @@ $(skip_hint)
         | .loops[$pair] = $n
         | .evidence       |= with_entries(select(.key as $k | ($ids | index($k)) | not))
         | .shown          |= with_entries(select(.key as $k | ($ids | index($k)) | not))
+        | .attempts       |= ((. // {}) | with_entries(select(.key as $k | ($ids | index($k)) | not)))
         | .stage_attempts[$s] = 0
         | .continue_streak = 0
         | .allowed_stop = false

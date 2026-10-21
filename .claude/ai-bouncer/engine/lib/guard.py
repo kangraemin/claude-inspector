@@ -8,7 +8,9 @@
 #  · 판정 단위는 반드시 **세그먼트**여야 한다. 줄 전체의 첫 토큰만 보면
 #    `bouncer status && rm -rf x` 가 통째로 통과한다.
 #  · 래퍼(`env`, `nohup`, `xargs`…)와 환경변수 접두는 실행 파일 이름을 바꾼다.
-#  · 문자열이 아니라 변수로 넘긴 경로는 들여다볼 수 없다 → 그런 형태는 거부한다.
+#  · 문자열이 아니라 변수로 넘긴 경로는 들여다볼 수 없다.
+#  · 읽기 전용(`edit_files: true`)은 허용 목록으로 하면 npm·playwright 설치까지 막힌다.
+#    그래서 확실히 보이는 쓰기만 여기서 막고, 나머지는 실행 뒤 작업 트리 비교(post-tool)가 잡는다.
 #
 # 이건 샌드박스가 아니라 가드레일이다. 진짜 보장은 blocking 게이트가 한다.
 #
@@ -59,21 +61,6 @@ PROJECT = _real(PROJECT)
 WORKTREE = _real(WORKTREE)
 CWD = _real(CWD) or PROJECT
 
-# 파일을 쓰지 않는 것으로 확인된 명령만.
-# python/node/ruby/perl 은 임의 코드를 실행하므로 없다. awk 는 프로그램을 따로 본다.
-READ_ONLY = {
-    'ls', 'cat', 'head', 'tail', 'wc', 'file', 'stat', 'pwd', 'echo', 'printf',
-    'basename', 'dirname', 'realpath', 'readlink', 'du', 'df', 'tree', 'which',
-    'type', 'date', 'whoami', 'uname', 'hostname', 'id', 'true', 'false',
-    'test', '[', 'command', 'env', 'printenv', 'ps', 'sw_vers', 'locale',
-    'cd', 'pushd', 'popd', 'dirs',
-    'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack', 'fd',
-    'diff', 'cmp', 'comm', 'cut', 'tr', 'column', 'nl', 'rev', 'tac',
-    'fold', 'expand', 'paste', 'join', 'od', 'strings', 'seq',
-    'jq', 'shasum', 'md5sum', 'sha256sum', 'tar',
-    'sort', 'find', 'sed', 'xxd', 'base64', 'uniq', 'git',   # 인자를 따로 본다
-    'awk', 'gawk', 'mawk', 'nawk',                           # 프로그램을 따로 본다
-}
 # 스코프 모드에서 "이 명령이 인자로 준 경로를 쓴다"고 보는 것들.
 # 여기 없는 명령(npm, make, ./build.sh)은 통과한다 — 셸 문법만으로 무엇을 쓰는지
 # 확정할 수 없기 때문이다. 이건 가드레일이지 샌드박스가 아니다.
@@ -149,7 +136,6 @@ WRAPPER_VALUE_FLAGS = {
     'exec':       set(), 'busybox': set(), 'doas': set(),
 }
 WRAPPERS = set(WRAPPER_VALUE_FLAGS)
-AWK_EXES = {'awk', 'gawk', 'mawk', 'nawk'}
 # timeout 은 값을 위치인자로 받는다 (`timeout 5 cmd`)
 DURATION = re.compile(r'^[0-9]+(\.[0-9]+)?[smhd]?$')
 # 안에 든 프로그램을 들여다볼 수 없는 것들. 인라인 코드를 주면 판정 불가다.
@@ -160,8 +146,6 @@ DURATION = re.compile(r'^[0-9]+(\.[0-9]+)?[smhd]?$')
 INTERPRETERS = {'sh', 'bash', 'zsh', 'ksh', 'dash', 'fish', 'csh', 'tcsh'}
 # 인자가 곧 코드다. 플래그가 없어도 항상 불투명하다.
 OPAQUE_EXE = {'eval', 'source', '.'}
-SHELL_KEYWORDS = {'for', 'if', 'while', 'until', 'case', 'select', 'function',
-                  'then', 'do', 'elif', 'else'}
 # 뒤에 곧바로 명령이 오는 키워드. 건너뛰고 진짜 명령을 본다.
 SKIP_KEYWORDS = {'if', 'then', 'elif', 'else', 'do', 'while', 'until', 'select',
                  'fi', 'done', 'esac', '!', 'time'}
@@ -214,109 +198,13 @@ KNOWN_GIT_SUBS = (GIT_READ | set(GIT_SUB) | GIT_PUSH_SUBS | GIT_TREE_WRITE
                      'log', 'status', 'diff', 'show', 'help', 'version', 'gc',
                      'prune', 'fsck', 'bundle', 'archive', 'describe', 'blame'})
 
-# ── 쓰기 인자 ────────────────────────────────────────────────
-# 명령별로 좁혀야 한다 — `-o`는 sort에서 출력이지만 grep에서는 --only-matching,
-# `-i`는 sed에서 제자리 수정이지만 base64/grep에서는 전혀 다른 뜻이다.
-WRITE_FLAG_ANY = {'--output'}
-WRITE_PREFIX_ANY = ('--output=',)
-WRITE_FLAG_CMD = {
-    'sort':   {'exact': {'-o'},   'prefix': ('-o',)},
-    'base64': {'exact': {'-o'},   'prefix': ()},
-    # `-ni.bak` 처럼 다른 단축 플래그와 붙어 오는 형태도 잡아야 한다
-    'sed':    {'exact': set(),    'prefix': ('-i', '--in-place'), 'inshort': 'i'},
-    'find':   {'exact': {'-fls'}, 'prefix': ('-fprint',)},
-}
-# 두 번째 위치인자를 출력 파일로 쓰는 명령 → 값을 받는 플래그를 건너뛰고 세야 한다
-POSITIONAL_OUT = {
-    'xxd':  {'-c', '-cols', '-g', '-groupsize', '-l', '-len', '-o', '-s', '-seek'},
-    'uniq': {'-f', '-s', '-w', '--skip-fields', '--skip-chars', '--check-chars'},
-}
-# sed 의 w/W 명령. 주소가 앞에 붙으면(`1w`, `$w`, `1,$w`) 놓치기 쉬워 문자군을 넓게 잡는다.
-# sed 의 w/W 는 두 형태로 온다. BSD sed 는 파일명 앞 공백을 요구하지 않는다.
-#   1) s///w file  — 치환 명령의 플래그
-#   2) [주소]w file — 단독 명령 (`1w`, `$w`, `1,$w`, `/re/,$w`)
-# 넓은 정규식 하나로 잡으면 `s/word/x/` 의 정규식 안 w 까지 걸린다.
-def sed_writes(script):
-    """sed 스크립트가 파일을 쓰는가 (`w`/`W` 명령, `s///w` 플래그).
-
-    정규식 하나로 잡으려니 `s/;w/x/` 의 치환문 안 `;w` 까지 걸렸다.
-    스크립트를 실제로 훑어야 주소·구분자·플래그를 구분할 수 있다.
-    """
-    i, n = 0, len(script)
-
-    def skip_delim(i, d):
-        """구분자로 감싼 구간 하나를 지나친다."""
-        i += 1
-        while i < n:
-            if script[i] == '\\':
-                i += 2; continue
-            if script[i] == d:
-                return i + 1
-            i += 1
-        return n
-
-    while i < n:
-        c = script[i]
-        if c in ' \t\n;{}':
-            i += 1; continue
-        if c == '#':
-            while i < n and script[i] != '\n':
-                i += 1
-            continue
-        # 주소부: /re/ 또는 \cREc 또는 숫자/$ , 뒤에 ,주소 와 ! 가 올 수 있다
-        for _ in range(2):
-            if i < n and script[i] == '/':
-                i = skip_delim(i, '/')
-            elif i < n and script[i] == '\\' and i + 1 < n:
-                i = skip_delim(i + 1, script[i + 1])
-            elif i < n and (script[i].isdigit() or script[i] == '$'):
-                while i < n and (script[i].isdigit() or script[i] in '$~+'):
-                    i += 1
-            else:
-                break
-            if i < n and script[i] == ',':
-                i += 1; continue
-            break
-        while i < n and script[i] in ' \t!':
-            i += 1
-        if i >= n:
-            break
-        cmd = script[i]
-        if cmd in 'wW':
-            return True
-        if cmd in 'sy':
-            d = script[i + 1] if i + 1 < n else '/'
-            i = skip_delim(i + 1, d)          # 패턴
-            i = skip_delim(i - 1, d)          # 치환
-            flags = ''
-            while i < n and script[i] not in ';\n}':
-                flags += script[i]; i += 1
-            if 'w' in flags or 'W' in flags:
-                return True
-            continue
-        if cmd in 'ra':                        # r=읽기, a=추가출력 (파일 안 씀)
-            while i < n and script[i] != '\n':
-                i += 1
-            continue
-        i += 1
-    return False
-
-
-SED_W_SPLIT = re.compile(r'^[0-9$,~+/]*[wW]$')
-# awk 프로그램 안의 쓰기·실행. 변수를 거친 리다이렉트까지 잡으려면
-# 대상 형태가 아니라 `print`/`printf` 뒤의 `>` 자체를 봐야 한다.
-# `|` 는 awk에서 파이프이기도 하고 정규식 대안이기도 하다. 파이프는 항상
-# 문자열(명령)이나 getline 과 붙어 있으므로 그 형태만 잡는다.
-# close( 는 파일을 열지 않으면 쓸 일이 없어 단독 신호로는 오탐만 낸다.
-AWK_EXEC = re.compile(r'system\s*\(|ENVIRON|\|\s*["\']|["\']\s*\||getline\s*<|\|\s*getline')
-AWK_STMT_SPLIT = re.compile(r'[;{}\n]')
-
 # ── 환경변수 접두 ────────────────────────────────────────────
-ENV_SAFE = {'LANG', 'TZ', 'TERM', 'NO_COLOR', 'CLICOLOR', 'COLUMNS', 'LINES'}
 # 값이 그대로 실행되거나 로딩되는 것들. GIT_* 는 통째로 막는다
 # (GIT_EXTERNAL_DIFF, GIT_SSH, GIT_CONFIG_KEY_n 으로 별칭 주입이 전부 가능하다).
 # 접두를 넓게 잡으면 `NODE_ENV=production npm run build` 처럼 필수적인 것까지 막힌다.
 # 값이 그대로 실행·로딩되는 이름만 든다.
+# PATH·NODE_* 접두는 정상 사용이 많고(`PATH=.venv/bin:$PATH pytest`) 막아도 우회가 쉬워 뺐다(2026-10-22 감사).
+# 판정기 자체를 속이는 git·셸·동적 로더 쪽만 남긴다.
 ENV_DANGEROUS_PREFIX = ('GIT_', 'LD_', 'DYLD_', 'BASH_')
 ENV_DANGEROUS_EXACT = {'PERL5OPT', 'PERL5LIB', 'PYTHONSTARTUP',
                        'NODE_OPTIONS', 'NODE_PATH', 'RUBYOPT'}
@@ -366,7 +254,30 @@ ENGINE_READ_OK = {
     'cat', 'head', 'tail', 'wc', 'ls', 'stat', 'file', 'tree', 'du', 'jq',
     'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack', 'diff', 'cmp', 'nl', 'od',
     'strings', 'md5sum', 'sha256sum', 'shasum', 'realpath', 'dirname', 'basename',
+    'md5',
 }
+# 쓰기 옵션이 없을 때만 읽기인 명령. `sed -n 1,40p`, `find .ai-bouncer -name '*.json'` 이 수정으로 막혔다(약 26건).
+FIND_WRITE = {'-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fprintf', '-fls'}
+
+
+def read_only(exe, cmd):
+    if exe in ENGINE_READ_OK:
+        return True
+    args = cmd[1:]
+    if exe == 'sed':
+        if any(a.startswith(('-i', '--in-place')) or (a.startswith('-') and not a.startswith('--') and 'i' in a[1:])
+               for a in args):
+            return False
+        # 스크립트 안의 w/W/e 명령은 파일을 쓰거나 실행한다
+        return not any(re.search(r'(^|[;{}\s/0-9$])[wWe](\s|$)', a) for a in args if not a.startswith('-'))
+    if exe == 'find':
+        return not any(a in FIND_WRITE for a in args)
+    return False
+
+
+def dotenv_source(exe, cmd):
+    # `source .env` / `. .env.local` 은 시크릿 로딩일 뿐이고, 막아도 grep|cut 으로 똑같이 된다. eval 은 계속 막는다.
+    return exe in ('source', '.') and len(cmd) == 2 and re.fullmatch(r'(\./)?(\S*/)?\.env[\w.-]*', cmd[1]) is not None
 
 
 ENGINE_MSG = ("엔진 파일(.ai-bouncer/ 상태, .claude/ai-bouncer/ 설정·엔진, "
@@ -859,7 +770,11 @@ VALUE_FLAGS = {'truncate': {'-s', '--size'}, 'mkdir': {'-m', '--mode'},
                'rsync': {'--exclude', '--include', '--exclude-from', '--include-from',
                          '-e', '--rsh', '--files-from', '--filter', '-f', '--chmod',
                          '--log-file', '--partial-dir', '--compare-dest', '--link-dest'},
-               'install': {'-m', '-o', '-g', '--mode', '--owner', '--group'}}
+               'install': {'-m', '-o', '-g', '--mode', '--owner', '--group'},
+               # 두 번째 위치인자가 출력이다. 값을 받는 플래그를 건너뛰고 세야 한다
+               # (안 그러면 `xxd -l 32 a.js` 의 a.js 가 출력으로 읽힌다)
+               'xxd': {'-c', '-cols', '-g', '-groupsize', '-l', '-len', '-o', '-s', '-seek'},
+               'uniq': {'-f', '-s', '-w', '--skip-fields', '--skip-chars', '--check-chars'}}
 
 
 def write_targets(exe, args):
@@ -1117,30 +1032,6 @@ def git_sub(cmd):
     return ''
 
 
-def awk_writes(prog):
-    """awk 프로그램이 파일을 쓰거나 명령을 실행하는가.
-
-    `$3 > 500` 같은 비교와 `print $1 > f` 를 갈라야 한다. 리다이렉트는 항상
-    출력 목록 뒤에 오므로, `>` 앞쪽 같은 문장 안에 print/printf 가 있으면 쓰기로 본다.
-    대상이 변수여도 잡힌다 — 대상 모양을 보지 않기 때문이다.
-    """
-    if AWK_EXEC.search(prog):
-        return True
-    if '>>' in prog:
-        return True
-    for m in re.finditer(r'>', prog):
-        s, e = m.start(), m.end()
-        if prog[s - 1:s] == '>' or prog[e:e + 1] in ('=', '>'):
-            continue                    # >= 나 >> 의 일부
-        head = AWK_STMT_SPLIT.split(prog[:s])[-1]
-        # 괄호가 열려 있으면 표현식 안이다 — `print ($1 > 5)` 는 비교다.
-        if head.count('(') > head.count(')'):
-            continue
-        if re.search(r'\bprintf?\b', head):
-            return True
-    return False
-
-
 def _has_component(parts, want):
     n = len(want)
     for i in range(len(parts) - n + 1):
@@ -1237,7 +1128,7 @@ def check_engine_files(segments):
             continue
         if SUB_TOKEN in exe:
             out(SUB_EXE_MSG)
-        if exe in OPAQUE_EXE:
+        if exe in OPAQUE_EXE and not dotenv_source(exe, cmd):
             out(OPAQUE_MSG % exe)
         # `git clean -fdx` 는 gitignore된 것을 지운다 — 상태 디렉토리가 정확히 그것이다.
         if exe == 'git' and git_sub(cmd) == 'clean' \
@@ -1247,12 +1138,12 @@ def check_engine_files(segments):
                 "진행 중인 작업이 통째로 사라지므로 허용되지 않는다.\n"
                 "정말 필요하면 `bouncer cancel` 로 작업을 끝낸 뒤에 해라.")
         # 읽기 명령은 글로브가 엔진 디렉토리를 훑어도 아무것도 안 바꾼다
-        for t in ([] if exe in ENGINE_READ_OK else clean):
+        for t in ([] if read_only(exe, cmd) else clean):
             if glob_could_hit_engine(t):
                 out("`%s` 는 글로브라 엔진 디렉토리(.ai-bouncer/ 등)를 삼킬 수 있다.\n"
                     "지울 대상을 정확히 적어라." % t)
         # `rm -rf .ai-bounce{r,x}` — 중괄호 확장은 셸이 푼다. 무엇이 될지 모른다.
-        if struct and any(t in ('{', '}') for t in struct) and exe not in ENGINE_READ_OK:
+        if struct and any(t in ('{', '}') for t in struct) and not read_only(exe, cmd):
             for t in clean:
                 n2 = norm(t).rsplit('/', 1)[-1]
                 if n2 and any(c.startswith(n2) for w in ENGINE_DIRS for c in w):
@@ -1270,8 +1161,13 @@ def check_engine_files(segments):
                     out(ENGINE_MSG)
         if exe == 'git' and not git_read_error(cmd):
             continue                    # `git log -- .ai-bouncer` 같은 이력 조회
-        if exe in ENGINE_READ_OK:
+        if read_only(exe, cmd):
             continue                    # 읽기는 자유
+        if exe in ('cd', 'pushd') and not redirs:
+            # 들어가는 것 자체는 아무것도 안 바꾼다. 이후 상대경로 쓰기는
+            # track_cd 로 옮긴 기준에서 다시 엔진 경로로 걸린다.
+            track_cd(exe, cmd[1:], struct)
+            continue
         if any(is_engine_path(t) for t in clean):
             out(ENGINE_MSG)
         track_cd(exe, cmd[1:], struct)
@@ -1325,19 +1221,8 @@ def check_outside(seg_tokens, redirs, exe, args):
             "worktree 안의 같은 파일을 고쳐라." % (WORKTREE, bad[0]))
 
 
-def check_redirects(redirs):
-    for op, tgt in redirs:
-        if redirect_writes(op, tgt):
-            out("이 단계는 읽기 전용이다. 파일로 출력을 보낼 수 없다: %s %s" % (op, tgt))
-
-
-def check_env(env, readonly):
+def check_env(env):
     for name in env:
-        if readonly:
-            if name in ENV_SAFE or name.startswith('LC_'):
-                continue
-            out("이 단계는 읽기 전용이다. 환경변수 접두(`%s=…`)는 무엇을 실행할지 "
-                "판정할 수 없어 허용되지 않는다." % name)
         if name in ENV_DANGEROUS or name in ENV_DANGEROUS_EXACT \
            or name.startswith(ENV_DANGEROUS_PREFIX):
             out("`%s=…` 는 실행할 명령 자체를 바꿀 수 있어 이 단계에서는 허용되지 않는다."
@@ -1399,88 +1284,6 @@ OPAQUE_MSG = ("`%s` 는 인자가 곧 실행할 코드라 무엇을 하는지 �
               "명령을 그대로 적어라.")
 
 
-def check_readonly_cmd(exe, cmd):
-    if cmd and is_bouncer(cmd[0]):
-        return
-    if exe in OPAQUE_EXE:
-        out(OPAQUE_MSG % exe)
-    if exe == 'env -S':
-        out("`env -S \"…\"` 는 문자열 하나가 통째로 명령이라 판정할 수 없다.\n"
-            "명령을 그대로 적어라.")
-    if exe in SHELL_KEYWORDS:
-        out("이 단계는 읽기 전용이다. `%s` 같은 복합 구문은 안을 확인할 수 없어\n"
-            "허용되지 않는다. 조회는 한 줄 명령으로 해라." % exe)
-    if SUB_TOKEN in exe:
-        out(SUB_EXE_MSG)
-    if exe not in READ_ONLY:
-        out("이 단계는 읽기 전용이다. `%s` 는 파일을 쓸 수 있어 허용되지 않는다.\n"
-            "읽기·검색은 가능하고, 검증 명령은 `bouncer run <step-id>` 로 실행한다." % exe)
-    args = cmd[1:]
-    spec = WRITE_FLAG_CMD.get(exe, {'exact': set(), 'prefix': ()})
-    short = spec.get('inshort')
-    for a in args:
-        # `-ni.bak` 처럼 다른 단축 플래그와 묶여 오는 형태도 잡아야 한다
-        # 선행 알파벳 묶음만 플래그다. 값까지 훑으면 `-es/main/x/` 의 'i' 에 걸린다.
-        mm = re.match(r'-([a-zA-Z]+)', a) if a.startswith('-') and not a.startswith('--') else None
-        combined = bool(short and mm and short in mm.group(1))
-        if a in WRITE_FLAG_ANY or a.startswith(WRITE_PREFIX_ANY) \
-           or a in spec['exact'] or (spec['prefix'] and a.startswith(spec['prefix'])) \
-           or combined:
-            out("`%s %s` 는 파일을 쓴다. 이 단계에서는 허용되지 않는다." % (exe, a))
-    if exe in POSITIONAL_OUT:
-        value_flags, pos, i = POSITIONAL_OUT[exe], 0, 0
-        while i < len(args):
-            a = args[i]
-            if a in value_flags:
-                i += 2
-                continue
-            if a.startswith('-'):
-                i += 1
-                continue
-            pos += 1
-            i += 1
-        if pos > 1:
-            out("`%s <입력> <출력>` 은 두 번째 인자를 파일로 쓴다. 출력 인자를 빼라." % exe)
-    if exe == 'sed':
-        if any(a in ('-f', '--file') or a.startswith('--file=') for a in args):
-            out("`sed -f <파일>` 은 스크립트를 확인할 수 없어 허용되지 않는다.")
-        for a in args:
-            if a.startswith('--expression=') and sed_writes(a.split('=', 1)[1]):
-                out("sed 스크립트의 `w` 명령은 파일을 쓴다. 이 단계에서는 허용되지 않는다.")
-        # 따옴표로 묶인 스크립트(`'1w out'`)와 공백으로 갈라진 형태(`1w out`) 둘 다 본다.
-        if any(sed_writes(a) for a in args if not a.startswith('-')) \
-           or any(SED_W_SPLIT.match(a) for a in args[:-1]):
-            out("sed 스크립트의 `w` 명령은 파일을 쓴다. 이 단계에서는 허용되지 않는다.")
-    if exe in AWK_EXES:
-        if any(a in ('-f', '--file', '--source') or a.startswith('--file=') for a in args):
-            out("`awk -f <파일>` 은 프로그램을 확인할 수 없어 허용되지 않는다.")
-        for a in args:
-            if not a.startswith('-') and awk_writes(a):
-                out("이 awk 프로그램은 파일을 쓰거나 명령을 실행할 수 있다: %s" % a[:60])
-    if exe == 'tar':
-        # `-` 로 시작하는 인자만 옵션이다. 파일 이름에서 앞 글자를 뽑으면
-        # `tar xf t.tar` 의 `t` 가 목록 플래그로 오인돼 추출이 통과했다.
-        opt_args = [a for a in args if a.startswith('-') and not a.startswith('--')]
-        # `tar tf x.tar` 처럼 대시 없는 묶음도 전통적 옵션이다. 단 tar 옵션
-        # 글자로만 이뤄진 **첫** 인자일 때만 — 파일 이름을 옵션으로 읽으면 안 된다.
-        if args and not args[0].startswith('-') and re.fullmatch(r'[a-zA-Z]+', args[0]) \
-           and set(args[0]) <= set('ctxurdAtfvzjJZphmOWSPkKUlL'):
-            opt_args.insert(0, '-' + args[0])
-        mm = [re.match(r'-([a-zA-Z]+)', a) for a in opt_args]
-        letters = ''.join(m.group(1) for m in mm if m)
-        if any(a.startswith('--to-command') for a in args):
-            out("`tar --to-command` 은 임의 명령을 실행한다. 허용되지 않는다.")
-        if not ('t' in letters or any(a in ('--list', '--test-label') for a in args)):
-            out("`tar` 는 목록 보기(`-t`) 외에는 파일을 쓴다. 이 단계에서는 허용되지 않는다.")
-    if exe == 'find' and any(a in ('-exec', '-execdir', '-delete', '-ok', '-okdir')
-                             for a in args):
-        out("`find -exec/-delete` 는 임의 명령을 실행한다. 이 단계에서는 허용되지 않는다.")
-    if exe == 'git':
-        err = git_read_error(cmd)
-        if err:
-            out(err)
-
-
 PLANS_DIR = os.path.join(os.path.expanduser('~'), '.claude', 'plans')
 
 
@@ -1497,6 +1300,52 @@ def is_plan_file(p):
 
 def _under(a, root):
     return bool(root) and (a == root or a.startswith(root + '/'))
+
+
+HOME_CLAUDE = _real(os.path.join(os.path.expanduser('~'), '.claude'))
+
+
+def _ignored(a, root):
+    """작업 트리 안의 경로가 .gitignore 대상인가 (test-results, dist 같은 산출물)."""
+    try:
+        import subprocess
+        rel = os.path.relpath(a, root)
+        # 없는 디렉토리는 `dist-shot/` 같은 디렉토리 패턴에 안 맞는다 — 슬래시를 붙여서도 본다.
+        for cand in (rel, rel + '/'):
+            r = subprocess.run(['git', '-C', root, 'check-ignore', '-q', '--', cand],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+            if r.returncode == 0:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def readonly_free(p):
+    """읽기 전용 스테이지에서도 써도 되는 곳인가.
+
+    읽기 전용은 **이 작업의 코드**(프로젝트 작업 트리)를 못 고치게 하려는 것이다.
+    그 밖 — 캐시(~/Library, ~/.cache), /tmp, 다른 레포 — 와 작업 트리 안의
+    .gitignore 된 산출물(test-results, dist)은 막을 이유가 없다. 브라우저 설치나
+    테스트 리포트까지 막아 verify 가 환경 문제로 갇혔다.
+    단 `~/.claude` 는 hook 등록·설정이 사는 곳이라 계속 막는다.
+    경로가 변수라 알 수 없으면 여기서는 통과시키고 작업 트리 스냅샷 비교에 맡긴다.
+    """
+    if not p:
+        return False
+    if SUB_TOKEN in p or '$' in p or '`' in p:
+        return True                     # 판정 불가 — 실행 뒤 트리 비교가 잡는다
+    if cwd_unknown() and not os.path.isabs(os.path.expanduser(p.strip('"\''))):
+        return True
+    a = abspath(p)
+    if not a:
+        return False
+    if _under(a, HOME_CLAUDE) or is_engine_path(a):
+        return False
+    for r in (WORKTREE, PROJECT):
+        if r and _under(a, r):
+            return a != r and _ignored(a, r)
+    return True
 
 
 def push_target_outside(cmd, env):
@@ -1540,10 +1389,15 @@ def push_target_outside(cmd, env):
     return True
 
 
+# 커밋은 막지 않는다. 체인 명령이 통째로 막혀 같은 명령을 push 만 빼고 다시 치는 일이 반복됐다(2026-10-22 감사 36건).
+PUSH_MSG = ("push가 차단되었다. push 는 finalize 단계에서만 한다.\n"
+            "같은 명령에서 `git push` 부분만 빼고 다시 실행해라(add·commit 은 지금 해도 된다).")
+
+
 def check_push_cmd(exe, cmd, struct=(), env=()):
     if SUB_TOKEN in exe:
         out(SUB_EXE_MSG)
-    if exe in OPAQUE_EXE:
+    if exe in OPAQUE_EXE and not dotenv_source(exe, cmd):
         out(OPAQUE_MSG % exe)
     if exe == 'env -S':
         out("`env -S \"…\"` 는 문자열 하나가 통째로 명령이라 판정할 수 없다.")
@@ -1561,7 +1415,7 @@ def check_push_cmd(exe, cmd, struct=(), env=()):
         out("git 서브커맨드 자리에 변수·명령 치환이 있어 무엇을 하는지 판정할 수 없다.\n"
             "이 단계에서는 서브커맨드를 그대로 적어야 한다.")
     if exe == 'git-push':
-        out("push가 차단되었다.")
+        out(PUSH_MSG)
     if inline_program(exe, cmd):
         out("`%s -c …` 안의 코드는 확인할 수 없다 (push를 숨길 수 있다).\n"
             "스크립트 파일로 만들어 실행하거나, 명령을 직접 써라." % exe)
@@ -1580,9 +1434,9 @@ def check_push_cmd(exe, cmd, struct=(), env=()):
             return                      # 아무것도 보내지 않는다
         if sub == 'push' and push_target_outside(cmd, env):
             return                      # 이 작업과 무관한 다른 레포
-        out("push가 차단되었다.")
+        out(PUSH_MSG)
     if sub == 'subtree' and 'push' in cmd:
-        out("push가 차단되었다.")
+        out(PUSH_MSG)
     if sub == 'config' and any('alias.' in a for a in cmd):
         out("이 단계에서 git 별칭을 등록할 수 없다 (push를 숨길 수 있다).")
 
@@ -1601,6 +1455,8 @@ if CHECK_PATH:
             "여기서 고치면 검증과 finalize는 손대지 않은 worktree를 보고 전부 통과한다.\n"
             "worktree 안의 같은 파일을 고쳐라. 셸도 그 안에서 실행한다:\n    cd %s"
             % (WORKTREE, TARGET, WORKTREE))
+    elif EDIT is True and readonly_free(TARGET):
+        pass                    # 읽기 전용은 이 작업의 코드만 막는다 (library 기록 등)
     elif EDIT is not None and (EDIT is True or path_forbidden(TARGET)):
         sys.stdout.write("파일 수정이 차단되었다: %s" % norm(TARGET))
     sys.exit(0)
@@ -1639,25 +1495,40 @@ def run_passes(SEGMENTS, TOKENS):
     # 명령 전체 기준으로 기억해둔다.
     SUBSHELL_SEEN[0] = any(k == 'st' and t in ('(', ')') for t, k in TOKENS)
     if EDIT is True:
-        # ── 전면 읽기 전용 스테이지 (`edit_files: true`) ──────────
-        bad = sorted({t for t, k in TOKENS if k == 'st'})
-        if bad:
-            out("이 단계는 읽기 전용이다. 안을 확인할 수 없는 구문(%s)은 쓸 수 없다.\n"
-                "검증 명령을 돌려야 하면 `bouncer run <step-id>` 를 써라." % ' '.join(bad))
+        # ── 읽기 전용 스테이지 (`edit_files: true`) ─────────────────
+        # 막는 것은 **프로젝트 작업 트리 수정**뿐이다. 도구·브라우저 설치, 캐시·/tmp 쓰기,
+        # npm/npx/테스트 실행, 변수 대입·서브셸은 허용한다.
+        # 예전엔 조회 명령 허용 목록이라 `npm run e2e`, `playwright install`, `f=$(ls); grep "$f"`
+        # 까지 막혀 verify 가 환경 문제 하나로 갇혔다.
+        # 명령 이름으로는 무엇을 쓸지 알 수 없으므로, 확실히 보이는 것(작업 트리로의 리다이렉트,
+        # `rm`/`cp`/`sed -i` 의 대상, git 의 쓰기 서브커맨드)만 여기서 막고 나머지는
+        # 실행 뒤 작업 트리 스냅샷 비교(post-tool / stop)가 잡는다.
         for seg in SEGMENTS:
             clean, redirs, struct = parse_redirects(seg)
-            check_redirects(redirs)
+            for op, tgt in redirs:
+                if redirect_writes(op, tgt) and not readonly_free(tgt):
+                    out("이 단계에서는 프로젝트 파일로 출력을 보낼 수 없다: %s %s\n"
+                        "작업 트리 밖(/tmp 등)이나 .gitignore 된 경로는 된다." % (op, tgt))
             if not clean:
                 continue
             exe, cmd, env = resolve_exe(clean)
-            if exe_is_substitution(seg, struct):
-                out("명령 이름 자리에 치환이 있어 무엇을 실행하는지 판정할 수 없다.\n"
-                    "값을 먼저 구해서 명령을 그대로 적어라.")
-            check_env(env, True)
+            check_env(env)
             check_outside(clean, redirs, exe, cmd[1:])
-            if exe:
-                check_readonly_cmd(exe, cmd)
-            track_cd(exe, cmd[1:], struct)
+            args = cmd[1:]
+            if exe == 'git':
+                err = git_read_error(cmd)
+                if err:
+                    out(err)
+            elif exe in WRITERS and exe not in ('curl', 'wget'):
+                for a in write_targets(exe, args):
+                    if not readonly_free(a):
+                        out("`%s` 로 프로젝트 파일 %s 를 바꿀 수 없다. 이 단계에서는 코드를 고칠 수 없다.\n"
+                            "수정은 구현 단계로 돌아가서 한다." % (exe, a))
+            elif exe in ('curl', 'wget'):
+                for a in write_targets(exe, args):
+                    if not readonly_free(a):
+                        out("`%s` 로 프로젝트 파일 %s 를 쓸 수 없다." % (exe, a))
+            track_cd(exe, args, struct)
 
     elif EDIT is not None:
         # ── 경로 스코프 스테이지 (`edit_files: [글로브…]`) ─────────
@@ -1678,15 +1549,16 @@ def run_passes(SEGMENTS, TOKENS):
             if exe_is_substitution(seg, struct):
                 out("명령 이름 자리에 치환이 있어 무엇을 실행하는지 판정할 수 없다.\n"
                     "값을 먼저 구해서 명령을 그대로 적어라.")
-            check_env(env, False)
+            check_env(env)
             check_outside(clean, redirs, exe, cmd[1:])
-            if not is_bouncer(cmd[0] if cmd else ''):
+            if not is_bouncer(cmd[0] if cmd else '') \
+               and not read_only(exe, cmd) and exe not in ('cd', 'pushd'):
                 for t in clean:
                     if is_engine_path(t):
                         out(ENGINE_MSG)
             if exe == 'env -S':
                 out("`env -S \"…\"` 는 문자열 하나가 통째로 명령이라 판정할 수 없다.")
-            if exe in OPAQUE_EXE:
+            if exe in OPAQUE_EXE and not dotenv_source(exe, cmd):
                 out(OPAQUE_MSG % exe)
             if inline_program(exe, cmd):
                 out("`%s -c …` 안의 코드는 확인할 수 없어 이 단계에서는 허용되지 않는다.\n"
@@ -1736,7 +1608,7 @@ def run_passes(SEGMENTS, TOKENS):
             if exe_is_substitution(seg, struct):
                 out("명령 이름 자리에 치환이 있어 무엇을 실행하는지 판정할 수 없다.\n"
                     "값을 먼저 구해서 명령을 그대로 적어라.")
-            check_env(env, False)
+            check_env(env)
             check_outside(clean, redirs, exe, cmd[1:])
             check_push_cmd(exe, cmd, struct, env)
             track_cd(exe, cmd[1:], struct)

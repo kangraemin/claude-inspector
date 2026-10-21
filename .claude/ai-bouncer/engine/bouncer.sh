@@ -7,6 +7,7 @@
 #   bouncer run <step-id>             그 step의 명령을 실행하고 결과를 기록
 #   bouncer done <step-id>            사람 확인이 필요한 step을 완료 처리
 #   bouncer cancel                    작업 취소
+#   bouncer restore                   읽기 전용 단계에서 바뀐 작업 트리를 단계 진입 시점으로 되돌린다
 #   bouncer todo [add|done <n>|drop <n>]  할 일 목록 (checklist 게이트가 이걸 센다)
 #   bouncer skip <step-id>            엔진이 포기한 조건을 이번 작업에서만 건너뛴다
 #   bouncer release [--force]         죽은 세션이 남긴 잠금 확인 / 회수
@@ -386,6 +387,40 @@ cmd_done() {
   printf 'DONE\t%s\n' "$id"
 }
 
+# 읽기 전용 단계는 명령을 미리 막지 않고 실행 뒤 작업 트리 변화를 잡는다.
+# 잡혔을 때 모델이 손으로 되돌리게 하면(git checkout 등) 그 명령이 또 쓰기라 막히고,
+# 구현 단계에서 만든 미커밋 변경까지 날아간다. 그래서 엔진이 진입 시점 스냅샷으로 되돌린다.
+# 진짜 인덱스는 건드리지 않는다. 되돌리기 전 내용은 git tree 객체로 남겨 복구 경로를 알려준다.
+cmd_restore() {
+  need_task --mutating
+  [ "$(bouncer_stage "$PROJECT" "$STAGE" | jq -r '.forbid.edit_files // null')" = "true" ] \
+    || die "지금 단계($STAGE)는 읽기 전용이 아니다. 되돌릴 기준선이 없다."
+  local ch base w top now idx n=0 st path
+  ch="$(bouncer_ro_changes "$TASK" "$STAGE")"
+  if [ -z "$ch" ]; then
+    printf 'CLEAN\t작업 트리가 단계 진입 때와 같다.\n'; return 0
+  fi
+  base="$(bouncer_state "$TASK" '.ro_base.tree')"; w="$(bouncer_state "$TASK" '.ro_base.root')"
+  top="$(git -C "$w" rev-parse --show-toplevel 2>/dev/null)" || die "작업 트리를 찾을 수 없다: $w"
+  now="$(bouncer_tree_obj "$w" "$TASK/.ro.index")" || die "현재 작업 트리를 읽지 못했다."
+  idx="$TASK/.ro.restore.index"; rm -f "$idx"
+  GIT_INDEX_FILE="$idx" git -C "$top" read-tree "$base" 2>/dev/null || die "기준선($base)을 읽지 못했다."
+  while IFS= read -r -d '' st && IFS= read -r -d '' path; do
+    case "$st" in
+      A) rm -f -- "$top/$path" ;;          # 이 단계에서 새로 생긴 파일
+      *) GIT_INDEX_FILE="$idx" git -C "$top" checkout-index -f -- "$path" >/dev/null 2>&1 \
+           || die "되돌리지 못했다: $path" ;;
+    esac
+    n=$((n+1))
+  done < <(git -C "$top" diff-tree -r -z --no-renames --name-status "$base" "$now")
+  rm -f "$idx"
+  ch="$(bouncer_ro_changes "$TASK" "$STAGE")"
+  [ -z "$ch" ] || die "되돌린 뒤에도 차이가 남았다:
+$ch"
+  printf 'RESTORED\t%s개 경로를 단계 진입 시점으로 되돌렸다.\n' "$n"
+  printf '되돌리기 전 내용이 필요하면: git -C %s restore --source=%s -- <경로>\n' "$top" "$now"
+}
+
 cmd_cancel() {
   need_task --mutating
   local noted=1
@@ -674,6 +709,7 @@ case "${1:-}" in
   run)       shift; cmd_run "$@" ;;
   done)      shift; cmd_done "$@" ;;
   cancel)    shift; cmd_cancel "$@" ;;
+  restore)   shift; cmd_restore "$@" ;;
   workflows) shift; cmd_workflows "$@" ;;
   release)   shift; cmd_release "$@" ;;
   skip)      shift; cmd_skip "$@" ;;
@@ -687,6 +723,6 @@ case "${1:-}" in
                create)   die "worktree는 'bouncer start <workflow> <slug> --parallel' 로 만든다." ;;
                *) die "usage: bouncer worktree finalize" ;;
              esac ;;
-  ""|-h|--help) sed -n '3,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  ""|-h|--help) sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "알 수 없는 명령: $1" ;;
 esac
