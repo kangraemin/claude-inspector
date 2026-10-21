@@ -197,6 +197,7 @@ Step 1에 `OTHER`가 있었으면 그냥 `start`하면 거부된다. 사용자�
 | `bouncer todo drop <n>` | 범위에서 뺀다 (기록에 남으니 사유를 사용자에게 알린다) |
 | `bouncer status` | 현재 단계와 남은 조건 (각 step의 `id:` 도 함께 나온다) |
 | `bouncer run <step-id>` | 검증 명령 실행 후 결과 기록. 명령 문자열은 엔진이 소유한다 |
+| `bouncer scope <step-id> <경로…>` | 명령에 `{scope}` 자리가 있는 step(e2e 등)을 이번 작업에서 새로 만들었거나 영향받는 테스트로 좁힌다. 안 적으면 전체. `--clear`로 되돌린다 |
 | `bouncer done <step-id>` | 할 일을 마친 step 완료 표시 (사람 확인은 없다) |
 | `bouncer cancel` | 작업 취소 |
 | `bouncer restore` | 읽기 전용 단계(verify 등)에서 작업 트리를 바꿨다고 알림이 오면, 단계 진입 시점으로 되돌린다 |

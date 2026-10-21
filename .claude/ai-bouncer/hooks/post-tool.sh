@@ -14,11 +14,11 @@ set -uo pipefail
 INPUT="$(cat)"
 command -v jq >/dev/null 2>&1 || exit 0
 
-TOOL="$(jq -r '.tool_name // empty' <<<"$INPUT")"
+# 매 Bash 호출마다 돈다 — jq 를 필드마다 부르지 않고 한 번에 읽는다.
+{ IFS= read -r TOOL; IFS= read -r SESSION; IFS= read -r CWD; } \
+  < <(jq -r '(.tool_name // "" | tostring), (.session_id // "" | tostring), (.cwd // "" | tostring)' <<<"$INPUT" 2>/dev/null)
 case "$TOOL" in ExitPlanMode|Skill|Bash) ;; *) exit 0 ;; esac
 
-SESSION="$(jq -r '.session_id // empty' <<<"$INPUT")"
-CWD="$(jq -r '.cwd // empty'            <<<"$INPUT")"
 [ -n "$CWD" ] || CWD="$PWD"
 [ -n "$SESSION" ] || exit 0
 

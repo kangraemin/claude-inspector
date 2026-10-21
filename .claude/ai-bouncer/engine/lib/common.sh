@@ -4,9 +4,6 @@
 
 set -uo pipefail
 
-BOUNCER_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BOUNCER_ROOT="$(cd "$BOUNCER_LIB_DIR/../.." && pwd)"
-
 # ── 경로 ─────────────────────────────────────────────────────
 # 설치는 프로젝트별로만 한다. 전역 설치는 없다 —
 # 레포마다 워크플로우가 다른 게 정상이고, 전역을 두면 "어느 설정이 이겼나"를
@@ -22,7 +19,19 @@ BOUNCER_ROOT="$(cd "$BOUNCER_LIB_DIR/../.." && pwd)"
 # 모든 hook이 조용히 무관여가 된다 (push 통과, Stop 무출력).
 # git-common-dir 은 worktree에서도 메인 레포의 .git 을 가리킨다.
 bouncer_main_root() {
-  local d="${1:-$PWD}" gcd
+  local d="${1:-$PWD}" gcd up
+  # 가장 가까운 `.git` 이 디렉토리면 그 부모가 메인 레포다 — git 을 부를 필요가 없다.
+  # hook 한 번에 이 함수가 5번 불리는데, macOS 의 /usr/bin/git 은 xcrun 래퍼라
+  # 한 번에 수십~백 ms 가 들었다. `.git` 이 파일(worktree·서브모듈)일 때만 git 에 묻는다.
+  if [ -z "${GIT_DIR:-}" ]; then
+    up="$(cd "$d" 2>/dev/null && pwd)" || return 1
+    while :; do
+      if [ -d "$up/.git" ]; then printf '%s' "$up"; return 0; fi
+      [ -e "$up/.git" ] && break
+      [ "$up" = "/" ] && return 1
+      up="$(dirname "$up")"
+    done
+  fi
   gcd="$(git -C "$d" rev-parse --git-common-dir 2>/dev/null)" || return 1
   [ -n "$gcd" ] || return 1
   case "$gcd" in /*) ;; *) gcd="$(cd "$d" && cd "$gcd" 2>/dev/null && pwd)" || return 1 ;; esac
@@ -256,6 +265,17 @@ bouncer_ro_changes() {
   bouncer_tree_changes "$w" "$base" "$now"
 }
 
+# ── 실행 범위 ────────────────────────────────────────────────
+# run 명령의 {scope} 자리를 `bouncer scope` 로 적어 둔 경로로 채운다.
+# 적은 게 없으면 빈칸이 되어 전체를 돌린다. 경로는 하나씩 따옴표로 감싼다.
+bouncer_scoped_cmd() {
+  local task="$1" id="$2" cmd="$3" args="" p
+  case "$cmd" in *'{scope}'*) ;; *) printf '%s' "$cmd"; return 0 ;; esac
+  while IFS= read -r p; do
+    [ -n "$p" ] && args="$args $(printf '%q' "$p")"
+  done < <(jq -r --arg k "$id" '(.scope[$k] // [])[]' "$task/state.json" 2>/dev/null)
+  printf '%s' "${cmd//\{scope\}/${args# }}"
+}
+
 # ── hook 출력 ────────────────────────────────────────────────
 bouncer_block()   { jq -n --arg r "$1" '{decision:"block", reason:$r}'; exit 0; }   # PreToolUse 차단 / Stop 계속
-bouncer_notice()  { jq -n --arg c "$1" '{hookSpecificOutput:{additionalContext:$c}}'; exit 0; }

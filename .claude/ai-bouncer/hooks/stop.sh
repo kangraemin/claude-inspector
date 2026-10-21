@@ -240,7 +240,6 @@ while IFS= read -r step; do
         CL_N="$(jq -r '(.checklist // []) | length' "$TASK/state.json" 2>/dev/null)"
         CL_LEFT="$(jq -r '[(.checklist // [])[] | select(.done | not)] | length' \
                     "$TASK/state.json" 2>/dev/null)"
-        CL_TURN="$(jq -r '.checklist_turn // -1' "$TASK/state.json" 2>/dev/null)"
         if [ "${CL_N:-0}" = 0 ]; then
           add_failure "할 일 목록이 비어 있다 ($LABEL) — \`bouncer todo add\` 로 채워라"
           add_blocking_id "$ID"
@@ -272,6 +271,7 @@ while IFS= read -r step; do
   TMO="$(jq -r '.timeout' <<<"$step")"
 
   if [ "$BY" = "engine" ]; then
+    CMD="$(bouncer_scoped_cmd "$TASK" "$ID" "$CMD")"
     # 짧은 명령만 여기 온다 (컴파일에서 60초 상한 강제).
     if command -v timeout >/dev/null 2>&1; then
       OUT="$( cd "$WORK_ROOT" && timeout "$TMO" bash -lc "$CMD" 2>&1 )"; RC=$?
@@ -295,7 +295,13 @@ while IFS= read -r step; do
     if [ "$SHOWN" != "true" ]; then
       # 명령을 직접 치라고 하면 결과가 증거로 남지 않아 영원히 미충족이 된다.
       # 엔진이 명령을 소유하므로 bouncer run 으로 돌려야 종료코드가 기록된다.
-      add_inject "$LABEL — 아래를 실행해라 (명령은 엔진이 갖고 있다):"$'\n'"    bouncer run '$ID'"
+      case "$CMD" in
+        *'{scope}'*)
+          # 전체를 매번 돌리면 오래 걸린다. 이번 작업이 건드린 테스트만 골라 돌리게 한다.
+          add_inject "$LABEL — 먼저 이번 작업에서 새로 만들었거나 영향받는 테스트를 골라 범위로 적고, 그다음 실행해라:"$'\n'"    bouncer scope '$ID' <테스트 경로…>   (안 적으면 전체를 돌린다)"$'\n'"    bouncer run '$ID'" ;;
+        *)
+          add_inject "$LABEL — 아래를 실행해라 (명령은 엔진이 갖고 있다):"$'\n'"    bouncer run '$ID'" ;;
+      esac
       bouncer_state_update "$TASK" --arg k "$ID" '.shown[$k] = true'
     fi
     if [ -n "$BLOCKING" ]; then

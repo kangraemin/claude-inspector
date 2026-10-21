@@ -210,8 +210,6 @@ ENV_DANGEROUS_EXACT = {'PERL5OPT', 'PERL5LIB', 'PYTHONSTARTUP',
                        'NODE_OPTIONS', 'NODE_PATH', 'RUBYOPT'}
 ENV_DANGEROUS = {'PATH', 'ENV', 'IFS', 'SHELL', 'EDITOR', 'VISUAL', 'PAGER'}
 
-# 안을 들여다볼 수 없는 구문 — 무엇을 하는지 판정 불가라 거부한다
-OPAQUE = {'(', ')', '{', '}', '$', '`', '<(', '>('}
 # 개행도 구분자다. 빠져 있어서 `ls\nrm -rf .ai-bouncer` 가 한 세그먼트로 읽혀
 # exe='ls' 하나만 판정됐다 — 읽기 전용에서 엔진 삭제까지 통과했다.
 SEPARATOR_BASE = {';', '&&', '||', '|', '&', ';;', '|&', '\n'}
@@ -233,7 +231,6 @@ ENGINE_PARENTS = ('.claude',)
 ENGINE_MARKERS = ('.ai-bouncer', 'ai-bouncer/', 'workflow.compiled.json')
 INLINE_CODE_EXE = {'python', 'python3', 'perl', 'ruby', 'node', 'deno', 'bun', 'php',
                    'sh', 'bash', 'zsh', 'ksh', 'dash', 'awk', 'gawk', 'mawk'}
-BOUNCER_EXE = ('bouncer', 'bouncer.sh')
 
 
 def is_bouncer(tok):
@@ -1157,10 +1154,18 @@ def check_engine_files(segments):
         # 성분으로 안 보인다. 엔진 표식이 들어 있으면 통째로 거부한다.
         if exe in INLINE_CODE_EXE:
             for a in cmd[1:]:
+                # 실행할 스크립트 파일 경로는 코드 문자열이 아니다. 부모 디렉토리 이름에
+                # `ai-bouncer/` 가 들어 있으면(이 레포·scratchpad 절대경로) `bash <파일>` 이 막혔다.
+                if os.path.isfile(abspath(a)) and not is_engine_path(a):
+                    continue
                 if any(m in a for m in ENGINE_MARKERS):
                     out(ENGINE_MSG)
         if exe == 'git' and not git_read_error(cmd):
             continue                    # `git log -- .ai-bouncer` 같은 이력 조회
+        # add·commit 은 인덱스와 이력만 바꾸고 파일 내용은 안 건드린다.
+        # 설치본을 커밋하려는 `git add .claude/settings.json` 이 엔진 수정으로 막혔다.
+        if exe == 'git' and git_sub(cmd) in ('add', 'commit'):
+            continue
         if read_only(exe, cmd):
             continue                    # 읽기는 자유
         if exe in ('cd', 'pushd') and not redirs:
