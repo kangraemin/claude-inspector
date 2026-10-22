@@ -138,18 +138,11 @@ WRAPPER_VALUE_FLAGS = {
 WRAPPERS = set(WRAPPER_VALUE_FLAGS)
 # timeout 은 값을 위치인자로 받는다 (`timeout 5 cmd`)
 DURATION = re.compile(r'^[0-9]+(\.[0-9]+)?[smhd]?$')
-# 안에 든 프로그램을 들여다볼 수 없는 것들. 인라인 코드를 주면 판정 불가다.
-# 셸만 막는다. `sh -c '…'` 는 한 토큰이라 세그먼트 분리도 리다이렉트 검사도
-# 통째로 비껴가서, push 금지와 엔진 보호가 한 줄로 무력화된다.
-# node -e / python3 -c 까지 막는 건 의미가 없다 — 이미 npm·make·./build.sh 가
-# 허용된 단계라 막아도 얻는 게 없고 흔한 관용구만 깨진다.
+# 셸 인터프리터. 인라인 코드 안의 `git push` 를 찾을 때 쓴다.
 INTERPRETERS = {'sh', 'bash', 'zsh', 'ksh', 'dash', 'fish', 'csh', 'tcsh'}
-# 인자가 곧 코드다. 플래그가 없어도 항상 불투명하다.
-OPAQUE_EXE = {'eval', 'source', '.'}
 # 뒤에 곧바로 명령이 오는 키워드. 건너뛰고 진짜 명령을 본다.
 SKIP_KEYWORDS = {'if', 'then', 'elif', 'else', 'do', 'while', 'until', 'select',
                  'fi', 'done', 'esac', '!', 'time'}
-INLINE_FLAGS = ('-c', '-e', '--eval', '--command', '-E', '--exec')
 
 # ── git ──────────────────────────────────────────────────────
 # 어떤 인자를 줘도 읽기인 서브커맨드
@@ -193,22 +186,7 @@ GIT_SUB = {
 }
 GIT_PUSH_SUBS = {'push', 'send-pack', 'svn', 'p4', 'request-pull'}
 # 아는 서브커맨드 전부. 여기 없는 것이 서브커맨드 자리에 오면 치환에 가려진 것이다.
-KNOWN_GIT_SUBS = (GIT_READ | set(GIT_SUB) | GIT_PUSH_SUBS | GIT_TREE_WRITE
-                  | {'commit', 'add', 'tag', 'init', 'clone', 'fetch', 'branch',
-                     'log', 'status', 'diff', 'show', 'help', 'version', 'gc',
-                     'prune', 'fsck', 'bundle', 'archive', 'describe', 'blame'})
 
-# ── 환경변수 접두 ────────────────────────────────────────────
-# 값이 그대로 실행되거나 로딩되는 것들. GIT_* 는 통째로 막는다
-# (GIT_EXTERNAL_DIFF, GIT_SSH, GIT_CONFIG_KEY_n 으로 별칭 주입이 전부 가능하다).
-# 접두를 넓게 잡으면 `NODE_ENV=production npm run build` 처럼 필수적인 것까지 막힌다.
-# 값이 그대로 실행·로딩되는 이름만 든다.
-# PATH·NODE_* 접두는 정상 사용이 많고(`PATH=.venv/bin:$PATH pytest`) 막아도 우회가 쉬워 뺐다(2026-10-22 감사).
-# 판정기 자체를 속이는 git·셸·동적 로더 쪽만 남긴다.
-ENV_DANGEROUS_PREFIX = ('GIT_', 'LD_', 'DYLD_', 'BASH_')
-ENV_DANGEROUS_EXACT = {'PERL5OPT', 'PERL5LIB', 'PYTHONSTARTUP',
-                       'NODE_OPTIONS', 'NODE_PATH', 'RUBYOPT'}
-ENV_DANGEROUS = {'PATH', 'ENV', 'IFS', 'SHELL', 'EDITOR', 'VISUAL', 'PAGER'}
 
 # 개행도 구분자다. 빠져 있어서 `ls\nrm -rf .ai-bouncer` 가 한 세그먼트로 읽혀
 # exe='ls' 하나만 판정됐다 — 읽기 전용에서 엔진 삭제까지 통과했다.
@@ -230,7 +208,7 @@ ENGINE_SETTINGS = ('.claude', 'settings.json')
 ENGINE_PARENTS = ('.claude',)
 ENGINE_MARKERS = ('.ai-bouncer', 'ai-bouncer/', 'workflow.compiled.json')
 INLINE_CODE_EXE = {'python', 'python3', 'perl', 'ruby', 'node', 'deno', 'bun', 'php',
-                   'sh', 'bash', 'zsh', 'ksh', 'dash', 'awk', 'gawk', 'mawk'}
+                   'sh', 'bash', 'zsh', 'ksh', 'dash', 'awk', 'gawk', 'mawk', 'eval'}
 
 
 def is_bouncer(tok):
@@ -270,11 +248,6 @@ def read_only(exe, cmd):
     if exe == 'find':
         return not any(a in FIND_WRITE for a in args)
     return False
-
-
-def dotenv_source(exe, cmd):
-    # `source .env` / `. .env.local` 은 시크릿 로딩일 뿐이고, 막아도 grep|cut 으로 똑같이 된다. eval 은 계속 막는다.
-    return exe in ('source', '.') and len(cmd) == 2 and re.fullmatch(r'(\./)?(\S*/)?\.env[\w.-]*', cmd[1]) is not None
 
 
 ENGINE_MSG = ("엔진 파일(.ai-bouncer/ 상태, .claude/ai-bouncer/ 설정·엔진, "
@@ -918,29 +891,6 @@ def parse_redirects(seg):
 ASSIGN = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=')
 
 
-def exe_is_substitution(seg, struct):
-    """명령 이름 자리를 치환이 차지했는가.
-
-    `"$(echo git)" push` 는 자리표시가, `$(echo git) push` 는 아예 아무것도
-    안 남아 뒤따르는 `push` 가 실행 파일로 읽혔다. 둘 다 판정 불가다.
-    """
-    seen_word = False
-    for text, kind in seg:
-        if kind == 'st':
-            # 마커는 앞선 단어에 딸린 것이다. 단어가 하나도 없이 먼저 나오면
-            # 치환 자체가 명령 이름이다 (`$(echo git) push`).
-            if seen_word:
-                return False
-            return text in ('$(', '`')
-        if kind == 'w':
-            t = text.strip('"\'')
-            if ASSIGN.match(t):
-                seen_word = True
-                continue                   # `X=…` 접두는 명령이 아니다
-            return t.startswith(SUB_TOKEN)
-    return False
-
-
 def resolve_exe(seg):
     """(실행 파일 이름, 그 지점부터의 토큰, 환경변수 이름들) 을 돌려준다.
 
@@ -1002,23 +952,14 @@ def resolve_exe(seg):
     return last, seg[i:] if i < len(seg) else [], env
 
 
-def inline_program(exe, cmd):
-    """인라인 코드를 실행하는 형태인가 (`sh -c …`, `python3 -c …`)."""
-    return exe in INTERPRETERS and any(
-        a in INLINE_FLAGS or a.startswith(INLINE_FLAGS) for a in cmd[1:])
-
-
 def git_sub(cmd):
-    """git 의 전역 옵션을 건너뛰고 서브커맨드를 찾는다. `-c` 는 판정 불가."""
+    """git 의 전역 옵션을 건너뛰고 서브커맨드를 찾는다. 치환이면 None."""
     i = 1
     while i < len(cmd):
         t = cmd[i]
-        if t in ('-C', '--git-dir', '--work-tree', '--namespace', '--exec-path'):
+        if t in ('-C', '--git-dir', '--work-tree', '--namespace', '--exec-path', '-c', '--config-env'):
             i += 2
             continue
-        # `-c` 와 동등물. 별칭을 심어 push 를 숨길 수 있다.
-        if t == '-c' or t.startswith('--config-env'):
-            return None
         if t.startswith('-'):
             i += 1
             continue
@@ -1123,10 +1064,6 @@ def check_engine_files(segments):
         exe, cmd, _ = resolve_exe(clean)
         if cmd and is_bouncer(cmd[0]):
             continue
-        if SUB_TOKEN in exe:
-            out(SUB_EXE_MSG)
-        if exe in OPAQUE_EXE and not dotenv_source(exe, cmd):
-            out(OPAQUE_MSG % exe)
         # `git clean -fdx` 는 gitignore된 것을 지운다 — 상태 디렉토리가 정확히 그것이다.
         if exe == 'git' and git_sub(cmd) == 'clean' \
            and not any(a in ('-n', '--dry-run') or (a.startswith('-') and not a.startswith('--')
@@ -1226,19 +1163,11 @@ def check_outside(seg_tokens, redirs, exe, args):
             "worktree 안의 같은 파일을 고쳐라." % (WORKTREE, bad[0]))
 
 
-def check_env(env):
-    for name in env:
-        if name in ENV_DANGEROUS or name in ENV_DANGEROUS_EXACT \
-           or name.startswith(ENV_DANGEROUS_PREFIX):
-            out("`%s=…` 는 실행할 명령 자체를 바꿀 수 있어 이 단계에서는 허용되지 않는다."
-                % name)
-
-
 def git_read_error(cmd):
     """읽기가 아니면 사유 문자열, 읽기면 None."""
     sub = git_sub(cmd)
     if sub is None:
-        return ("`git -c …` 는 무엇을 하는지 판정할 수 없다(별칭 주입 가능). 허용되지 않는다.")
+        return ("git 서브커맨드 자리에 치환이 있다. 이 단계에서는 서브커맨드를 그대로 적어라.")
     if sub == '':
         return None                     # `git` 만 치면 도움말
     if sub == 'grep' and any(a.startswith(('-O', '--open-files-in-pager')) for a in cmd):
@@ -1283,10 +1212,6 @@ def git_read_error(cmd):
     return None
 
 
-SUB_EXE_MSG = ("명령 이름 자리에 치환이 있어 무엇을 실행하는지 판정할 수 없다.\n"
-               "값을 먼저 구해서 명령을 그대로 적어라.")
-OPAQUE_MSG = ("`%s` 는 인자가 곧 실행할 코드라 무엇을 하는지 판정할 수 없다.\n"
-              "명령을 그대로 적어라.")
 
 
 PLANS_DIR = os.path.join(os.path.expanduser('~'), '.claude', 'plans')
@@ -1399,41 +1324,20 @@ PUSH_MSG = ("push가 차단되었다. push 는 finalize 단계에서만 한다.\
             "같은 명령에서 `git push` 부분만 빼고 다시 실행해라(add·commit 은 지금 해도 된다).")
 
 
+# 모델은 push 를 숨기려 하지 않는다. `bash -c`·`source`·`env -i`·`git -c` 를 통째로 막던 검사는
+# 실사용 차단 47건이 전부 정상 명령이었다(숨긴 push 0건, 2026-10-22 감사). 실제로 잡히는 것은
+# 검증 전에 `git push` 를 그냥 치는 경우(46건)라 그 형태만 본다.
 def check_push_cmd(exe, cmd, struct=(), env=()):
-    if SUB_TOKEN in exe:
-        out(SUB_EXE_MSG)
-    if exe in OPAQUE_EXE and not dotenv_source(exe, cmd):
-        out(OPAQUE_MSG % exe)
-    if exe == 'env -S':
-        out("`env -S \"…\"` 는 문자열 하나가 통째로 명령이라 판정할 수 없다.")
-    # 명령치환이 섞였는데 서브커맨드가 아는 것이 아니면, 치환이 그 자리를
-    # 차지했다는 뜻이다 (`git $(echo push) origin main`).
-    if exe == 'git' and struct:
-        _sub = git_sub(cmd)
-        if _sub is None or (_sub and _sub not in KNOWN_GIT_SUBS):
-            out("git 서브커맨드 자리에 명령 치환(`$(…)`)이 있어 판정할 수 없다.\n"
-                "이 단계에서는 서브커맨드를 그대로 적어야 한다.")
-    # `git $x`, `git $(echo push)` — 서브커맨드 자리를 가리면 판정할 수 없다.
-    # 인자에 치환이 있는 것 자체는 문제가 아니다 (`git commit -m "$(cat msg)"`).
-    if exe == 'git' and not git_sub(cmd) \
-       and any('$' in a or '`' in a for a in cmd[1:]):
-        out("git 서브커맨드 자리에 변수·명령 치환이 있어 무엇을 하는지 판정할 수 없다.\n"
-            "이 단계에서는 서브커맨드를 그대로 적어야 한다.")
     if exe == 'git-push':
         out(PUSH_MSG)
-    if inline_program(exe, cmd):
-        out("`%s -c …` 안의 코드는 확인할 수 없다 (push를 숨길 수 있다).\n"
-            "스크립트 파일로 만들어 실행하거나, 명령을 직접 써라." % exe)
-    # `--no-push`, `[].push`, `/push/{print}` 같은 정상 인자를 잡지 않도록
-    # `git push` 형태만 본다.
-    if exe in ('awk', 'gawk', 'python', 'python3', 'perl', 'ruby', 'node', 'sh', 'bash') \
+    # 인라인 코드 안에 그대로 적힌 `git push` (`bash -c 'make && git push'`).
+    # `--no-push`, `[].push`, `/push/{print}` 같은 정상 인자를 잡지 않도록 `git push` 형태만 본다.
+    if exe in INTERPRETERS | {'awk', 'gawk', 'python', 'python3', 'perl', 'ruby', 'node', 'eval'} \
        and any(re.search(r'\bgit\b[^\n;|&]*\bpush\b', a) for a in cmd[1:]):
-        out("인터프리터·셸을 통한 push 시도로 보인다. 이 단계에서는 허용되지 않는다.")
+        out(PUSH_MSG)
     if exe != 'git':
         return
     sub = git_sub(cmd)
-    if sub is None:
-        out("`git -c …` 는 별칭으로 push를 숨길 수 있어 이 단계에서는 허용되지 않는다.")
     if sub in GIT_PUSH_SUBS:
         if sub == 'push' and any(a in ('-n', '--dry-run') for a in cmd):
             return                      # 아무것도 보내지 않는다
@@ -1442,8 +1346,6 @@ def check_push_cmd(exe, cmd, struct=(), env=()):
         out(PUSH_MSG)
     if sub == 'subtree' and 'push' in cmd:
         out(PUSH_MSG)
-    if sub == 'config' and any('alias.' in a for a in cmd):
-        out("이 단계에서 git 별칭을 등록할 수 없다 (push를 숨길 수 있다).")
 
 
 if CHECK_PATH:
@@ -1481,12 +1383,12 @@ while _work:
     if not _sub.strip() or _sub in _seen:
         continue
     if len(_seen) > 64:
-        out("명령 치환이 너무 많아 전부 판정할 수 없다. 명령을 나눠서 실행해라.")
+        break
     _seen.add(_sub)
     del SUBS[:]
     _t = lex(_sub)
     if _t is None:
-        out("명령 치환 안을 판정할 수 없다. 값을 먼저 구해서 명령을 그대로 적어라.")
+        continue
     SUB_SEGMENTS.append(split_segments(_t))
     _work.extend(SUBS)
 check_engine_files(SEGMENTS)
@@ -1517,7 +1419,6 @@ def run_passes(SEGMENTS, TOKENS):
             if not clean:
                 continue
             exe, cmd, env = resolve_exe(clean)
-            check_env(env)
             check_outside(clean, redirs, exe, cmd[1:])
             args = cmd[1:]
             if exe == 'git':
@@ -1551,23 +1452,12 @@ def run_passes(SEGMENTS, TOKENS):
             if not clean:
                 continue
             exe, cmd, env = resolve_exe(clean)
-            if exe_is_substitution(seg, struct):
-                out("명령 이름 자리에 치환이 있어 무엇을 실행하는지 판정할 수 없다.\n"
-                    "값을 먼저 구해서 명령을 그대로 적어라.")
-            check_env(env)
             check_outside(clean, redirs, exe, cmd[1:])
             if not is_bouncer(cmd[0] if cmd else '') \
                and not read_only(exe, cmd) and exe not in ('cd', 'pushd'):
                 for t in clean:
                     if is_engine_path(t):
                         out(ENGINE_MSG)
-            if exe == 'env -S':
-                out("`env -S \"…\"` 는 문자열 하나가 통째로 명령이라 판정할 수 없다.")
-            if exe in OPAQUE_EXE and not dotenv_source(exe, cmd):
-                out(OPAQUE_MSG % exe)
-            if inline_program(exe, cmd):
-                out("`%s -c …` 안의 코드는 확인할 수 없어 이 단계에서는 허용되지 않는다.\n"
-                    "스크립트 파일로 만들어 실행하거나, 명령을 직접 써라." % exe)
             args = cmd[1:]
             if exe == 'git':
                 sub = git_sub(cmd)
@@ -1610,10 +1500,6 @@ def run_passes(SEGMENTS, TOKENS):
             if not clean:
                 continue
             exe, cmd, env = resolve_exe(clean)
-            if exe_is_substitution(seg, struct):
-                out("명령 이름 자리에 치환이 있어 무엇을 실행하는지 판정할 수 없다.\n"
-                    "값을 먼저 구해서 명령을 그대로 적어라.")
-            check_env(env)
             check_outside(clean, redirs, exe, cmd[1:])
             check_push_cmd(exe, cmd, struct, env)
             track_cd(exe, cmd[1:], struct)
