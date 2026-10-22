@@ -10,7 +10,6 @@
     ".claude/ai-bouncer/hooks/user-prompt.sh",
     ".claude/ai-bouncer/hooks/stop.sh",
     ".claude/ai-bouncer/hooks/session-end.sh",
-    ".claude/ai-bouncer/scripts/update-check.sh",
     ".claude/skills/dev-bounce/SKILL.md"
   ],
   "gitignore_added": false

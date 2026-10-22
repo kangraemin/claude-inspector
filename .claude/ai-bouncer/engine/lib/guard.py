@@ -231,7 +231,7 @@ ENGINE_READ_OK = {
     'cat', 'head', 'tail', 'wc', 'ls', 'stat', 'file', 'tree', 'du', 'jq',
     'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack', 'diff', 'cmp', 'nl', 'od',
     'strings', 'md5sum', 'sha256sum', 'shasum', 'realpath', 'dirname', 'basename',
-    'md5',
+    'md5', 'test', '[', '[[',          # 존재 검사 `[ -f …/workflow.yaml ]` 가 수정으로 막혔다
 }
 # 쓰기 옵션이 없을 때만 읽기인 명령. `sed -n 1,40p`, `find .ai-bouncer -name '*.json'` 이 수정으로 막혔다(약 26건).
 FIND_WRITE = {'-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fprintf', '-fls'}
@@ -1523,7 +1523,9 @@ def run_passes(SEGMENTS, TOKENS):
                 # add·commit 은 인덱스·이력만, archive 는 출력만 만든다 — 작업 트리 내용은 그대로다.
                 # verify 에서 커밋하려던 `git add …` 가 막혔다(3건). 트리 비교 기준도 내용이다.
                 sub = git_sub(cmd)
-                err = None if sub in ('add', 'commit', 'archive') else git_read_error(cmd)
+                # push 는 아래 push 검사가 판정한다 — 다른 레포(library) push 까지 여기서 막혔다.
+                err = None if sub in ('add', 'commit', 'archive') or sub in GIT_PUSH_SUBS \
+                    else git_read_error(cmd)
                 if err:
                     out(err)
                 if sub == 'archive':

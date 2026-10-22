@@ -432,14 +432,14 @@ ROOT_KEYS = {'version', 'settings', 'workflows', 'stages'}
 # 그래야 새 설정이 생겨도 기존 yaml을 고칠 필요가 없다.
 SETTINGS = {
     'update_branch': 'main',
-    'update_check': True,
-    'update_check_interval_hours': 6,
     'max_attempts': 3,
     'max_continue': 10,
     'max_loops': 3,
     'stale_lock_hours': 12,
     'repo': 'kangraemin/ai-bouncer',
 }
+# 세션 시작 업데이트 알림을 없앴다. 예전 yaml 에 남은 키는 오류 없이 무시한다.
+RETIRED_SETTINGS = {'update_check', 'update_check_interval_hours'}
 
 
 def compile_config(raw, base_dir, sources):
@@ -456,6 +456,7 @@ def compile_config(raw, base_dir, sources):
     given = raw.get('settings') or {}
     if not isinstance(given, dict):
         _err('settings', '매핑이어야 한다')
+    given = {k: v for k, v in given.items() if k not in RETIRED_SETTINGS}
     unknown = set(given) - set(SETTINGS)
     if unknown:
         _err('settings', '알 수 없는 설정: %s (가능: %s)'

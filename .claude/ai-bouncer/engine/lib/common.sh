@@ -66,7 +66,7 @@ bouncer_config() {
   local key="$1" default="${2:-}" project="${3:-$PWD}" f val
   f="$(bouncer_compiled_file "$project")"
   [ -f "$f" ] || { printf '%s' "$default"; return; }
-  # jq 의 `//` 는 false 를 "없음" 으로 본다 — `update_check: false` 가 조용히
+  # jq 의 `//` 는 false 를 "없음" 으로 본다 — `false` 설정값이 조용히
   # 무시됐다. choices 에서 같은 함정을 이미 고쳤는데 여기만 남아 있었다.
   val="$(jq -r --arg k "$key" \
     'if (.settings | has($k)) then .settings[$k] else empty end' "$f" 2>/dev/null)"

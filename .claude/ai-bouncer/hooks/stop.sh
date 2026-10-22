@@ -240,9 +240,12 @@ while IFS= read -r step; do
         CL_N="$(jq -r '(.checklist // []) | length' "$TASK/state.json" 2>/dev/null)"
         CL_LEFT="$(jq -r '[(.checklist // [])[] | select(.done | not)] | length' \
                     "$TASK/state.json" 2>/dev/null)"
+        # 빈 목록은 통과다. 모델이 스스로 세우고 같은 명령에서 체크하는 의례가 됐다
+        # (2026-10-22 감사: 형식 통과 20건, mukmap add 38건 중 17건). 승인된 계획에서
+        # 옮겨 온 목록(plan 모드)이나 스스로 세운 목록이 있을 때만 센다.
         if [ "${CL_N:-0}" = 0 ]; then
-          add_failure "할 일 목록이 비어 있다 ($LABEL) — \`bouncer todo add\` 로 채워라"
-          add_blocking_id "$ID"
+          bouncer_state_update "$TASK" --arg k "$ID" '.evidence[$k] = true'
+          continue
         elif [ "${CL_LEFT:-1}" != 0 ]; then
           add_failure "남은 항목 ${CL_LEFT}/${CL_N}개 ($LABEL) — \`bouncer todo\` 로 확인"
           add_blocking_id "$ID"
@@ -317,6 +320,12 @@ while IFS= read -r step; do
       fi
       bouncer_state_update "$TASK" --arg k "$ID" '.shown[$k] = true'
     fi
+    RUN_PID="$(jq -r --arg k "$ID" '.running[$k] // ""' "$TASK/state.json" 2>/dev/null)"
+    if [ -n "$BLOCKING" ] && [ -n "$RUN_PID" ] && kill -0 "$RUN_PID" 2>/dev/null; then
+      # 아직 실행 중이다. 막으면 기다리는 동안 같은 차단만 반복된다 — 끝나면 알림이 온다.
+      RUNNING="${RUNNING:+$RUNNING, }$LABEL"
+      continue
+    fi
     if [ -n "$BLOCKING" ]; then
       # `bouncer run` 이 실패를 기록했으면 "아직 안 돌림"이 아니라 실패다.
       # 미실행으로 취급하면 HARD_FAIL 이 안 켜져, done 표시만 남은 스텝과 함께 있을 때
@@ -341,6 +350,13 @@ done < <(jq -c '.steps[]?' <<<"$STAGE_JSON")
 # ─────────────────────────────────────────────────────────────
 # 판정
 # ─────────────────────────────────────────────────────────────
+if [ -n "${RUNNING:-}" ]; then
+  # 다음 단계로는 안 넘어간다. 실행이 끝난 뒤 Stop 에서 다시 판정한다.
+  jq -n --arg c "${INJECT:+$INJECT$'\n\n'}[$STAGE] 실행 중: $RUNNING — 끝나면 결과를 확인하고 이어서 진행한다.${FAILURES:+
+남은 조건:
+$FAILURES}" '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
+  exit 0
+fi
 if [ -z "$FAILURES" ]; then
   # 반송돼 온 스테이지라면, 뭔가 달라졌을 때만 다시 내보낸다.
   # 그러지 않으면 조건 없는 스테이지를 사이에 두고 같은 검사를 무한히 반복한다.

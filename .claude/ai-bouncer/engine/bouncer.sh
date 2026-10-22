@@ -354,6 +354,10 @@ cmd_run() {
   cmd="$(bouncer_scoped_cmd "$TASK" "$id" "$cmd")"
 
   printf '▶ %s\n  $ %s\n\n' "$(jq -r '.label' <<<"$step")" "$cmd"
+  # 백그라운드로 돌리는 동안 턴이 끝나면 Stop 이 "아직 통과 못함"으로 계속 막았다
+  # (verify 차단 157건 중 약 63건). 실행 중임을 남겨 Stop 이 기다리게 한다.
+  bouncer_state_update "$TASK" --arg k "$id" --argjson p "$$" '.running[$k] = $p'
+  trap "bouncer_state_update $(printf %q "$TASK") --arg k $(printf %q "$id") 'del(.running[\$k])'" EXIT
   local rc=0
   if command -v timeout >/dev/null 2>&1; then
     ( cd "$WORK_ROOT" && timeout "$tmo" bash -lc "$cmd" ) || rc=$?

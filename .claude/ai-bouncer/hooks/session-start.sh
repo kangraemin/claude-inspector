@@ -82,7 +82,4 @@ if [ "$COMPILED_OK" = 1 ]; then
   fi
 fi
 
-# ── 4. 업데이트 확인 ─────────────────────────────────────────
-UPD="$(dirname "$(dirname "${BASH_SOURCE[0]}")")/scripts/update-check.sh"
-[ -x "$UPD" ] && BOUNCER_PROJECT="$CWD" bash "$UPD" 2>/dev/null || true
 exit 0
