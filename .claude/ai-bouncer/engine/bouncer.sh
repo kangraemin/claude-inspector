@@ -362,7 +362,8 @@ cmd_run() {
   fi
 
   if [ "$rc" -eq 0 ]; then
-    bouncer_state_update "$TASK" --arg k "$id" '.evidence[$k] = true'
+    bouncer_state_update "$TASK" --arg k "$id" --arg t "$(bouncer_evidence_tree "$TASK" "$WORK_ROOT")" \
+      '.evidence[$k] = true | .evidence_tree[$k] = $t'
     printf '\n✅ 통과 — %s\n' "$id"
   else
     bouncer_state_update "$TASK" --arg k "$id" '.evidence[$k] = false

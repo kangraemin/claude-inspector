@@ -236,6 +236,21 @@ bouncer_tree_obj() {
   GIT_INDEX_FILE="$idx" git -C "$w" write-tree 2>/dev/null
 }
 
+# 검증 결과가 가리키는 코드 내용. 커밋해도 값이 같다(HEAD 가 아니라 tree 내용이다).
+# 검증 통과 뒤 코드를 고치고 그대로 넘어간 경우가 291번 중 5번 있었다 —
+# 통과 기록에 이 값을 같이 남기고, 달라지면 다시 돌리게 한다.
+# 추적 파일만 본다 — 추적 안 되는 테스트 산출물(리포트·스냅샷)까지 넣으면 step 둘이
+# 서로의 산출물로 서로를 무효로 만들며 끝없이 다시 돈다.
+bouncer_evidence_tree() {
+  local task="$1" w="$2" gi idx="$1/.ev.index"
+  gi="$(git -C "$w" rev-parse --path-format=absolute --git-path index 2>/dev/null)" || return 0
+  [ -f "$gi" ] && cp "$gi" "$idx" 2>/dev/null || return 0
+  GIT_INDEX_FILE="$idx" git -C "$w" add -u -- ':(top)' >/dev/null 2>&1 || return 0
+  GIT_INDEX_FILE="$idx" git -C "$w" rm -r -q --cached --ignore-unmatch -- \
+    ':(top).claude' ':(top).ai-bouncer' >/dev/null 2>&1 || return 0
+  GIT_INDEX_FILE="$idx" git -C "$w" write-tree 2>/dev/null || true
+}
+
 # 두 tree 사이에 바뀐 경로 (상태 문자 + 경로, 탭 구분)
 bouncer_tree_changes() {
   git -C "$1" diff-tree -r --no-renames --name-status "$2" "$3" 2>/dev/null

@@ -222,7 +222,9 @@ def is_bouncer(tok):
     roots = [r for r in (PROJECT, WORKTREE) if r]
     if roots and full and not any(full.startswith(r + '/') for r in roots):
         return False        # 다른 곳에 심어둔 동명 스크립트는 엔진이 아니다
-    return t.replace('\\', '/').endswith('.claude/ai-bouncer/engine/bouncer.sh')
+    # `.claude/ai-bouncer/bin/bouncer` 는 설치본 런처다. PATH 에 없을 때 그 경로로 부른다.
+    return t.replace('\\', '/').endswith(('.claude/ai-bouncer/engine/bouncer.sh',
+                                          '.claude/ai-bouncer/bin/bouncer'))
 # 엔진 파일을 **읽기만** 하는 것은 막을 이유가 없다.
 # (설정을 확인하려는 것뿐인데 스테이지마다 다르게 막히면 혼란만 준다)
 ENGINE_READ_OK = {
@@ -685,9 +687,12 @@ def norm(p):
     return a
 
 
-def glob_re(pat):
+def glob_re(pat, dot=True):
+    """dot=False 면 셸 기본값처럼 성분 첫 글자의 `*`·`?` 가 `.` 으로 시작하는 이름에 안 맞는다."""
     i, o = 0, ['^']
     while i < len(pat):
+        if not dot and (i == 0 or pat[i - 1] == '/') and pat[i] in '*?':
+            o.append(r'(?!\.)')
         if pat.startswith('**/', i):
             o.append('(?:.*/)?'); i += 3
         elif pat.startswith('**', i):
@@ -997,7 +1002,7 @@ def is_engine_path(tok):
     if len(parts) >= 2 and tuple(parts[-2:]) == ENGINE_SETTINGS:
         return True
     # `.claude` 를 통째로 지우면 엔진·설정이 전부 사라진다. 부모 디렉토리 자체를 막는다.
-    if parts and parts[-1] in ENGINE_PARENTS and not p.startswith('/'):
+    if parts and parts[-1] in ENGINE_PARENTS and not p.startswith(('/', '$')):
         return True
     if parts[-1] in ENGINE_FILES:
         return True
@@ -1029,11 +1034,96 @@ def glob_could_hit_engine(tok):
     # 글로브를 정규식으로 바꿔 엔진 경로와 그 조상에 실제로 맞는지 본다.
     rel = norm(t)
     try:
-        rx = glob_re(rel)
+        # `rm -rf *` 는 `.ai-bouncer`·`.claude` 를 안 지운다 (dotglob 이 꺼져 있으면).
+        # case 패턴 `*)` 까지 엔진을 삼키는 글로브로 막혔다.
+        rx = glob_re(rel, dot='dotglob' in CMD)
     except re.error:
         return True                     # 판정 못 하면 막는다
     targets = ['.ai-bouncer', '.claude', '.claude/ai-bouncer']
     return any(rx.match(x) for x in targets)
+
+
+BRACE = re.compile(r'\{([^{}]*)\}')
+
+
+def brace_expand(t, limit=64):
+    """`.ai-bounce{r,x}` → `.ai-bouncer`, `.ai-bouncex`. 셸이 펼칠 결과를 미리 본다.
+
+    예전엔 `{ …; }` 그룹 기호를 중괄호 확장으로 오인해 그룹 안의 평범한 명령을 막았고,
+    정작 토큰 안의 확장은 보지 않았다.
+    """
+    todo, done = [t], []
+    while todo and len(todo) + len(done) <= limit:
+        x = todo.pop()
+        m = next((m for m in BRACE.finditer(x) if ',' in m.group(1) or '..' in m.group(1)), None)
+        if not m:
+            done.append(x)
+            continue
+        body = m.group(1)
+        if ',' in body:
+            alts = body.split(',')
+        else:
+            lo, _, hi = body.partition('..')
+            if lo.isdigit() and hi.isdigit():
+                alts = [str(i) for i in range(int(lo), int(hi) + 1)][:limit]
+            elif len(lo) == 1 and len(hi) == 1:
+                alts = [chr(i) for i in range(ord(lo), ord(hi) + 1)][:limit]
+            else:
+                done.append(x)
+                continue
+        todo += [x[:m.start()] + a + x[m.end():] for a in alts]
+    return done + todo
+
+
+FIND_EXEC = ('-exec', '-execdir', '-ok', '-okdir')
+FIND_EXEC_END = (';', '\\;', '+')
+
+
+def find_write_starts(args):
+    """`find` 가 무언가를 지우거나 바꾸면 그 시작 경로들을, 아니면 None.
+
+    `-exec ls -la {} ;` 같은 조회나 `-exec cp {} 목적지 ;` 처럼 꺼내기만 하는 것은
+    아무것도 안 바꾼다. 스크린샷 복사·`ls` 가 지우기로 막혔다(2건).
+    """
+    starts = []
+    for a in args:
+        if a.startswith(('-', '(', '!')):
+            break
+        starts.append(a)
+    writes = False
+    for j, a in enumerate(args):
+        if a == '-delete':
+            writes = True
+        elif a in FIND_EXEC:
+            sub = os.path.basename(args[j + 1].strip('"\'').lstrip('\\')) if j + 1 < len(args) else ''
+            if sub in ENGINE_READ_OK:
+                continue
+            if sub == 'cp':
+                body = args[j + 2:]
+                end = next((k for k, x in enumerate(body) if x in FIND_EXEC_END), len(body))
+                dst = [x for x in body[:end] if x != '{}' and not x.startswith('-')]
+                if dst and not any(is_engine_path(x) for x in dst):
+                    continue
+            writes = True
+    return (starts or ['.']) if writes else None
+
+
+def may_hold_engine(p):
+    """이 시작 경로 아래에 엔진 디렉토리가 있을 수 있는가 (프로젝트 루트나 그 조상, 변수)."""
+    if '$' in p or '`' in p or SUB_TOKEN in p:
+        return True
+    a = abspath(p)
+    if not a or is_engine_path(p):
+        return True
+    return any(r and (r == a or r.startswith(a.rstrip('/') + '/')) for r in (PROJECT, WORKTREE))
+
+
+# 코드 문자열을 셸이 아니라 언어 런타임이 읽는 것. 읽기 코드에는 쓰기 흔적이 없다.
+INLINE_LANG_EXE = {'python', 'python3', 'perl', 'ruby', 'node', 'deno', 'bun', 'php'}
+INLINE_WRITE_HINT = re.compile(
+    r"""open\s*\([^)]*,\s*['"][^'"]*[wax+]|\.write|subprocess|\b(?:dump|unlink|remove|rmtree"""
+    r"""|rename|replace|truncate|chmod|mkdir|copy\w*|move|system|popen|exec\w*|spawn\w*"""
+    r"""|writeFile\w*|appendFile\w*|rmSync|rmdir|symlink\w*)\s*\(""", re.I)
 
 
 def reset_cwd():
@@ -1071,31 +1161,32 @@ def check_engine_files(segments):
             out("`git clean` 은 무시 대상(.ai-bouncer/ 상태 포함)을 지운다.\n"
                 "진행 중인 작업이 통째로 사라지므로 허용되지 않는다.\n"
                 "정말 필요하면 `bouncer cancel` 로 작업을 끝낸 뒤에 해라.")
+        # 변수 대입의 값은 아무것도 안 쓴다 (`D=…/.claude/ai-bouncer/hooks; cat $D/x` 가 막혔다).
+        # `rm -rf .ai-bounce{r,x}` 는 셸이 펼친 결과로 본다.
+        words = [x for t in clean if not ASSIGN.match(t.strip('"\'').lstrip('\\'))
+                 for x in brace_expand(t)]
         # 읽기 명령은 글로브가 엔진 디렉토리를 훑어도 아무것도 안 바꾼다
-        for t in ([] if read_only(exe, cmd) else clean):
+        for t in ([] if read_only(exe, cmd) else words):
             if glob_could_hit_engine(t):
                 out("`%s` 는 글로브라 엔진 디렉토리(.ai-bouncer/ 등)를 삼킬 수 있다.\n"
                     "지울 대상을 정확히 적어라." % t)
-        # `rm -rf .ai-bounce{r,x}` — 중괄호 확장은 셸이 푼다. 무엇이 될지 모른다.
-        if struct and any(t in ('{', '}') for t in struct) and not read_only(exe, cmd):
-            for t in clean:
-                n2 = norm(t).rsplit('/', 1)[-1]
-                if n2 and any(c.startswith(n2) for w in ENGINE_DIRS for c in w):
-                    out("중괄호 확장(`%s{…}`)은 무엇이 펼쳐질지 확인할 수 없다.\n"
-                        "엔진 디렉토리를 삼킬 수 있어 허용되지 않는다. 대상을 정확히 적어라." % t)
-        if exe == 'find' and any(a in ('-delete', '-exec', '-execdir', '-ok', '-okdir')
-                                 for a in cmd[1:]):
+        if exe == 'find':
             # `find . -name state.json -delete` 로 상태 파일이 사라졌다
-            out("`find -exec/-delete` 로는 무엇을 지울지 확인할 수 없어 허용되지 않는다.")
+            starts = find_write_starts(cmd[1:])
+            if starts and any(may_hold_engine(x) for x in starts):
+                out("`find -exec/-delete` 로는 무엇을 지울지 확인할 수 없어 허용되지 않는다.\n"
+                    "엔진 디렉토리(.ai-bouncer/ 등)를 품지 않는 경로에서 시작하거나 대상을 직접 적어라.")
         # `python3 -c "open('.ai-bouncer/state.json','w')"` — 코드 문자열 안의 경로는
-        # 성분으로 안 보인다. 엔진 표식이 들어 있으면 통째로 거부한다.
+        # 성분으로 안 보인다. 엔진 표식이 있으면 거부하되, 언어 런타임 코드는 쓰기 흔적이
+        # 있을 때만 막는다 (`json.load(open('.ai-bouncer/…/state.json'))` 읽기가 막혔다).
         if exe in INLINE_CODE_EXE:
             for a in cmd[1:]:
                 # 실행할 스크립트 파일 경로는 코드 문자열이 아니다. 부모 디렉토리 이름에
                 # `ai-bouncer/` 가 들어 있으면(이 레포·scratchpad 절대경로) `bash <파일>` 이 막혔다.
                 if os.path.isfile(abspath(a)) and not is_engine_path(a):
                     continue
-                if any(m in a for m in ENGINE_MARKERS):
+                if any(m in a for m in ENGINE_MARKERS) \
+                   and (exe not in INLINE_LANG_EXE or INLINE_WRITE_HINT.search(a)):
                     out(ENGINE_MSG)
         if exe == 'git' and not git_read_error(cmd):
             continue                    # `git log -- .ai-bouncer` 같은 이력 조회
@@ -1110,7 +1201,7 @@ def check_engine_files(segments):
             # track_cd 로 옮긴 기준에서 다시 엔진 경로로 걸린다.
             track_cd(exe, cmd[1:], struct)
             continue
-        if any(is_engine_path(t) for t in clean):
+        if any(is_engine_path(t) for t in words):
             out(ENGINE_MSG)
         track_cd(exe, cmd[1:], struct)
 
@@ -1251,7 +1342,7 @@ def _ignored(a, root):
         return False
 
 
-def readonly_free(p):
+def readonly_free(p, new_ok=False):
     """읽기 전용 스테이지에서도 써도 되는 곳인가.
 
     읽기 전용은 **이 작업의 코드**(프로젝트 작업 트리)를 못 고치게 하려는 것이다.
@@ -1274,6 +1365,11 @@ def readonly_free(p):
         return False
     for r in (WORKTREE, PROJECT):
         if r and _under(a, r):
+            # 셸로 새로 만드는 경로(임시 파일·디렉토리)는 기존 코드를 고치는 게 아니다.
+            # `mkdir -p packages/core`, `cp … ./.side-probe.mjs` 가 막혔다(3건). 남으면 트리 비교가 잡는다.
+            # Edit/Write 도구로 새 파일을 쓰는 건 코드 작성이라 계속 막는다 (new_ok=False).
+            if new_ok and a != r and not (set(p) & GLOB_CHARS) and not os.path.lexists(a):
+                return True
             return a != r and _ignored(a, r)
     return True
 
@@ -1407,13 +1503,15 @@ def run_passes(SEGMENTS, TOKENS):
         # npm/npx/테스트 실행, 변수 대입·서브셸은 허용한다.
         # 예전엔 조회 명령 허용 목록이라 `npm run e2e`, `playwright install`, `f=$(ls); grep "$f"`
         # 까지 막혀 verify 가 환경 문제 하나로 갇혔다.
-        # 명령 이름으로는 무엇을 쓸지 알 수 없으므로, 확실히 보이는 것(작업 트리로의 리다이렉트,
+        # 명령 이름으로는 무엇을 쓸지 알 수 없으므로, 확실히 보이는 것(**기존** 파일로의 리다이렉트,
         # `rm`/`cp`/`sed -i` 의 대상, git 의 쓰기 서브커맨드)만 여기서 막고 나머지는
         # 실행 뒤 작업 트리 스냅샷 비교(post-tool / stop)가 잡는다.
         for seg in SEGMENTS:
             clean, redirs, struct = parse_redirects(seg)
+            # `xargs -I % cp b.js %` 의 `%` 는 실제 대상이 아니다 — 없는 파일로 보면 안 된다.
+            new_ok = 'xargs' not in clean
             for op, tgt in redirs:
-                if redirect_writes(op, tgt) and not readonly_free(tgt):
+                if redirect_writes(op, tgt) and not readonly_free(tgt, new_ok):
                     out("이 단계에서는 프로젝트 파일로 출력을 보낼 수 없다: %s %s\n"
                         "작업 트리 밖(/tmp 등)이나 .gitignore 된 경로는 된다." % (op, tgt))
             if not clean:
@@ -1422,17 +1520,26 @@ def run_passes(SEGMENTS, TOKENS):
             check_outside(clean, redirs, exe, cmd[1:])
             args = cmd[1:]
             if exe == 'git':
-                err = git_read_error(cmd)
+                # add·commit 은 인덱스·이력만, archive 는 출력만 만든다 — 작업 트리 내용은 그대로다.
+                # verify 에서 커밋하려던 `git add …` 가 막혔다(3건). 트리 비교 기준도 내용이다.
+                sub = git_sub(cmd)
+                err = None if sub in ('add', 'commit', 'archive') else git_read_error(cmd)
                 if err:
                     out(err)
+                if sub == 'archive':
+                    for i, x in enumerate(cmd):
+                        o = cmd[i + 1] if x in ('-o', '--output') and i + 1 < len(cmd) \
+                            else x.split('=', 1)[1] if x.startswith('--output=') else None
+                        if o and not readonly_free(o, new_ok):
+                            out("`git archive` 로 프로젝트 파일 %s 를 덮어쓸 수 없다." % o)
             elif exe in WRITERS and exe not in ('curl', 'wget'):
                 for a in write_targets(exe, args):
-                    if not readonly_free(a):
+                    if not readonly_free(a, new_ok):
                         out("`%s` 로 프로젝트 파일 %s 를 바꿀 수 없다. 이 단계에서는 코드를 고칠 수 없다.\n"
                             "수정은 구현 단계로 돌아가서 한다." % (exe, a))
             elif exe in ('curl', 'wget'):
                 for a in write_targets(exe, args):
-                    if not readonly_free(a):
+                    if not readonly_free(a, new_ok):
                         out("`%s` 로 프로젝트 파일 %s 를 쓸 수 없다." % (exe, a))
             track_cd(exe, args, struct)
 
@@ -1475,8 +1582,8 @@ def run_passes(SEGMENTS, TOKENS):
                 if sub in GIT_TREE_WRITE and not ok_form and git_read_error(cmd):
                     out("`git %s` 는 워킹트리를 바꾼다. 이 단계에서는 허용되지 않는다.\n"
                         "고칠 수 있는 범위가 정해져 있다면 그 파일만 직접 수정해라." % sub)
-            elif exe == 'find' and any(a in ('-delete', '-exec', '-execdir', '-ok', '-okdir')
-                                       for a in args):
+            elif exe == 'find' and any(path_forbidden(x) or '$' in x
+                                       for x in (find_write_starts(args) or [])):
                 out("`find -exec/-delete` 는 무엇을 지울지 확인할 수 없어 허용되지 않는다.")
             elif exe in WRITERS:
                 pos = [a for a in args if not a.startswith('-') and a.strip('"\'')]

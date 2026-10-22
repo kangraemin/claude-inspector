@@ -265,6 +265,19 @@ while IFS= read -r step; do
   fi
 
   # ── run ────────────────────────────────────────────────────
+  # 통과 뒤 코드가 바뀌었으면 그 통과는 지금 코드에 대한 것이 아니다.
+  # 쓰기를 미리 막는 대신(읽기 전용 단계) 결과를 무효로 돌려 다시 돌리게 한다.
+  if [ "$DONE" = "true" ]; then
+    EV_TREE="$(jq -r --arg k "$ID" '.evidence_tree[$k] // ""' "$TASK/state.json" 2>/dev/null)"
+    if [ -n "$EV_TREE" ]; then
+      [ -n "${NOW_EV_TREE+x}" ] || NOW_EV_TREE="$(bouncer_evidence_tree "$TASK" "$WORK_ROOT")"
+      if [ -n "$NOW_EV_TREE" ] && [ "$NOW_EV_TREE" != "$EV_TREE" ]; then
+        bouncer_state_update "$TASK" --arg k "$ID" '.evidence[$k] = false | del(.evidence_tree[$k])'
+        DONE=false
+        add_inject "[$LABEL] 통과한 뒤 코드가 바뀌었다 — 바뀐 코드로 다시 실행해야 한다."
+      fi
+    fi
+  fi
   [ "$DONE" = "true" ] && continue
   CMD="$(jq -r '.run'     <<<"$step")"
   BY="$(jq -r '.by'       <<<"$step")"
@@ -284,7 +297,8 @@ while IFS= read -r step; do
       TAIL="$TAIL"$'\n'"현재 워킹트리:"$'\n'"$(git -C "$WORK_ROOT" status --porcelain 2>/dev/null | head -20)"
     fi
     if [ "$RC" -eq 0 ]; then
-      bouncer_state_update "$TASK" --arg k "$ID" '.evidence[$k] = true'
+      bouncer_state_update "$TASK" --arg k "$ID" --arg t "$(bouncer_evidence_tree "$TASK" "$WORK_ROOT")" \
+        '.evidence[$k] = true | .evidence_tree[$k] = $t'
       [ -n "$TAIL" ] && add_inject "[$LABEL] 통과 (exit 0)"$'\n'"$TAIL"
     elif [ -n "$BLOCKING" ]; then
       add_failure "$LABEL — \`$CMD\` 실패 (exit $RC)"; add_blocking_id "$ID"; HARD_FAIL=1
