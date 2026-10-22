@@ -367,8 +367,14 @@ cmd_run() {
 
   if [ "$rc" -eq 0 ]; then
     bouncer_state_update "$TASK" --arg k "$id" --arg t "$(bouncer_evidence_tree "$TASK" "$WORK_ROOT")" \
-      '.evidence[$k] = true | .evidence_tree[$k] = $t'
+      '.evidence[$k] = true | .evidence_tree[$k] = $t | del(.broken[$k])'
     printf '\n✅ 통과 — %s\n' "$id"
+  elif [ "$rc" -eq 127 ]; then
+    # 명령 자체가 없다. 코드를 고쳐도 안 풀리므로 반송하지 않는다 — Stop 이 바로 판단을 넘긴다.
+    bouncer_state_update "$TASK" --arg k "$id" '.evidence[$k] = false
+      | .attempts[$k] = ((.attempts[$k] // 0) + 1) | .broken[$k] = ((.broken[$k] // 0) + 1)'
+    printf '\n❌ 실패 (exit 127: 명령을 찾을 수 없다) — %s\n의존성·경로를 갖춘 뒤 다시 실행하라. 코드 수정으로는 풀리지 않는다.\n' "$id"
+    return 1
   else
     bouncer_state_update "$TASK" --arg k "$id" '.evidence[$k] = false
       | .attempts[$k] = ((.attempts[$k] // 0) + 1)'
@@ -437,7 +443,8 @@ cmd_done() {
   case "$blocking" in
     plan_approved) die "'$id'는 plan mode 승인으로만 통과한다. ExitPlanMode를 호출하라." ;;
     skill:*)       die "'$id'는 '${blocking#skill:}' 스킬을 실제로 실행해야 통과한다." ;;
-    "")            die "'$id'는 blocking이 아니다. 완료 처리할 필요가 없다." ;;
+    # 지시만 하는 step 이다. 거절하면 옛 습관대로 부른 모델이 오류를 고치느라 턴을 쓴다(258건).
+    "")            printf 'DONE\t%s\t(blocking이 아니다 — 표시할 것 없다)\n' "$id"; return 0 ;;
   esac
   bouncer_state_update "$TASK" --arg k "$id" '.evidence[$k] = true'
   printf 'DONE\t%s\n' "$id"
@@ -780,6 +787,6 @@ case "${1:-}" in
                create)   die "worktree는 'bouncer start <workflow> <slug> --parallel' 로 만든다." ;;
                *) die "usage: bouncer worktree finalize" ;;
              esac ;;
-  ""|-h|--help) sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  ""|-h|--help|help) sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "알 수 없는 명령: $1" ;;
 esac

@@ -183,6 +183,17 @@ add_blocking_id() {
 }
 # 제안은 그대로 복사해서 실행할 수 있어야 한다.
 # (`printf '%s' | while read` 는 끝에 개행이 없어 마지막 줄을 통째로 버린다)
+# exit 127(명령 없음)로 실패한 step. 코드 수정으로 안 풀려서 반송하면 왕복만 쌓인다.
+BROKEN=""; BROKEN_MAX=0
+note_broken() {
+  local n; n="$(jq -r --arg k "$1" '.broken[$k] // 0' "$TASK/state.json" 2>/dev/null)"
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  [ "$n" -gt 0 ] || return 0
+  BROKEN="${BROKEN:+$BROKEN, }$2"
+  [ "$n" -gt "$BROKEN_MAX" ] && BROKEN_MAX="$n"
+  return 0
+}
+
 skip_hint() {
   [ -n "$BLOCKING_IDS" ] || { printf '       (막고 있는 step을 특정하지 못했다 — bouncer status 참고)'; return; }
   while IFS= read -r _i; do
@@ -305,6 +316,10 @@ while IFS= read -r step; do
       [ -n "$TAIL" ] && add_inject "[$LABEL] 통과 (exit 0)"$'\n'"$TAIL"
     elif [ -n "$BLOCKING" ]; then
       add_failure "$LABEL — \`$CMD\` 실패 (exit $RC)"; add_blocking_id "$ID"; HARD_FAIL=1
+      if [ "$RC" -eq 127 ]; then
+        bouncer_state_update "$TASK" --arg k "$ID" '.broken[$k] = ((.broken[$k] // 0) + 1)'
+        note_broken "$ID" "$LABEL"
+      fi
       add_inject "[$LABEL] 실패 (exit $RC)"$'\n'"$TAIL"
     fi
   else
@@ -335,6 +350,7 @@ while IFS= read -r step; do
       case "$RUN_FAILS" in ''|*[!0-9]*) RUN_FAILS=0 ;; esac
       if [ "$RUN_FAILS" -gt 0 ]; then
         add_failure "$LABEL — \`bouncer run '$ID'\` 실패 (${RUN_FAILS}회)"; HARD_FAIL=1
+        note_broken "$ID" "$LABEL"
         # 전체를 돌려 무관한 기존 실패에 막히면 같은 전체 실행만 반복하게 된다 (먹맵 e2e).
         if bouncer_scopable "$CMD" && [ -z "$(jq -r --arg k "$ID" '(.scope[$k] // [])[]' "$TASK/state.json" 2>/dev/null)" ]; then
           add_inject "$LABEL — 전체를 돌렸다. 실패가 이번 작업과 무관하면 영향받는 테스트만 범위로 적고 다시 돌려라:"$'\n'"    bouncer scope '$ID' <테스트 경로…>"$'\n'"    bouncer run '$ID'"
@@ -521,6 +537,33 @@ fi
 
 # ── 미충족 ──
 STREAK="$(bouncer_state "$TASK" '.continue_streak')"; [ -n "$STREAK" ] || STREAK=0
+
+# ── 명령 없음(exit 127) ──────────────────────────────────────
+# 반송·재시도로 풀리지 않는다(실사용 6건). 한 번은 환경을 갖추게 하고, 또 그러면 사람에게 넘긴다.
+if [ -n "$BROKEN" ]; then
+  if [ "$BROKEN_MAX" -ge 2 ]; then
+    bouncer_state_update "$TASK" '.allowed_stop = true | .continue_streak = 0 | .reentry_count = 0'
+    offer_skip
+    jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] $BROKEN — 명령을 찾을 수 없다 (exit 127, ${BROKEN_MAX}회).
+코드로 고칠 문제가 아니라 반송하지 않고 사용자에게 넘긴다.
+
+미충족 조건:
+$FAILURES
+
+AskUserQuestion으로 물어라 (도구가 없으면 텍스트로 제시하고 답을 기다려라):
+  1. 필요한 도구·의존성을 설치한 뒤 다시 실행한다
+  2. 이 조건을 이번 작업에서만 건너뛴다:
+$(skip_hint)
+  3. 작업을 중단한다 (bouncer cancel)" '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
+    exit 0
+  fi
+  guarded_block "[$STAGE] $BROKEN — 명령을 찾을 수 없다 (exit 127).
+코드 문제가 아니므로 반송하지 않는다. 의존성 설치·가상환경·경로를 확인하고 다시 실행해라.
+한 번 더 같은 이유로 실패하면 사용자에게 넘긴다.
+
+미충족 조건:
+$FAILURES${INJECT:+$'\n\n'}$INJECT"
+fi
 
 # ── on_fail 되돌아가기 ───────────────────────────────────────
 # 이 스테이지가 **모든** 파일 수정을 금지한다면 제자리 재시도는 무의미하다 → 1회로 반송.
