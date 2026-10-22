@@ -266,15 +266,30 @@ bouncer_ro_changes() {
 }
 
 # ── 실행 범위 ────────────────────────────────────────────────
-# run 명령의 {scope} 자리를 `bouncer scope` 로 적어 둔 경로로 채운다.
+# 범위를 좁힐 수 있는 명령인가. {scope} 자리가 있거나, 연결 연산자가 없는 단일 명령이면
+# 끝에 경로를 붙일 수 있다. 먹맵 e2e(`npx playwright test --workers=1`)는 자리가 없어
+# `bouncer scope` 가 거부됐고, 무관한 기존 실패 6건 때문에 전체 e2e 를 계속 돌렸다.
+# `a && b` 처럼 이어진 명령은 끝에 붙이면 마지막 명령에만 들어가므로 자리를 요구한다.
+bouncer_scopable() {
+  case "$1" in
+    *'{scope}'*) return 0 ;;
+    *'&'*|*'|'*|*';'*|*'<'*|*'>'*|*'`'*|*'$('*|*$'\n'*) return 1 ;;
+  esac
+  [ -n "$1" ]
+}
+
+# run 명령의 {scope} 자리(없으면 끝)를 `bouncer scope` 로 적어 둔 경로로 채운다.
 # 적은 게 없으면 빈칸이 되어 전체를 돌린다. 경로는 하나씩 따옴표로 감싼다.
 bouncer_scoped_cmd() {
   local task="$1" id="$2" cmd="$3" args="" p
-  case "$cmd" in *'{scope}'*) ;; *) printf '%s' "$cmd"; return 0 ;; esac
+  bouncer_scopable "$cmd" || { printf '%s' "$cmd"; return 0; }
   while IFS= read -r p; do
     [ -n "$p" ] && args="$args $(printf '%q' "$p")"
   done < <(jq -r --arg k "$id" '(.scope[$k] // [])[]' "$task/state.json" 2>/dev/null)
-  printf '%s' "${cmd//\{scope\}/${args# }}"
+  case "$cmd" in
+    *'{scope}'*) printf '%s' "${cmd//\{scope\}/${args# }}" ;;
+    *) printf '%s%s' "$cmd" "$args" ;;
+  esac
 }
 
 # ── hook 출력 ────────────────────────────────────────────────

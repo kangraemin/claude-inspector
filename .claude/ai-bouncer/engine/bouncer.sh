@@ -5,7 +5,7 @@
 #   bouncer start <workflow> <slug> [--parallel] [--off <id> ...]
 #   bouncer status                    현재 단계와 남은 조건
 #   bouncer run <step-id>             그 step의 명령을 실행하고 결과를 기록
-#   bouncer scope <step-id> [경로…|--clear]  run 명령의 {scope}에 넣을 이번 작업 범위 (없으면 전체)
+#   bouncer scope <step-id> [경로…|--clear]  run 명령의 {scope}(없으면 끝)에 넣을 이번 작업 범위 (없으면 전체)
 #   bouncer done <step-id>            사람 확인이 필요한 step을 완료 처리
 #   bouncer cancel                    작업 취소
 #   bouncer restore                   읽기 전용 단계에서 바뀐 작업 트리를 단계 진입 시점으로 되돌린다
@@ -332,7 +332,7 @@ hook은 이 상태에서 작업을 진행시키지 않는다.
       elif ($st[0].choices | has($sid)) then $st[0].choices[$sid]
       else true end) as $on |
      ($st[0].skipped[$sid] // false) as $skip |
-     "  \(if $skip then "⃠" elif ($on|not) then "⃠" elif $done then "✅" elif .blocking then "⬜" else "·" end) \(.label)\(if $skip then "  (건너뜀)" elif ($on|not) then "  (이번 작업에서 끔)" elif .blocking then "  [\(.blocking)]" else "" end)\n      id: \($sid)\(if ((.run // "") | contains("{scope}")) then "\n      범위: \(($st[0].scope[$sid] // []) | if length == 0 then "전체 (bouncer scope로 좁힐 수 있다)" else join(" ") end)" else "" end)")'
+     "  \(if $skip then "⃠" elif ($on|not) then "⃠" elif $done then "✅" elif .blocking then "⬜" else "·" end) \(.label)\(if $skip then "  (건너뜀)" elif ($on|not) then "  (이번 작업에서 끔)" elif .blocking then "  [\(.blocking)]" else "" end)\n      id: \($sid)\(if ((.run // "") | contains("{scope}") or (length > 0 and (test("[&|;<>`\\n]|\\$\\(") | not))) then "\n      범위: \(($st[0].scope[$sid] // []) | if length == 0 then "전체 (bouncer scope로 좁힐 수 있다)" else join(" ") end)" else "" end)")'
 }
 
 # ── 실행 / 완료 ──────────────────────────────────────────────
@@ -372,7 +372,7 @@ cmd_run() {
   fi
 }
 
-# 이번 작업에서 돌릴 범위. run 명령에 {scope} 자리가 있는 step만 받는다.
+# 이번 작업에서 돌릴 범위. run 명령에 {scope} 자리가 있거나 단일 명령인 step만 받는다 (없으면 끝에 붙는다).
 # 새로 만들었거나 영향받는 테스트만 적으면 그것만 돌려 통과를 판정한다. 안 적으면 전체.
 # 경로만 받는다 — `--list` 같은 옵션을 끼워 아무것도 안 돌리고 통과하는 길을 막는다.
 cmd_scope() {
@@ -386,10 +386,8 @@ cmd_scope() {
     step="$(step_json "$id" "$st")"; [ -n "$step" ] && break
   done < <(bouncer_chain "$PROJECT" "$wf")
   [ -n "$step" ] || die "'$id' 라는 step이 이 워크플로우($wf)에 없다."
-  case "$(jq -r '.run // ""' <<<"$step")" in
-    *'{scope}'*) ;;
-    *) die "'$id'의 명령에 {scope} 자리가 없다. 범위를 정할 수 없는 step이다." ;;
-  esac
+  bouncer_scopable "$(jq -r '.run // ""' <<<"$step")" \
+    || die "'$id'의 명령은 여러 명령이 이어져 있어(&& ; | 등) 범위를 붙일 곳을 모른다. workflow.yaml 의 run 에 {scope} 자리를 넣어라."
 
   if [ $# -eq 0 ]; then
     local cur; cur="$(jq -r --arg k "$id" '(.scope[$k] // [])[]' "$TASK/state.json")"
