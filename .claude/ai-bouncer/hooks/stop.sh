@@ -367,10 +367,15 @@ done < <(jq -c '.steps[]?' <<<"$STAGE_JSON")
 # 판정
 # ─────────────────────────────────────────────────────────────
 if [ -n "${RUNNING:-}" ]; then
-  # 다음 단계로는 안 넘어간다. 실행이 끝난 뒤 Stop 에서 다시 판정한다.
-  jq -n --arg c "${INJECT:+$INJECT$'\n\n'}[$STAGE] 실행 중: $RUNNING — 끝나면 결과를 확인하고 이어서 진행한다.${FAILURES:+
-남은 조건:
-$FAILURES}" '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
+  # 다음 단계로는 안 넘어간다. 실행이 끝나면 백그라운드 알림이 턴을 다시 열고 그때 판정한다.
+  # additionalContext 는 턴을 다시 연다 — 실행 중 내내 "아직 실행 중" 응답이 3초마다 반복됐다
+  # (ttuk-chiro-clinic 2026-10-23). 턴을 열지 않는 systemMessage 로 한 번만 알린다.
+  bouncer_state_update "$TASK" '.continue_streak = 0 | .reentry_count = 0'
+  _rkey="$STAGE:$RUNNING"
+  if [ "$(bouncer_state "$TASK" '.running_notice')" != "$_rkey" ]; then
+    bouncer_state_update "$TASK" --arg k "$_rkey" '.running_notice = $k'
+    jq -n --arg m "[ai-bouncer] [$STAGE] 실행 중: $RUNNING — 끝나면 결과로 다시 판정한다." '{systemMessage:$m}'
+  fi
   exit 0
 fi
 if [ -z "$FAILURES" ]; then
