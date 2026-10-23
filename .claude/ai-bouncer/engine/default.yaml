@@ -1,0 +1,115 @@
+# ai-bouncer 워크플로우 정의
+#
+# 엔진 기본값. 설치/업데이트 때마다 .claude/ai-bouncer/engine/default.yaml 로 덮어쓴다 — 레포에서 고치지 않는다.
+# 레포별로 바꾸거나 덧붙일 것만 .claude/ai-bouncer/workflow.yaml 에 적는다(병합 규칙: engine/compile.py).
+# 스키마: docs/SCHEMA.md
+
+version: 1
+
+# ─────────────────────────────────────────────────────────────
+# 엔진 설정. 적지 않으면 아래 기본값이 쓰인다.
+# ─────────────────────────────────────────────────────────────
+settings:
+  update_branch: main        # 업데이트 기준 브랜치 (dev 등으로 바꿀 수 있다)
+  # max_attempts: 3          # blocking 실패를 몇 번 재시도한 뒤 on_fail로 보낼지
+  # max_continue: 10         # 한 단계에서 연속으로 밀어붙일 상한. 넘으면 사용자에게 묻는다
+  # stale_lock_hours: 12     # 이 시간 넘게 멈춘 잠금을 정리
+
+# ─────────────────────────────────────────────────────────────
+# 워크플로우 — /dev-bounce 실행 시 이 목록이 그대로 모드 선택지가 된다.
+# ─────────────────────────────────────────────────────────────
+workflows:
+
+  plan:
+    label: 계획을 세우고 승인받은 뒤 구현
+    stages: [plan, implement, verify, finalize, done]
+
+  simple:
+    label: 계획 없이 바로 구현
+    stages: [implement, verify, finalize, done]
+
+
+stages:
+
+  # ── 계획 ──────────────────────────────────────────────────
+  # 유일하게 Claude Code의 실제 승인 UI(plan mode)를 쓰는 스테이지. 수정 차단은 plan mode 가 한다.
+  plan:
+    steps:
+      - label: 계획 수립과 승인
+        inject_file: prompts/plan.md
+        # 승인된 계획의 목록 항목이 그대로 구현 단계 체크리스트가 된다.
+        # (post-tool 이 ExitPlanMode 를 관찰해 옮긴다)
+    forbid:
+      push: true
+      reason: 계획 단계에서는 push할 수 없다.
+
+  # ── 구현 ──────────────────────────────────────────────────
+  implement:
+    steps:
+      - label: 구현
+        inject: |
+          [implement] 구현 단계다.
+          계획을 세운 뒤라면 그 계획의 After 코드를 그대로 옮긴다.
+
+      # 승인된 계획(plan 모드)의 항목을 엔진이 센다. 목록이 비어 있으면 통과한다 —
+      # 스스로 세우고 바로 체크하는 의례가 됐다(2026-10-22 감사: 형식 통과 20건).
+      - label: 구현 완료 대조
+        blocking: checklist
+        inject: |
+          할 일 목록이 있으면(plan 모드는 승인된 계획에서 옮겨진다) 엔진이 항목 수를 센다.
+          구현한 항목은 `bouncer todo done <번호>`, 뺄 항목은 `bouncer todo drop <번호>`(사유를 알린다).
+    forbid:
+      push: true
+      reason: 검증 전에는 push할 수 없다.
+
+  # ── 검증 ──────────────────────────────────────────────────
+  verify:
+    on_fail: implement
+    steps:
+      # 지시만 한다. 자기신고(blocking: done)는 230회 중 92%가 이미 테스트를 돌린 뒤의
+      # 의례였다(2026-10-22 감사). 강제할 검증은 아래 run: 스텝으로 둔다 — 엔진이 직접 판정한다.
+      - label: 검증 보고
+        inject: |
+          [verify] 검증 단계다. 추측 금지 — 실제로 실행해서 확인한다.
+            0. 요청받은 범위가 **전부** 구현됐는지 다시 대조한다.
+               빠진 것이 있으면 통과로 보고하지 말고, 무엇이 빠졌는지 적어라.
+               (이 단계에서 못 고치면 구현 단계로 되돌아간다)
+            1. 이 프로젝트의 테스트 / 빌드 / 린트를 실행한다. 시작 때 끈 게이트는 하지 않는다.
+            2. 실패한 것을 통과로 보고하지 않는다.
+
+      # 프로젝트 검증 명령을 여기에 추가하면 hook이 실행 결과를 직접 관찰한다.
+      # 자기 보고와 달리 모델이 우회할 수 없다.
+      #
+      # - label: 유닛 테스트
+      #   run: "npm test -- --run"
+      #   timeout: 900
+      #   blocking: true
+      #   optional: true          # 시작할 때 사용자가 고른 것만 강제된다
+      #
+      # - label: e2e
+      #   run: "npx playwright test"
+      #   timeout: 1800
+      #   blocking: true
+      #   optional: true          # 시작할 때 할지 말지 물어본다
+    forbid:
+      push: true
+      reason: 검증이 끝나기 전에는 push할 수 없다.
+
+  # ── 마무리 ────────────────────────────────────────────────
+  finalize:
+    steps:
+      - label: 커밋과 푸시
+        inject: |
+          [finalize] 마무리 단계다.
+            1. 변경 파일을 개별 git add 한다. `git add .` / `-A` 금지.
+            2. 커밋하고 push한다.
+            3. 이번 작업과 무관한 WIP는 커밋하지 않고 그대로 둔다(stash·삭제 금지).
+               워킹트리가 깨끗할 필요는 없다 — 이번 작업 파일이 빠짐없이 커밋·푸시됐는지 스스로 확인한다.
+
+
+  # ── 종단 ──────────────────────────────────────────────────
+  done:
+    steps:
+      - label: 완료 보고
+        inject: |
+          [done] 작업이 끝났다. 사용자 지시 없이 새 작업을 시작하지 않는다.

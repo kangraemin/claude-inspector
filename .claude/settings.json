@@ -35,32 +35,7 @@
             "timeout": 10
           }
         ],
-        "matcher": "ExitPlanMode|Skill|Bash"
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/ai-bouncer/hooks/post-tool.sh",
-            "args": [],
-            "timeout": 10
-          }
-        ],
-        "matcher": "Bash"
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/ai-bouncer/hooks/user-prompt.sh",
-            "args": [],
-            "timeout": 10
-          }
-        ]
+        "matcher": "ExitPlanMode"
       }
     ],
     "Stop": [
@@ -70,7 +45,7 @@
             "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/ai-bouncer/hooks/stop.sh",
             "args": [],
-            "timeout": 300
+            "timeout": 1800
           }
         ]
       }

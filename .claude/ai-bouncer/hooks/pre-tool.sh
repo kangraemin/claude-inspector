@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PreToolUse — 현재 스테이지의 forbid를 강제한다.
+# PreToolUse — 엔진 파일 보호, worktree 경계, 현재 스테이지의 push 금지를 강제한다.
 #
 # ⚠️ 매 도구 호출마다 돈다. 그리고 이 hook이 타임아웃되면 차단이 **아예 안 된다**
 #    (공식 문서: "don't count on a stalled hook to act as a gate").
@@ -72,9 +72,6 @@ fi
 # ── 엔진 전용 파일 보호 (스테이지와 무관하게 항상) ────────────
 # 이 파일들을 고치면 단계 건너뛰기나 가드 무력화가 가능해진다.
 FILE_PATH="$(jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // empty' <<<"$INPUT")"
-# 셸을 통한 접근은 guard.py가 같은 기준으로 막는다 (아래 Bash 분기).
-# 여기서 정규식으로 한 번 더 보던 코드는 지웠다 — 두 벌로 관리하니
-# 셸 쪽만 `.ai-bouncer` 부모 디렉토리를 놓쳐 `rm -rf .ai-bouncer` 가 통과했다.
 
 STAGE_JSON="$(bouncer_stage "$CWD" "$STAGE")"
 if [ -z "$STAGE_JSON" ]; then
@@ -99,63 +96,41 @@ $REASON"
   fi
 }
 
-EDIT="$(jq -c '.edit_files // null' <<<"$FORBID")"
-PUSH="$(jq -r '.push'               <<<"$FORBID")"
+PUSH="$(jq -r '.push' <<<"$FORBID")"
 
-# 판정기는 하나만 쓴다. 예전에는 Edit 판정을 셸 `case` 로 따로 구현해서,
-# 같은 파일에 대해 `*` 가 `/` 를 넘는지와 `!` 우선순위가 두 게이트에서 정반대였다.
 # `python3 -S` 로 site 초기화를 건너뛴다 — 표준 라이브러리만 쓰는데
 # Homebrew python 은 site 처리에 기동 시간 대부분(약 230ms → 50ms)을 썼다.
 GUARD="$(dirname "$(dirname "${BASH_SOURCE[0]}")")/engine/lib/guard.py"
 # 상대화 기준은 세션 cwd가 아니라 프로젝트 루트다.
-# cwd 기준으로 잡으면 하위 디렉토리에서 연 세션은 글로브가 하나도 안 맞아
-# 스코프가 통째로 꺼진다 (모노레포에서 흔한 패턴이다).
 ROOT="$(bouncer_project_root "$CWD")"
 WT="$(bouncer_state "$TASK" '.worktree.path')"
 [ "$(bouncer_state "$TASK" '.work_root')" = "$WT" ] || WT=""
 
-# 읽기 전용 단계는 명령 이름이 아니라 "작업 트리를 바꿨나"로 판정한다 (post-tool / stop).
-# 그 비교 기준을 이 단계의 첫 도구가 실행되기 전에 찍어둔다.
-if [ "$EDIT" = "true" ]; then
-  bouncer_ro_ensure_base "$TASK" "${WT:-$ROOT}" "$STAGE" || true
-fi
-
+# 단계별 파일 수정 금지(edit_files)·명령 패턴 금지는 지웠다 — plan 은 Claude Code plan 모드가,
+# 검증 단계 쓰기는 증거 무효화(코드 지문)가 맡는다. 남은 것은 엔진 파일 직접 수정,
+# worktree 밖 수정, push 다.
 case "$TOOL" in
   Edit|Write|MultiEdit|NotebookEdit)
-    if [ -f "$GUARD" ] && command -v python3 >/dev/null 2>&1; then
-      if [ -z "$FILE_PATH" ] && [ "$EDIT" != "null" ]; then
-        deny "어느 파일을 고치려는지 알 수 없다. 이 단계에는 수정 제한이 걸려 있다."
-      fi
-      # Bash 분기와 같은 방향으로 실패해야 한다. 예전엔 여기만 fail-open 이었다.
-      R="$(python3 -S "$GUARD" --check-path "$EDIT" \
-            "$ROOT" "$FILE_PATH" "$CWD" "$WT" 2>/dev/null)" \
-        || deny "경로 판정 중 오류가 발생했다. 안전을 위해 차단한다."
-      [ -n "$R" ] && deny "$R"
-    elif [ "$EDIT" != "null" ]; then
-      deny "경로 판정기를 사용할 수 없다 ($GUARD). 이 단계에는 수정 제한이 걸려 있다."
+    [ -n "$FILE_PATH" ] || exit 0
+    if [ ! -f "$GUARD" ] || ! command -v python3 >/dev/null 2>&1; then
+      deny "경로 판정기를 사용할 수 없다 ($GUARD). 설치가 손상됐을 수 있다 — 다시 설치하라."
     fi
+    R="$(python3 -S "$GUARD" --check-path "$ROOT" "$FILE_PATH" "$CWD" "$WT" 2>/dev/null)" \
+      || deny "경로 판정 중 오류가 발생했다. 안전을 위해 차단한다."
+    [ -n "$R" ] && deny "$R"
     exit 0 ;;
 
   Bash)
     CMD="$(jq -r '.tool_input.command // empty' <<<"$INPUT")"
     [ -n "$CMD" ] || exit 0
-    # 정규식 블랙리스트로는 못 막는다는 게 감사로 확인됐다 —
-    # 따옴표(`"rm" -f`), 인터프리터(`python3 -c "open(...,'w')"`), 에디터(`ed`),
-    # git write 서브커맨드가 전부 빠져나갔고, `bouncer status; rm x` 처럼
-    # 허용 명령 뒤에 붙이면 통째로 통과했다.
-    # 그래서 명령을 세그먼트로 쪼개고 실행 파일 이름을 정규화해서 판정한다.
-    # 제약이 하나도 없는 스테이지에서도 엔진 파일 보호는 살아 있어야 한다.
-    # 예전에는 여기서 곧장 exit 0 해서, done 단계에서 상태 파일이 무방비였다.
-    # 제약이 있는데 판정기를 못 쓰면 "제약 없음"이 아니라 "판정 불가"다. 막는다.
+    [ "$PUSH" = "true" ] || [ -n "$WT" ] || exit 0
+    # 정규식으로는 `bouncer status && git push` 같은 체인을 못 본다 —
+    # 명령을 세그먼트로 쪼개고 실행 파일 이름을 정규화해서 판정한다.
     if [ ! -f "$GUARD" ] || ! command -v python3 >/dev/null 2>&1; then
-      deny "명령 판정기를 사용할 수 없다 ($GUARD).
-이 단계에는 제약이 걸려 있는데 무엇이 허용되는지 판정할 수 없다.
-설치가 손상됐을 수 있다 — 다시 설치하라."
+      deny "명령 판정기를 사용할 수 없다 ($GUARD). 설치가 손상됐을 수 있다 — 다시 설치하라."
     fi
-    VERDICT="$(printf '%s' "$CMD" | python3 -S "$GUARD" \
-      "$EDIT" "$PUSH" \
-      "$(jq -c '.bash // []' <<<"$FORBID")" \
-      "$ROOT" "$WT" "$CWD" 2>/dev/null)" || deny "명령 판정 중 오류가 발생했다. 안전을 위해 차단한다."
+    VERDICT="$(printf '%s' "$CMD" | python3 -S "$GUARD" "$PUSH" "$ROOT" "$WT" "$CWD" 2>/dev/null)" \
+      || deny "명령 판정 중 오류가 발생했다. 안전을 위해 차단한다."
     [ -n "$VERDICT" ] && deny "$VERDICT"
     exit 0 ;;
 esac

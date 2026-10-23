@@ -1,49 +1,37 @@
 #!/usr/bin/env python3
-# 셸 명령이 이 스테이지에서 허용되는지 판정한다.
+# 셸 명령이 push 금지와 worktree 경계를 어기는지, Edit/Write 대상이 엔진 파일인지 판정한다.
 #
-# 네 차례 감사에서 배운 것:
-#  · 블랙리스트(쓰는 명령 열거)는 원리상 완결되지 않는다.
-#  · 허용 목록만으로도 부족하다 — 목록 안의 명령에도 쓰기 모드가 있다
-#    (`sed 1w out`, `sort -o`, `uniq in out`, `git symbolic-ref HEAD ref`).
+# 감사에서 배운 것:
 #  · 판정 단위는 반드시 **세그먼트**여야 한다. 줄 전체의 첫 토큰만 보면
-#    `bouncer status && rm -rf x` 가 통째로 통과한다.
+#    `bouncer status && git push` 가 통째로 통과한다.
 #  · 래퍼(`env`, `nohup`, `xargs`…)와 환경변수 접두는 실행 파일 이름을 바꾼다.
-#  · 문자열이 아니라 변수로 넘긴 경로는 들여다볼 수 없다.
-#  · 읽기 전용(`edit_files: true`)은 허용 목록으로 하면 npm·playwright 설치까지 막힌다.
-#    그래서 확실히 보이는 쓰기만 여기서 막고, 나머지는 실행 뒤 작업 트리 비교(post-tool)가 잡는다.
+#  · 단계별 파일 수정 금지(edit_files)·명령 패턴 금지는 지웠다. plan 은 Claude Code plan 모드가,
+#    검증 단계 쓰기는 증거 무효화(코드 지문)가 맡는다(2026-10-23).
 #
 # 이건 샌드박스가 아니라 가드레일이다. 진짜 보장은 blocking 게이트가 한다.
 #
-# stdin: 명령 문자열 / argv: <edit_files_json> <push_bool> <bash_patterns_json> <project_dir>
 # 출력: 차단 사유 (없으면 허용)
-import json
 import os
 import re
-import shlex
 import sys
 
 # 두 가지로 쓰인다:
-#   guard.py --check-path <edit_json> <project> <파일경로>   Edit/Write 판정
-#   guard.py <edit_json> <push> <patterns_json> <project> [worktree]  Bash 판정 (stdin=명령)
-# 예전에는 Edit 판정을 셸 `case` 로 따로 구현해서, 같은 파일에 대해
-# `*` 의 의미(`/` 를 넘는지)와 `!` 우선순위가 두 게이트에서 정반대였다.
+#   guard.py --check-path <project> <파일경로> [cwd] [worktree]   Edit/Write 판정
+#   guard.py <push> <project> [worktree] [cwd]                    Bash 판정 (stdin=명령)
 if len(sys.argv) > 1 and sys.argv[1] == '--check-path':
     CHECK_PATH = True
-    EDIT = json.loads(sys.argv[2])
-    PROJECT = sys.argv[3]
-    TARGET = sys.argv[4]
-    CWD = sys.argv[5] if len(sys.argv) > 5 else PROJECT
-    WORKTREE = sys.argv[6] if len(sys.argv) > 6 else ''
-    CMD, PUSH, PATTERNS = '', False, []
+    PROJECT = sys.argv[2]
+    TARGET = sys.argv[3]
+    CWD = sys.argv[4] if len(sys.argv) > 4 else PROJECT
+    WORKTREE = sys.argv[5] if len(sys.argv) > 5 else ''
+    CMD, PUSH = '', False
 else:
     CHECK_PATH = False
     CMD = sys.stdin.read()
-    EDIT = json.loads(sys.argv[1])      # true / 글로브 배열 / null
-    PUSH = sys.argv[2] == "true"
-    PATTERNS = json.loads(sys.argv[3])
-    PROJECT = sys.argv[4]
-    WORKTREE = sys.argv[5] if len(sys.argv) > 5 else ''
-    CWD = sys.argv[6] if len(sys.argv) > 6 else PROJECT
+    PUSH = sys.argv[1] == "true"
+    PROJECT = sys.argv[2]
+    WORKTREE = sys.argv[3] if len(sys.argv) > 3 else ''
+    CWD = sys.argv[4] if len(sys.argv) > 4 else PROJECT
     TARGET = ''
 
 
@@ -85,39 +73,7 @@ WRITERS = {
     'sed': 'sed', 'dd': 'dd',
     'sort': '-o', 'base64': '-o', 'curl': '-o', 'wget': '-O',
 }
-# 워킹트리를 통째로 되돌리는 git 서브커맨드 — 경로를 안 줘도 파일을 바꾼다
-# 워킹트리 파일을 바꾸는 것들. `fetch` 는 원격만 받아오므로 뺀다.
-GIT_TREE_WRITE = {'checkout', 'restore', 'reset', 'clean', 'apply', 'stash',
-                  'revert', 'merge', 'rebase', 'cherry-pick', 'pull', 'switch',
-                  'am', 'rm', 'mv', 'checkout-index', 'read-tree', 'sparse-checkout',
-                  'bisect', 'filter-branch', 'submodule', 'worktree'}
-# 같은 서브커맨드라도 이 형태는 파일을 안 바꾼다 (브랜치 생성 / 인덱스만)
-# 같은 서브커맨드라도 이 형태는 워킹트리 파일을 안 바꾼다.
-#   need: 이 중 하나가 있어야 하고   deny: 이건 하나도 없어야 한다
-# `any(safe in cmd)` 로 보면 `restore --staged --worktree` 가 안전으로 통과했다.
-GIT_TREE_SAFE = {
-    'checkout':  {'need': ('-b', '-B', '--orphan'), 'deny': ('--', '-f', '--force')},
-    'switch':    {'need': ('-c', '-C', '--create'), 'deny': ('-f', '--force', '--discard-changes')},
-    'restore':   {'need': ('--staged',), 'deny': ('--worktree', '-W')},
-    'stash':     {'need': ('list', 'show'), 'deny': ()},
-    'worktree':  {'need': ('list',), 'deny': ()},
-    'submodule': {'need': ('status',), 'deny': ()},
-    'apply':     {'need': ('--check', '--stat', '--summary', '--numstat'), 'deny': ()},
-    'merge':     {'need': ('--abort',), 'deny': ()},
-    'rebase':    {'need': ('--abort', '--continue', '--skip', '--edit-todo'), 'deny': ()},
-    'cherry-pick': {'need': ('--abort', '--continue', '--skip'), 'deny': ()},
-    'am':        {'need': ('--abort', '--continue', '--skip'), 'deny': ()},
-    'push':      {'need': ('-n', '--dry-run'), 'deny': ()},
-    'clean':     {'need': ('-n', '--dry-run'), 'deny': ()},
-}
 
-
-def git_safe_form(sub, cmd):
-    """이 서브커맨드가 아무것도 바꾸지 않는 형태인가."""
-    spec = GIT_TREE_SAFE.get(sub)
-    if not spec:
-        return False
-    return any(a in spec['need'] for a in cmd) and not any(a in spec['deny'] for a in cmd)
 
 # 실행 파일 이름을 가리는 래퍼. 벗겨내고 진짜 명령을 봐야 한다.
 # 값을 따로 받는 플래그를 같이 적어야 한다 — `nice -n 5 cp …` 에서 `5` 를
@@ -144,52 +100,12 @@ INTERPRETERS = {'sh', 'bash', 'zsh', 'ksh', 'dash', 'fish', 'csh', 'tcsh'}
 SKIP_KEYWORDS = {'if', 'then', 'elif', 'else', 'do', 'while', 'until', 'select',
                  'fi', 'done', 'esac', '!', 'time'}
 
-# ── git ──────────────────────────────────────────────────────
-# 어떤 인자를 줘도 읽기인 서브커맨드
-GIT_READ = {
-    'status', 'log', 'diff', 'show', 'rev-parse', 'rev-list', 'ls-files',
-    'ls-tree', 'ls-remote', 'blame', 'describe', 'cat-file', 'shortlog',
-    'whatchanged', 'grep', 'count-objects', 'var', 'name-rev', 'merge-base',
-    'check-ignore', 'diff-tree', 'for-each-ref', 'show-branch', 'show-ref',
-    'verify-pack', 'cherry', 'version', 'help',
-}
-# 인자에 따라 읽기/쓰기가 갈리는 서브커맨드.
-#   first    : 첫 위치인자가 이 집합에 있어야 읽기 (None이면 위치인자 개수로만 판정)
-#   bare_ok  : 위치인자 없이 쓰면 읽기인가
-#   max_pos  : 허용되는 위치인자 개수 상한
-#   bad      : 하나라도 있으면 쓰기로 보는 플래그
-GIT_SUB = {
-    'remote':       dict(first={'show', 'get-url'}, bare_ok=True,  max_pos=2, bad=set()),
-    'stash':        dict(first={'list', 'show'},    bare_ok=False, max_pos=2, bad=set()),
-    'worktree':     dict(first={'list'},            bare_ok=False, max_pos=1, bad=set()),
-    'submodule':    dict(first={'status'},          bare_ok=True,  max_pos=1, bad=set()),
-    'notes':        dict(first={'list', 'show'},    bare_ok=True,  max_pos=2, bad=set()),
-    'reflog':       dict(first={'show'},            bare_ok=True,  max_pos=2, bad=set()),
-    # 목록 형태만 읽기다. `git branch <이름>` 은 브랜치를 만든다.
-    'branch':       dict(first=None, bare_ok=True, max_pos=0, list_flags={
-                             '-l', '--list', '--contains', '--no-contains',
-                             '--merged', '--no-merged', '--points-at',
-                             '--format', '--sort'},
-                         bad={'-d', '-D', '--delete', '-m', '-M', '--move', '-c', '-C',
-                              '--copy', '-f', '--force', '-u', '--set-upstream-to',
-                              '--unset-upstream', '--edit-description'}),
-    'tag':          dict(first=None, bare_ok=True, max_pos=0, list_flags={
-                             '-l', '--list', '--contains', '--no-contains',
-                             '--merged', '--no-merged', '--points-at',
-                             '--format', '--sort'},
-                         bad={'-d', '--delete', '-a', '-s', '-m', '-f', '--force'}),
-    # 인자 하나면 읽기, 둘이면 .git/HEAD 를 다시 쓴다.
-    'symbolic-ref': dict(first=None, bare_ok=True, max_pos=1, bad={'-d', '--delete'}),
-    'config':       dict(first=None, bare_ok=True, max_pos=1,
-                         bad={'--add', '--unset', '--unset-all', '--replace-all',
-                              '--rename-section', '--remove-section', '-e', '--edit'}),
-}
 GIT_PUSH_SUBS = {'push', 'send-pack', 'svn', 'p4', 'request-pull'}
 # 아는 서브커맨드 전부. 여기 없는 것이 서브커맨드 자리에 오면 치환에 가려진 것이다.
 
 
 # 개행도 구분자다. 빠져 있어서 `ls\nrm -rf .ai-bouncer` 가 한 세그먼트로 읽혀
-# exe='ls' 하나만 판정됐다 — 읽기 전용에서 엔진 삭제까지 통과했다.
+# exe='ls' 하나만 판정됐다.
 SEPARATOR_BASE = {';', '&&', '||', '|', '&', ';;', '|&', '\n'}
 
 # 리다이렉트 연산자. 앞에 붙는 fd 번호는 별도 토큰으로 떨어지므로 여기 없다.
@@ -206,50 +122,6 @@ ENGINE_FILES = ('workflow.compiled.json',)
 ENGINE_SETTINGS = ('.claude', 'settings.json')
 # 이 디렉토리 자체를 지우면 그 아래 엔진이 통째로 사라진다
 ENGINE_PARENTS = ('.claude',)
-ENGINE_MARKERS = ('.ai-bouncer', 'ai-bouncer/', 'workflow.compiled.json')
-INLINE_CODE_EXE = {'python', 'python3', 'perl', 'ruby', 'node', 'deno', 'bun', 'php',
-                   'sh', 'bash', 'zsh', 'ksh', 'dash', 'awk', 'gawk', 'mawk', 'eval'}
-
-
-def is_bouncer(tok):
-    """엔진 자신의 명령인가. basename만 보면 `./src/bouncer` 로 위장된다."""
-    t = tok.strip('"\'').lstrip('\\')
-    if '/' not in t:
-        # 설치본은 PATH 에 `bouncer` 로만 놓인다. `bouncer.sh` 는 정의상
-        # 엔진일 수 없는데도 면제를 받아 엔진 파일 검사까지 건너뛰었다.
-        return t == 'bouncer'
-    full = abspath(t)
-    roots = [r for r in (PROJECT, WORKTREE) if r]
-    if roots and full and not any(full.startswith(r + '/') for r in roots):
-        return False        # 다른 곳에 심어둔 동명 스크립트는 엔진이 아니다
-    # `.claude/ai-bouncer/bin/bouncer` 는 설치본 런처다. PATH 에 없을 때 그 경로로 부른다.
-    return t.replace('\\', '/').endswith(('.claude/ai-bouncer/engine/bouncer.sh',
-                                          '.claude/ai-bouncer/bin/bouncer'))
-# 엔진 파일을 **읽기만** 하는 것은 막을 이유가 없다.
-# (설정을 확인하려는 것뿐인데 스테이지마다 다르게 막히면 혼란만 준다)
-ENGINE_READ_OK = {
-    'cat', 'head', 'tail', 'wc', 'ls', 'stat', 'file', 'tree', 'du', 'jq',
-    'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack', 'diff', 'cmp', 'nl', 'od',
-    'strings', 'md5sum', 'sha256sum', 'shasum', 'realpath', 'dirname', 'basename',
-    'md5', 'test', '[', '[[',          # 존재 검사 `[ -f …/workflow.yaml ]` 가 수정으로 막혔다
-}
-# 쓰기 옵션이 없을 때만 읽기인 명령. `sed -n 1,40p`, `find .ai-bouncer -name '*.json'` 이 수정으로 막혔다(약 26건).
-FIND_WRITE = {'-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fprintf', '-fls'}
-
-
-def read_only(exe, cmd):
-    if exe in ENGINE_READ_OK:
-        return True
-    args = cmd[1:]
-    if exe == 'sed':
-        if any(a.startswith(('-i', '--in-place')) or (a.startswith('-') and not a.startswith('--') and 'i' in a[1:])
-               for a in args):
-            return False
-        # 스크립트 안의 w/W/e 명령은 파일을 쓰거나 실행한다
-        return not any(re.search(r'(^|[;{}\s/0-9$])[wWe](\s|$)', a) for a in args if not a.startswith('-'))
-    if exe == 'find':
-        return not any(a in FIND_WRITE for a in args)
-    return False
 
 
 ENGINE_MSG = ("엔진 파일(.ai-bouncer/ 상태, .claude/ai-bouncer/ 설정·엔진, "
@@ -671,8 +543,7 @@ def norm(p):
     """프로젝트 기준 상대경로. 프로젝트 밖이면 절대경로 그대로.
 
     병렬 작업의 worktree 는 프로젝트의 사본이므로 worktree 기준으로도 상대화한다.
-    안 그러면 worktree 안 모든 파일이 "프로젝트 밖"이 되어 edit_files 스코프가
-    통째로 사라진다 — 사용자가 건 가드가 병렬에서만 조용히 없어졌다.
+    안 그러면 worktree 안 엔진 파일이 "프로젝트 밖"으로 보여 보호가 빠진다.
     """
     a = abspath(p)
     if not a:
@@ -685,57 +556,6 @@ def norm(p):
         if a.startswith(root + '/'):
             return a[len(root) + 1:]
     return a
-
-
-def glob_re(pat, dot=True):
-    """dot=False 면 셸 기본값처럼 성분 첫 글자의 `*`·`?` 가 `.` 으로 시작하는 이름에 안 맞는다."""
-    i, o = 0, ['^']
-    while i < len(pat):
-        if not dot and (i == 0 or pat[i - 1] == '/') and pat[i] in '*?':
-            o.append(r'(?!\.)')
-        if pat.startswith('**/', i):
-            o.append('(?:.*/)?'); i += 3
-        elif pat.startswith('**', i):
-            o.append('.*'); i += 2
-        elif pat[i] == '*':
-            o.append('[^/]*'); i += 1
-        elif pat[i] == '?':
-            o.append('[^/]'); i += 1
-        else:
-            o.append(re.escape(pat[i])); i += 1
-    return re.compile(''.join(o) + '$')
-
-
-def relative_and_unknown(p):
-    """기준을 모르는 상태에서 상대경로를 쓰려 한다."""
-    return cwd_unknown() and not os.path.isabs(p.strip('"\''))
-
-
-def path_forbidden(p):
-    """이 경로가 edit_files 스코프에 걸리는가. 뒤에 오는 패턴이 이긴다(`!` 는 예외).
-
-    스코프는 프로젝트 안에서만 뜻이 있다. `**` 는 `^.*$` 라 절대경로까지 삼켜서,
-    예전에는 `/tmp/scratch.txt` 조차 "스코프 안"이 되어 막혔다.
-    """
-    a = abspath(p)
-    # 다른 작업의 worktree 는 그 작업의 스코프가 따로 있다. 여기서 확인할 수
-    # 없으므로 손대지 못하게 한다 (병렬 작업 A 가 B 의 트리를 고치던 구멍).
-    if a and '/.ai-bouncer/worktrees/' in a + '/' \
-       and not (WORKTREE and (a == WORKTREE or a.startswith(WORKTREE + '/'))):
-        return True
-    rel = norm(p)
-    if rel.startswith('/') or rel.startswith('../'):
-        return False                    # 프로젝트 밖 — 이 스코프의 관심사가 아니다
-    hit = False
-    for pat in EDIT:
-        neg = pat.startswith('!')
-        body = pat[1:] if neg else pat
-        # `!src/**` 는 "src 아래"만 뜻하지만 사용자는 src 자체도 포함해서 읽는다.
-        # 그래야 `mkdir -p src`, `cp a src` 가 통한다.
-        alt = body[:-3] if body.endswith('/**') else None
-        if glob_re(body).match(rel) or (alt and glob_re(alt).match(rel)):
-            hit = not neg
-    return hit
 
 
 FIRST_ARG_NOT_PATH = {'chmod', 'chown', 'chgrp'}
@@ -1018,192 +838,12 @@ def is_engine_path(tok):
     return False
 
 
-GLOB_CHARS = set('*?[')
-
-
-def glob_could_hit_engine(tok):
-    """`rm -rf .ai*` 처럼 글로브가 엔진 디렉토리를 삼킬 수 있는가.
-
-    글로브는 셸이 풀기 때문에 우리는 확장 결과를 못 본다. 리터럴 접두가
-    엔진 디렉토리 이름의 접두이기만 해도 삼킬 수 있으므로 거부한다.
-    """
-    t = tok.strip('"\'').replace('\\', '/')
-    if not (set(t) & GLOB_CHARS):
-        return False
-    # 접두 문자열 비교로는 `.claude/*` 를 못 잡았다 (`ai-bouncer` 는 점이 없다).
-    # 글로브를 정규식으로 바꿔 엔진 경로와 그 조상에 실제로 맞는지 본다.
-    rel = norm(t)
-    try:
-        # `rm -rf *` 는 `.ai-bouncer`·`.claude` 를 안 지운다 (dotglob 이 꺼져 있으면).
-        # case 패턴 `*)` 까지 엔진을 삼키는 글로브로 막혔다.
-        rx = glob_re(rel, dot='dotglob' in CMD)
-    except re.error:
-        return True                     # 판정 못 하면 막는다
-    targets = ['.ai-bouncer', '.claude', '.claude/ai-bouncer']
-    return any(rx.match(x) for x in targets)
-
-
-BRACE = re.compile(r'\{([^{}]*)\}')
-
-
-def brace_expand(t, limit=64):
-    """`.ai-bounce{r,x}` → `.ai-bouncer`, `.ai-bouncex`. 셸이 펼칠 결과를 미리 본다.
-
-    예전엔 `{ …; }` 그룹 기호를 중괄호 확장으로 오인해 그룹 안의 평범한 명령을 막았고,
-    정작 토큰 안의 확장은 보지 않았다.
-    """
-    todo, done = [t], []
-    while todo and len(todo) + len(done) <= limit:
-        x = todo.pop()
-        m = next((m for m in BRACE.finditer(x) if ',' in m.group(1) or '..' in m.group(1)), None)
-        if not m:
-            done.append(x)
-            continue
-        body = m.group(1)
-        if ',' in body:
-            alts = body.split(',')
-        else:
-            lo, _, hi = body.partition('..')
-            if lo.isdigit() and hi.isdigit():
-                alts = [str(i) for i in range(int(lo), int(hi) + 1)][:limit]
-            elif len(lo) == 1 and len(hi) == 1:
-                alts = [chr(i) for i in range(ord(lo), ord(hi) + 1)][:limit]
-            else:
-                done.append(x)
-                continue
-        todo += [x[:m.start()] + a + x[m.end():] for a in alts]
-    return done + todo
-
-
-FIND_EXEC = ('-exec', '-execdir', '-ok', '-okdir')
-FIND_EXEC_END = (';', '\\;', '+')
-
-
-def find_write_starts(args):
-    """`find` 가 무언가를 지우거나 바꾸면 그 시작 경로들을, 아니면 None.
-
-    `-exec ls -la {} ;` 같은 조회나 `-exec cp {} 목적지 ;` 처럼 꺼내기만 하는 것은
-    아무것도 안 바꾼다. 스크린샷 복사·`ls` 가 지우기로 막혔다(2건).
-    """
-    starts = []
-    for a in args:
-        if a.startswith(('-', '(', '!')):
-            break
-        starts.append(a)
-    writes = False
-    for j, a in enumerate(args):
-        if a == '-delete':
-            writes = True
-        elif a in FIND_EXEC:
-            sub = os.path.basename(args[j + 1].strip('"\'').lstrip('\\')) if j + 1 < len(args) else ''
-            if sub in ENGINE_READ_OK:
-                continue
-            if sub == 'cp':
-                body = args[j + 2:]
-                end = next((k for k, x in enumerate(body) if x in FIND_EXEC_END), len(body))
-                dst = [x for x in body[:end] if x != '{}' and not x.startswith('-')]
-                if dst and not any(is_engine_path(x) for x in dst):
-                    continue
-            writes = True
-    return (starts or ['.']) if writes else None
-
-
-def may_hold_engine(p):
-    """이 시작 경로 아래에 엔진 디렉토리가 있을 수 있는가 (프로젝트 루트나 그 조상, 변수)."""
-    if '$' in p or '`' in p or SUB_TOKEN in p:
-        return True
-    a = abspath(p)
-    if not a or is_engine_path(p):
-        return True
-    return any(r and (r == a or r.startswith(a.rstrip('/') + '/')) for r in (PROJECT, WORKTREE))
-
-
-# 코드 문자열을 셸이 아니라 언어 런타임이 읽는 것. 읽기 코드에는 쓰기 흔적이 없다.
-INLINE_LANG_EXE = {'python', 'python3', 'perl', 'ruby', 'node', 'deno', 'bun', 'php'}
-INLINE_WRITE_HINT = re.compile(
-    r"""open\s*\([^)]*,\s*['"][^'"]*[wax+]|\.write|subprocess|\b(?:dump|unlink|remove|rmtree"""
-    r"""|rename|replace|truncate|chmod|mkdir|copy\w*|move|system|popen|exec\w*|spawn\w*"""
-    r"""|writeFile\w*|appendFile\w*|rmSync|rmdir|symlink\w*)\s*\(""", re.I)
-
-
 def reset_cwd():
     """판정 패스를 새로 시작할 때 cd 추적을 초기화한다.
 
-    EDIT 패스 마지막 세그먼트의 `cd` 가 PUSH 패스 첫 세그먼트로 새어,
-    `touch src/a.js && cd -` 처럼 **쓰기보다 뒤에 오는 cd** 가 앞을 막았다.
+    앞 치환의 `cd` 가 다음 치환의 첫 세그먼트로 새면 다른 디렉토리로 판정한다.
     """
     EFFECTIVE_CWD[0] = ''
-
-
-def check_engine_files(segments):
-    """엔진 파일은 어느 스테이지에서도 직접 **수정**할 수 없다.
-
-    세그먼트마다 따로 본다. 줄 전체의 첫 토큰이 bouncer 인지로 면제하면
-    `bouncer status && echo x > state.json` 이 통째로 빠져나간다.
-    """
-    reset_cwd()
-    SUBSHELL_SEEN[0] = any(k == 'st' and t in ('(', ')')
-                           for seg in segments for t, k in seg)
-    for seg in segments:
-        clean, redirs, struct = parse_redirects(seg)
-        # 리다이렉트 대상은 bouncer 자신의 명령이라도 검사한다.
-        # (`bouncer.sh > .ai-bouncer/tasks/x/state.json` 으로 상태를 덮어썼다)
-        for op, tgt in redirs:
-            if op != '<' and is_engine_path(tgt):
-                out(ENGINE_MSG)
-        exe, cmd, _ = resolve_exe(clean)
-        if cmd and is_bouncer(cmd[0]):
-            continue
-        # `git clean -fdx` 는 gitignore된 것을 지운다 — 상태 디렉토리가 정확히 그것이다.
-        if exe == 'git' and git_sub(cmd) == 'clean' \
-           and not any(a in ('-n', '--dry-run') or (a.startswith('-') and not a.startswith('--')
-                                                    and 'n' in a[1:]) for a in cmd[1:]):
-            out("`git clean` 은 무시 대상(.ai-bouncer/ 상태 포함)을 지운다.\n"
-                "진행 중인 작업이 통째로 사라지므로 허용되지 않는다.\n"
-                "정말 필요하면 `bouncer cancel` 로 작업을 끝낸 뒤에 해라.")
-        # 변수 대입의 값은 아무것도 안 쓴다 (`D=…/.claude/ai-bouncer/hooks; cat $D/x` 가 막혔다).
-        # `rm -rf .ai-bounce{r,x}` 는 셸이 펼친 결과로 본다.
-        words = [x for t in clean if not ASSIGN.match(t.strip('"\'').lstrip('\\'))
-                 for x in brace_expand(t)]
-        # 읽기 명령은 글로브가 엔진 디렉토리를 훑어도 아무것도 안 바꾼다
-        for t in ([] if read_only(exe, cmd) else words):
-            if glob_could_hit_engine(t):
-                out("`%s` 는 글로브라 엔진 디렉토리(.ai-bouncer/ 등)를 삼킬 수 있다.\n"
-                    "지울 대상을 정확히 적어라." % t)
-        if exe == 'find':
-            # `find . -name state.json -delete` 로 상태 파일이 사라졌다
-            starts = find_write_starts(cmd[1:])
-            if starts and any(may_hold_engine(x) for x in starts):
-                out("`find -exec/-delete` 로는 무엇을 지울지 확인할 수 없어 허용되지 않는다.\n"
-                    "엔진 디렉토리(.ai-bouncer/ 등)를 품지 않는 경로에서 시작하거나 대상을 직접 적어라.")
-        # `python3 -c "open('.ai-bouncer/state.json','w')"` — 코드 문자열 안의 경로는
-        # 성분으로 안 보인다. 엔진 표식이 있으면 거부하되, 언어 런타임 코드는 쓰기 흔적이
-        # 있을 때만 막는다 (`json.load(open('.ai-bouncer/…/state.json'))` 읽기가 막혔다).
-        if exe in INLINE_CODE_EXE:
-            for a in cmd[1:]:
-                # 실행할 스크립트 파일 경로는 코드 문자열이 아니다. 부모 디렉토리 이름에
-                # `ai-bouncer/` 가 들어 있으면(이 레포·scratchpad 절대경로) `bash <파일>` 이 막혔다.
-                if os.path.isfile(abspath(a)) and not is_engine_path(a):
-                    continue
-                if any(m in a for m in ENGINE_MARKERS) \
-                   and (exe not in INLINE_LANG_EXE or INLINE_WRITE_HINT.search(a)):
-                    out(ENGINE_MSG)
-        if exe == 'git' and not git_read_error(cmd):
-            continue                    # `git log -- .ai-bouncer` 같은 이력 조회
-        # add·commit 은 인덱스와 이력만 바꾸고 파일 내용은 안 건드린다.
-        # 설치본을 커밋하려는 `git add .claude/settings.json` 이 엔진 수정으로 막혔다.
-        if exe == 'git' and git_sub(cmd) in ('add', 'commit'):
-            continue
-        if read_only(exe, cmd):
-            continue                    # 읽기는 자유
-        if exe in ('cd', 'pushd') and not redirs:
-            # 들어가는 것 자체는 아무것도 안 바꾼다. 이후 상대경로 쓰기는
-            # track_cd 로 옮긴 기준에서 다시 엔진 경로로 걸린다.
-            track_cd(exe, cmd[1:], struct)
-            continue
-        if any(is_engine_path(t) for t in words):
-            out(ENGINE_MSG)
-        track_cd(exe, cmd[1:], struct)
 
 
 SINK_OK = {'/dev/null', '/dev/stdout', '/dev/stderr', '/dev/tty'}
@@ -1254,124 +894,8 @@ def check_outside(seg_tokens, redirs, exe, args):
             "worktree 안의 같은 파일을 고쳐라." % (WORKTREE, bad[0]))
 
 
-def git_read_error(cmd):
-    """읽기가 아니면 사유 문자열, 읽기면 None."""
-    sub = git_sub(cmd)
-    if sub is None:
-        return ("git 서브커맨드 자리에 치환이 있다. 이 단계에서는 서브커맨드를 그대로 적어라.")
-    if sub == '':
-        return None                     # `git` 만 치면 도움말
-    if sub == 'grep' and any(a.startswith(('-O', '--open-files-in-pager')) for a in cmd):
-        return ("`git grep -O` 는 매치된 파일을 임의 명령에 넘겨 실행한다. "
-                "허용되지 않는다.")
-    if sub in GIT_READ:
-        return None
-    # `git apply --check`, `git push --dry-run` 처럼 아무것도 안 바꾸는 형태
-    if git_safe_form(sub, cmd):
-        return None
-    if sub == 'clean':
-        if any(a.startswith('-') and not a.startswith('--') and 'n' in a[1:] for a in cmd):
-            return None
-        return "`git clean` 은 파일을 지운다. 확인만 하려면 `-n` 을 붙여라."
-    if sub not in GIT_SUB:
-        return ("`git %s` 는 읽기 명령이 아니다. 이 단계에서는 허용되지 않는다." % sub)
-    rule = GIT_SUB[sub]
-    after = cmd[cmd.index(sub) + 1:]
-    pos = [a for a in after if not a.startswith('-')]
-    flags = [a for a in after if a.startswith('-')]
-    for f in flags:
-        head = f.split('=', 1)[0]
-        if head in rule['bad']:
-            return ("`git %s %s` 는 쓰기 동작이다. 이 단계에서는 허용되지 않는다." % (sub, f))
-    if not pos:
-        if rule['bare_ok']:
-            return None
-        return ("`git %s` 는 이 형태로는 읽기가 아니다. 허용: %s"
-            % (sub, ', '.join(sorted(rule['first']))))
-    if rule['first'] is not None and pos[0] not in rule['first']:
-        return ("`git %s %s` 는 읽기가 아니다. 허용: %s"
-            % (sub, pos[0], ', '.join(sorted(rule['first']))))
-    # 목록 플래그가 있으면 위치인자는 패턴이다 (`git branch --list 'feat*'`).
-    limit = rule['max_pos']
-    if rule.get('list_flags') and any(f.split('=', 1)[0] in rule['list_flags']
-                                     for f in flags):
-        limit = max(limit, 1)
-    if len(pos) > limit:
-        return ("`git %s` 에 인자를 %d개 주면 쓰기 동작이다 (읽기는 최대 %d개)."
-            % (sub, len(pos), limit))
-
-    return None
-
-
-
-
-PLANS_DIR = os.path.join(os.path.expanduser('~'), '.claude', 'plans')
-
-
-def is_plan_file(p):
-    """Claude Code plan 모드가 쓰는 계획 파일인가 (`~/.claude/plans/<이름>.md`).
-
-    plan 단계는 `edit_files: true` 라 이것까지 막혀서, 계획을 쓸 수 없어
-    plan 모드 자체가 진행되지 않았다. 바로 아래 `.md` 만 연다.
-    """
-    a = abspath(p)
-    return bool(a) and a.endswith('.md') \
-        and os.path.dirname(a) == (_real(PLANS_DIR) or PLANS_DIR)
-
-
 def _under(a, root):
     return bool(root) and (a == root or a.startswith(root + '/'))
-
-
-HOME_CLAUDE = _real(os.path.join(os.path.expanduser('~'), '.claude'))
-
-
-def _ignored(a, root):
-    """작업 트리 안의 경로가 .gitignore 대상인가 (test-results, dist 같은 산출물)."""
-    try:
-        import subprocess
-        rel = os.path.relpath(a, root)
-        # 없는 디렉토리는 `dist-shot/` 같은 디렉토리 패턴에 안 맞는다 — 슬래시를 붙여서도 본다.
-        for cand in (rel, rel + '/'):
-            r = subprocess.run(['git', '-C', root, 'check-ignore', '-q', '--', cand],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
-            if r.returncode == 0:
-                return True
-        return False
-    except Exception:
-        return False
-
-
-def readonly_free(p, new_ok=False):
-    """읽기 전용 스테이지에서도 써도 되는 곳인가.
-
-    읽기 전용은 **이 작업의 코드**(프로젝트 작업 트리)를 못 고치게 하려는 것이다.
-    그 밖 — 캐시(~/Library, ~/.cache), /tmp, 다른 레포 — 와 작업 트리 안의
-    .gitignore 된 산출물(test-results, dist)은 막을 이유가 없다. 브라우저 설치나
-    테스트 리포트까지 막아 verify 가 환경 문제로 갇혔다.
-    단 `~/.claude` 는 hook 등록·설정이 사는 곳이라 계속 막는다.
-    경로가 변수라 알 수 없으면 여기서는 통과시키고 작업 트리 스냅샷 비교에 맡긴다.
-    """
-    if not p:
-        return False
-    if SUB_TOKEN in p or '$' in p or '`' in p:
-        return True                     # 판정 불가 — 실행 뒤 트리 비교가 잡는다
-    if cwd_unknown() and not os.path.isabs(os.path.expanduser(p.strip('"\''))):
-        return True
-    a = abspath(p)
-    if not a:
-        return False
-    if _under(a, HOME_CLAUDE) or is_engine_path(a):
-        return False
-    for r in (WORKTREE, PROJECT):
-        if r and _under(a, r):
-            # 셸로 새로 만드는 경로(임시 파일·디렉토리)는 기존 코드를 고치는 게 아니다.
-            # `mkdir -p packages/core`, `cp … ./.side-probe.mjs` 가 막혔다(3건). 남으면 트리 비교가 잡는다.
-            # Edit/Write 도구로 새 파일을 쓰는 건 코드 작성이라 계속 막는다 (new_ok=False).
-            if new_ok and a != r and not (set(p) & GLOB_CHARS) and not os.path.lexists(a):
-                return True
-            return a != r and _ignored(a, r)
-    return True
 
 
 def push_target_outside(cmd, env):
@@ -1449,8 +973,6 @@ if CHECK_PATH:
     # `…/worktrees/../tasks/x/state.json` 이 예외를 타고 통과했다.
     if is_engine_path(TARGET):
         sys.stdout.write(ENGINE_MSG)
-    elif is_plan_file(TARGET):
-        pass                    # Claude Code plan 모드 자체 파일 — 프로젝트 소스가 아니다
     elif outside_worktree(TARGET):
         sys.stdout.write(
             "이 작업은 별도 worktree에서 진행 중이다:\n    %s\n"
@@ -1458,14 +980,22 @@ if CHECK_PATH:
             "여기서 고치면 검증과 finalize는 손대지 않은 worktree를 보고 전부 통과한다.\n"
             "worktree 안의 같은 파일을 고쳐라. 셸도 그 안에서 실행한다:\n    cd %s"
             % (WORKTREE, TARGET, WORKTREE))
-    elif EDIT is True and readonly_free(TARGET):
-        pass                    # 읽기 전용은 이 작업의 코드만 막는다 (library 기록 등)
-    elif EDIT is not None and (EDIT is True or path_forbidden(TARGET)):
-        sys.stdout.write("파일 수정이 차단되었다: %s" % norm(TARGET))
+    sys.exit(0)
+
+# 셸로 엔진 파일을 건드리는지 해석하던 검사는 지웠다. 7일 차단 76건 중 state/.active 를
+# 실제로 겨눈 건 1건이고 나머지는 ls·sed·find 같은 읽기 오탐이었다(2026-10-23 감사).
+# Edit/Write 로 직접 고치는 것만 위에서 막는다.
+if not PUSH and not WORKTREE:
     sys.exit(0)
 
 TOKENS = tokenize(CMD)
 if TOKENS is None:
+    # 해석 못 한 명령을 통째로 막으면 grep 패턴 속 백틱 같은 읽기까지 막힌다(4건).
+    # 판정할 게 push 뿐이면 push 가 보일 때만 막는다.
+    if PUSH and 'push' in CMD:
+        out("따옴표가 닫히지 않아 명령을 판정할 수 없다.")
+    if not WORKTREE:
+        sys.exit(0)
     out("따옴표가 닫히지 않아 명령을 판정할 수 없다.")
 
 SEGMENTS = split_segments(TOKENS)
@@ -1487,151 +1017,24 @@ while _work:
         continue
     SUB_SEGMENTS.append(split_segments(_t))
     _work.extend(SUBS)
-check_engine_files(SEGMENTS)
-for _segs in SUB_SEGMENTS:
-    check_engine_files(_segs)
+
 
 def run_passes(SEGMENTS, TOKENS):
-    """한 명령(또는 치환 하나)에 대해 모든 검사를 돌린다."""
+    """한 명령(또는 치환 하나)에 대해 push 금지와 worktree 밖 쓰기를 본다."""
     reset_cwd()
-    # 세그먼트를 `(`/`)` 로도 나누므로 서브셸 표식이 세그먼트 안에 안 남는다.
-    # 명령 전체 기준으로 기억해둔다.
     SUBSHELL_SEEN[0] = any(k == 'st' and t in ('(', ')') for t, k in TOKENS)
-    if EDIT is True:
-        # ── 읽기 전용 스테이지 (`edit_files: true`) ─────────────────
-        # 막는 것은 **프로젝트 작업 트리 수정**뿐이다. 도구·브라우저 설치, 캐시·/tmp 쓰기,
-        # npm/npx/테스트 실행, 변수 대입·서브셸은 허용한다.
-        # 예전엔 조회 명령 허용 목록이라 `npm run e2e`, `playwright install`, `f=$(ls); grep "$f"`
-        # 까지 막혀 verify 가 환경 문제 하나로 갇혔다.
-        # 명령 이름으로는 무엇을 쓸지 알 수 없으므로, 확실히 보이는 것(**기존** 파일로의 리다이렉트,
-        # `rm`/`cp`/`sed -i` 의 대상, git 의 쓰기 서브커맨드)만 여기서 막고 나머지는
-        # 실행 뒤 작업 트리 스냅샷 비교(post-tool / stop)가 잡는다.
-        for seg in SEGMENTS:
-            clean, redirs, struct = parse_redirects(seg)
-            # `xargs -I % cp b.js %` 의 `%` 는 실제 대상이 아니다 — 없는 파일로 보면 안 된다.
-            new_ok = 'xargs' not in clean
-            for op, tgt in redirs:
-                if redirect_writes(op, tgt) and not readonly_free(tgt, new_ok):
-                    out("이 단계에서는 프로젝트 파일로 출력을 보낼 수 없다: %s %s\n"
-                        "작업 트리 밖(/tmp 등)이나 .gitignore 된 경로는 된다." % (op, tgt))
-            if not clean:
-                continue
-            exe, cmd, env = resolve_exe(clean)
-            check_outside(clean, redirs, exe, cmd[1:])
-            args = cmd[1:]
-            if exe == 'git':
-                # add·commit 은 인덱스·이력만, archive 는 출력만 만든다 — 작업 트리 내용은 그대로다.
-                # verify 에서 커밋하려던 `git add …` 가 막혔다(3건). 트리 비교 기준도 내용이다.
-                sub = git_sub(cmd)
-                # push 는 아래 push 검사가 판정한다 — 다른 레포(library) push 까지 여기서 막혔다.
-                err = None if sub in ('add', 'commit', 'archive') or sub in GIT_PUSH_SUBS \
-                    else git_read_error(cmd)
-                if err:
-                    out(err)
-                if sub == 'archive':
-                    for i, x in enumerate(cmd):
-                        o = cmd[i + 1] if x in ('-o', '--output') and i + 1 < len(cmd) \
-                            else x.split('=', 1)[1] if x.startswith('--output=') else None
-                        if o and not readonly_free(o, new_ok):
-                            out("`git archive` 로 프로젝트 파일 %s 를 덮어쓸 수 없다." % o)
-            elif exe in WRITERS and exe not in ('curl', 'wget'):
-                for a in write_targets(exe, args):
-                    if not readonly_free(a, new_ok):
-                        out("`%s` 로 프로젝트 파일 %s 를 바꿀 수 없다. 이 단계에서는 코드를 고칠 수 없다.\n"
-                            "수정은 구현 단계로 돌아가서 한다." % (exe, a))
-            elif exe in ('curl', 'wget'):
-                for a in write_targets(exe, args):
-                    if not readonly_free(a, new_ok):
-                        out("`%s` 로 프로젝트 파일 %s 를 쓸 수 없다." % (exe, a))
-            track_cd(exe, args, struct)
-
-    elif EDIT is not None:
-        # ── 경로 스코프 스테이지 (`edit_files: [글로브…]`) ─────────
-        # `!` 예외는 "여기는 써도 된다"는 뜻이다. 임의 명령은 허용하되
-        # 스코프에 걸린 경로에 **쓰는 것만** 막는다.
-        for seg in SEGMENTS:
-            clean, redirs, struct = parse_redirects(seg)
-            for op, tgt in redirs:
-                # /dev/null 과 fd 복제까지 막으면 `npm test 2>&1` 조차 안 돈다.
-                if redirect_writes(op, tgt):
-                    if relative_and_unknown(tgt):
-                        out("`cd -` / 서브셸 이동 뒤라 `%s` 가 어느 디렉토리인지 알 수 없다." % tgt)
-                    if path_forbidden(tgt):
-                        out("이 단계에서 %s 에 쓸 수 없다." % tgt)
-            if not clean:
-                continue
-            exe, cmd, env = resolve_exe(clean)
-            check_outside(clean, redirs, exe, cmd[1:])
-            if not is_bouncer(cmd[0] if cmd else '') \
-               and not read_only(exe, cmd) and exe not in ('cd', 'pushd'):
-                for t in clean:
-                    if is_engine_path(t):
-                        out(ENGINE_MSG)
-            args = cmd[1:]
-            if exe == 'git':
-                sub = git_sub(cmd)
-                ok_form = git_safe_form(sub, cmd)
-                # `git checkout -- src/a.js` / `git restore src/a.js` 처럼 경로를
-                # 명시하면 그 경로만 본다. 스코프가 열어준 곳은 되돌릴 수 있어야 한다.
-                if not ok_form and sub in ('checkout', 'restore'):
-                    if '--' in cmd:
-                        paths = cmd[cmd.index('--') + 1:]
-                    elif sub == 'restore':
-                        paths = [a for a in cmd[cmd.index(sub) + 1:] if not a.startswith('-')]
-                    else:
-                        paths = []
-                    ok_form = bool(paths) and not any(path_forbidden(a) for a in paths)
-                if sub in GIT_TREE_WRITE and not ok_form and git_read_error(cmd):
-                    out("`git %s` 는 워킹트리를 바꾼다. 이 단계에서는 허용되지 않는다.\n"
-                        "고칠 수 있는 범위가 정해져 있다면 그 파일만 직접 수정해라." % sub)
-            elif exe == 'find' and any(path_forbidden(x) or '$' in x
-                                       for x in (find_write_starts(args) or [])):
-                out("`find -exec/-delete` 는 무엇을 지울지 확인할 수 없어 허용되지 않는다.")
-            elif exe in WRITERS:
-                pos = [a for a in args if not a.startswith('-') and a.strip('"\'')]
-                targets = write_targets(exe, args)
-                for a in targets:
-                    if SUB_TOKEN in a:
-                        out("쓰기 대상이 명령 치환이라 어느 파일인지 알 수 없다.\n"
-                            "경로를 그대로 적어라.")
-                    if relative_and_unknown(a):
-                        out("`cd -` / 서브셸 이동 뒤라 `%s` 가 어느 디렉토리인지 알 수 없다.\n"
-                            "절대경로로 적거나, 이동을 한 번에 하나씩 해라." % a)
-                    if path_forbidden(a):
-                        out("`%s` 로 %s 를 고칠 수 없다." % (exe, a))
-            track_cd(exe, args, struct)
-
-    reset_cwd()
-    if PUSH:
-        # ── push 금지 (스코프 모드와 함께 걸릴 수 있으므로 독립적으로 본다) ──
-        for seg in SEGMENTS:
-            clean, redirs, struct = parse_redirects(seg)
-            if not clean:
-                continue
-            exe, cmd, env = resolve_exe(clean)
-            check_outside(clean, redirs, exe, cmd[1:])
+    for seg in SEGMENTS:
+        clean, redirs, struct = parse_redirects(seg)
+        if not clean:
+            continue
+        exe, cmd, env = resolve_exe(clean)
+        check_outside(clean, redirs, exe, cmd[1:])
+        if PUSH:
             check_push_cmd(exe, cmd, struct, env)
-            track_cd(exe, cmd[1:], struct)
-
-    reset_cwd()
-    if EDIT is None and not PUSH and WORKTREE:
-        for seg in SEGMENTS:
-            clean, redirs, struct = parse_redirects(seg)
-            if not clean:
-                continue
-            exe, cmd, _ = resolve_exe(clean)
-            check_outside(clean, redirs, exe, cmd[1:])
-            track_cd(exe, cmd[1:], struct)
+        track_cd(exe, cmd[1:], struct)
 
 
 run_passes(SEGMENTS, TOKENS)
 # 각 치환은 서브셸이라 원래 cwd 에서 돈다 — 별도로, 매번 cwd 를 초기화해 본다.
 for _segs in SUB_SEGMENTS:
     run_passes(_segs, [t for seg in _segs for t in seg])
-
-for pat in PATTERNS:
-    try:
-        if re.search(pat, CMD):
-            out("차단된 명령이다: %s" % CMD[:80])
-    except re.error:
-        pass

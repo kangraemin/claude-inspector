@@ -15,9 +15,6 @@ SESSION="$(jq -r '.session_id // empty' <<<"$INPUT")"
 CWD="$(jq -r '.cwd // empty'        <<<"$INPUT")"
 
 # 이 Stop이 직전 Stop hook의 차단 때문에 재진입한 것이면 true다.
-# 여기서 또 차단하면 사용자 개입 없이 영원히 도는 구간이 생긴다.
-# continue_streak 상한이 1차 방어지만, 그 카운터가 어떤 이유로 리셋되면
-# 그것만으로는 못 막는다. 그래서 재진입 자체를 별도로 센다.
 REENTRY="$(jq -r '.stop_hook_active // false' <<<"$INPUT")"
 [ -n "$CWD" ] || CWD="$PWD"
 [ -n "$SESSION" ] || exit 0
@@ -25,38 +22,6 @@ REENTRY="$(jq -r '.stop_hook_active // false' <<<"$INPUT")"
 TASK="$(bouncer_my_task "$CWD" "$SESSION")" || exit 0      # 내 작업 없으면 관여 안 함
 COMPILED="$(bouncer_compiled_file "$CWD")"
 
-# 출구 안전장치 — 턴을 다시 여는 출력(block / additionalContext)은 경로가 10곳이 넘는다.
-# 경로마다 막으면 새 경로가 생길 때 또 샌다: "실행 중" 안내 하나가 도구 없는 응답을
-# 939번 반복시켰다 (ttuk-chiro-clinic 2026-10-22, 5회 이상 연속 루프 54건).
-# 그래서 모든 출력을 여기서 거른다. 다시 연 뒤 모델이 도구를 하나도 안 쓰고 또 멈추는 일이
-# IDLE_REOPEN_MAX 번 이어지면, 무슨 출력이든 턴을 열지 않는 systemMessage 로 바꿔 돌려준다.
-IDLE_REOPEN_MAX=2
-_OUT="$(mktemp)"; exec 3>&1 >"$_OUT"
-reopen_guard() {
-  local out seq at n txt
-  out="$(cat "$_OUT" 2>/dev/null)"; rm -f "$_OUT"; exec 1>&3
-  if [ -n "$out" ] && jq -e '(.decision == "block") or ((.hookSpecificOutput.additionalContext // "") != "")' \
-       <<<"$out" >/dev/null 2>&1; then
-    seq="$(cat "$TASK/.tool_seq" 2>/dev/null)"; case "$seq" in ''|*[!0-9]*) seq=0 ;; esac
-    at="$(cat "$TASK/.tool_seq_at_reopen" 2>/dev/null)"
-    n="$(cat "$TASK/.idle_reopens" 2>/dev/null)"; case "$n" in ''|*[!0-9]*) n=0 ;; esac
-    if [ "$REENTRY" = "true" ] && [ "$seq" = "$at" ]; then n=$(( n + 1 )); else n=0; fi
-    printf '%s' "$seq" > "$TASK/.tool_seq_at_reopen" 2>/dev/null || true
-    if [ "$n" -ge "$IDLE_REOPEN_MAX" ]; then
-      printf 0 > "$TASK/.idle_reopens" 2>/dev/null || true
-      txt="$(jq -r '.reason // .hookSpecificOutput.additionalContext' <<<"$out")"
-      jq -n --arg m "[ai-bouncer] 도구 없이 ${n}번 연속 멈췄다 — 턴을 다시 열지 않고 돌려준다.
-
-$txt
-
-이어서 할 일을 지시해 주세요: 1. 계속 진행한다  2. 접근을 바꾼다  3. 작업을 중단한다 (bouncer cancel)" '{systemMessage:$m}'
-      return
-    fi
-    printf '%s' "$n" > "$TASK/.idle_reopens" 2>/dev/null || true
-  fi
-  [ -z "$out" ] || printf '%s\n' "$out"
-}
-trap reopen_guard EXIT
 # 진단은 guarded_block 이 정의된 뒤에 한다 — 직접 block 을 내보내면
 # 상한 카운터를 안 거쳐 세션이 영원히 안 돌아온다 (30/30 차단이 재현됐다).
 CONFIG_BROKEN=0
@@ -88,57 +53,27 @@ MAX_CONTINUE="$(bouncer_config max_continue 10 "$CWD")"
 MAX_ATTEMPTS="$(bouncer_config max_attempts 3 "$CWD")"
 MAX_LOOPS="$(bouncer_config max_loops 3 "$CWD")"
 
-# 사람이 실제로 답했는지는 UserPromptSubmit hook이 올린 카운터로 판정한다.
-# allowed_stop 만 보면, 한 번 사람 대기 상태가 됐던 작업에서 모델이 같은 턴에
-# `bouncer done` 을 쳐도 통과한다 — 게이트가 자기 보고로 전락한다.
-UT_NOW="$(bouncer_state "$TASK" '.user_turns')"; [ -n "$UT_NOW" ] || UT_NOW=0
-UT_MARK="$(bouncer_state "$TASK" '.user_turns_at_wait')"; [ -n "$UT_MARK" ] || UT_MARK=-1
-USER_TURN_HAPPENED=false
-[ "$UT_MARK" -ge 0 ] 2>/dev/null && [ "$UT_NOW" -gt "$UT_MARK" ] 2>/dev/null && USER_TURN_HAPPENED=true
-
 INJECT=""      # 이번에 주입할 텍스트
 FAILURES=""    # blocking 미충족 사유
-HUMAN_WAIT=0   # 사람/승인 UI를 기다리는 중인가
 HARD_FAIL=0    # 사람과 무관하게 실패한 조건이 있는가 (run 게이트 등)
-PENDING_DONE=0 # 모델이 아직 done 표시를 안 했을 뿐인가 (실패가 아니라 진행 중)
 
 add_inject()  { INJECT="${INJECT}${INJECT:+$'\n\n'}$1"; }
 
-# 전이·반송 등 어떤 경로로 차단하든 여기를 지난다. 상한을 넘으면 세션을 돌려준다.
-# 전이가 continue_streak 을 리셋해도 이 카운터는 리셋되지 않는다.
-MAX_BLOCKS=$(( MAX_CONTINUE * 2 + 4 ))
+# 어떤 경로로 차단하든 여기를 지난다.
+# 의미 있을 때만 막는다: 직전 차단과 같은 사유인데 그 뒤 도구를 하나도 안 썼으면
+# 다시 막아봐야 같은 답만 반복한다 (도구 없는 재진입 루프 54건, 최대 939회).
+# 그때는 막지 않고 끝내게 둔다 — 단계는 그대로라 통과가 아니고, 다음 Stop 에서 다시 판정한다.
 guarded_block() {
-  local n
-  n="$(jq -r '.blocks_total // 0' "$TASK/state.json" 2>/dev/null)"; [ -n "$n" ] || n=""
-  if [ -z "$n" ] || ! [ "$n" -eq "$n" ] 2>/dev/null; then
-    # state.json 을 못 읽는 상황에서도 상한은 살아야 한다. 카운터를 state 에만
-    # 두면, 상태가 깨진 바로 그 경우에 안전밸브가 원리상 작동하지 않는다
-    # (40회 연속 차단이 재현됐다). 별도 파일로 센다.
-    n="$(cat "$TASK/.blocks" 2>/dev/null)"; [ -n "$n" ] || n=0
-    n=$(( n + 1 )); printf '%s' "$n" > "$TASK/.blocks" 2>/dev/null
-  else
-    n=$(( n + 1 ))
-  fi
-  if [ "$n" -gt "$MAX_BLOCKS" ] 2>/dev/null; then
-    rm -f "$TASK/.blocks"
-    bouncer_state_update "$TASK" '.blocks_total = 0 | .continue_streak = 0 | .reentry_count = 0
-      | .allowed_stop = true | .returned_to = null | .returned_tree = null'
-    local _head="⛔ 사용자 개입 없이 ${MAX_BLOCKS}번 연속으로 진행했다. 세션을 돌려준다."
-    case "$1" in
-      "✅"*) _head="ℹ️ ${MAX_BLOCKS}번 연속으로 진행했다. 여기서 한 번 사용자에게 돌려준다." ;;
-    esac
-    jq -n --arg c "$_head
-
-$1
-
-AskUserQuestion으로 물어라 (도구가 없으면 텍스트로 제시하고 답을 기다려라):
-  1. 계속 진행한다
-  2. 접근을 바꾼다
-  3. 작업을 중단한다 (bouncer cancel)" \
-      '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
+  local key seq
+  # 사유는 미충족 조건 목록으로 비교한다 (첫 차단에만 붙는 안내 문구로 키가 달라지지 않게).
+  key="$STAGE:$(printf '%s' "${FAILURES:-$1}" | cksum | cut -d' ' -f1)"
+  seq="$(cat "$TASK/.tool_seq" 2>/dev/null)"; case "$seq" in ''|*[!0-9]*) seq=0 ;; esac
+  if [ "$REENTRY" = "true" ] && [ "$(cat "$TASK/.block_key" 2>/dev/null)" = "$key" ] \
+     && [ "$(cat "$TASK/.tool_seq_at_block" 2>/dev/null)" = "$seq" ]; then
     exit 0
   fi
-  bouncer_state_update "$TASK" --argjson n "$n" '.blocks_total = $n'
+  printf '%s' "$key" > "$TASK/.block_key" 2>/dev/null || true
+  printf '%s' "$seq" > "$TASK/.tool_seq_at_block" 2>/dev/null || true
   bouncer_block "$1"
 }
 
@@ -190,21 +125,7 @@ if [ ! -d "$WORK_ROOT" ]; then
   · worktree를 되살린다:    git worktree prune && git worktree add $WORK_ROOT $(bouncer_state "$TASK" '.worktree.branch')
     (prune 없이 add만 하면 '이미 등록된 worktree' 라며 실패한다)"
 fi
-# 읽기 전용 단계는 명령을 미리 막지 않는 대신, 끝낼 때 작업 트리가 진입 시점 그대로여야 한다.
-# (post-tool 이 명령마다 알리지만, 실패한 명령이나 hook 누락분까지 여기서 한 번 더 본다)
-if [ "$(jq -r '.forbid.edit_files // null' <<<"$STAGE_JSON")" = "true" ]; then
-  RO_CH="$(bouncer_ro_changes "$TASK" "$STAGE")"
-  if [ -n "$RO_CH" ]; then
-    guarded_block "⛔ [$STAGE] 이 단계에서 프로젝트 작업 트리가 바뀌었다:
-$(printf '%s\n' "$RO_CH" | head -20 | sed 's/^/    /')
-
-이 단계에서는 프로젝트 코드를 고칠 수 없다. 되돌린 뒤 계속하라:
-    bouncer restore
-수정이 필요하면 검증 실패로 구현 단계에 돌아가서 한다."
-  fi
-fi
-N_FAIL=0; N_PENDING=0  # 미충족 조건 수 / 그중 done 표시만 남은 수
-add_failure() { FAILURES="${FAILURES}${FAILURES:+$'\n'}- $1"; N_FAIL=$((N_FAIL+1)); }
+add_failure() { FAILURES="${FAILURES}${FAILURES:+$'\n'}- $1"; }
 # 막고 있는 step 의 id 를 모아둔다. "건너뛴다"를 제안하면서 id 를 안 주면
 # 모델이 compiled.json 을 직접 읽지 않는 한 그 제안을 실행할 수 없다.
 # step id 는 `<stage>/<label>` 이고 라벨에 공백이 있다. 공백으로 이어붙였다가
@@ -264,21 +185,9 @@ while IFS= read -r step; do
       bouncer_state_update "$TASK" --arg k "$ID" '.shown[$k] = true'
     fi
     [ -z "$BLOCKING" ] && continue
-    # plan_approved / skill: 은 hook이 도구 사용을 직접 관찰한 증거다 — 사용자 턴을 따로 요구하지 않는다.
-    # 반면 순수 inject blocking은 모델의 자기신고이므로 실제 사용자 턴이 있어야 인정한다.
-    if [ "$DONE" = "true" ]; then
-      case "$BLOCKING" in
-        # 사람 확인 게이트는 없앴다 — inject 의 blocking: true 도 모델의 done 표시로 통과한다.
-        *) continue ;;
-      esac
-    fi
+    [ "$DONE" = "true" ] && continue
 
     case "$BLOCKING" in
-      plan_approved)
-        add_failure "계획이 아직 승인되지 않았다 — ExitPlanMode 승인 필요 ($LABEL)"; add_blocking_id "$ID"
-        HUMAN_WAIT=1 ;;
-      skill:*)
-        add_failure "'${BLOCKING#skill:}' 스킬을 아직 실행하지 않았다 ($LABEL)"; add_blocking_id "$ID" ;;
       checklist)
         # 자기보고가 아니다 — 엔진이 항목 수를 센다.
         CL_N="$(jq -r '(.checklist // []) | length' "$TASK/state.json" 2>/dev/null)"
@@ -305,7 +214,7 @@ while IFS= read -r step; do
         #  승인을 묻게 만들어 없앴다. true 와 done 은 이제 같다.)
         add_inject "→ 위를 마쳤으면 실행: bouncer done '$ID'   ($LABEL)"
         add_failure "아직 완료 표시 안 됨 ($LABEL)"; add_blocking_id "$ID"
-        PENDING_DONE=1; N_PENDING=$((N_PENDING+1)) ;;
+        ;;
 
     esac
     continue
@@ -400,16 +309,20 @@ done < <(jq -c '.steps[]?' <<<"$STAGE_JSON")
 # 판정
 # ─────────────────────────────────────────────────────────────
 if [ -n "${RUNNING:-}" ]; then
-  # 다음 단계로는 안 넘어간다. 실행이 끝나면 백그라운드 알림이 턴을 다시 열고 그때 판정한다.
-  # additionalContext 는 턴을 다시 연다 — 실행 중 내내 "아직 실행 중" 응답이 3초마다 반복됐다
-  # (ttuk-chiro-clinic 2026-10-23). 턴을 열지 않는 systemMessage 로 한 번만 알린다.
-  bouncer_state_update "$TASK" '.continue_streak = 0 | .reentry_count = 0'
-  _rkey="$STAGE:$RUNNING"
-  if [ "$(bouncer_state "$TASK" '.running_notice')" != "$_rkey" ]; then
-    bouncer_state_update "$TASK" --arg k "$_rkey" '.running_notice = $k'
-    jq -n --arg m "[ai-bouncer] [$STAGE] 실행 중: $RUNNING — 끝나면 결과로 다시 판정한다." '{systemMessage:$m}'
-  fi
-  exit 0
+  # 실행 중이면 여기서 끝날 때까지 기다렸다가 결과로 다시 판정한다.
+  # 막으면 기다리는 동안 같은 차단이 반복되고, 통과시키면 결과를 안 보고 끝난다.
+  # 상한(RUN_WAIT_MAX초)은 settings.json 의 Stop timeout 보다 짧아야 한다.
+  _deadline=$(( $(date +%s) + ${RUN_WAIT_MAX:-1700} ))
+  while [ "$(date +%s)" -lt "$_deadline" ]; do
+    _alive=0
+    for _p in $(jq -r '(.running // {})[]' "$TASK/state.json" 2>/dev/null); do
+      kill -0 "$_p" 2>/dev/null && _alive=1
+    done
+    [ "$_alive" = 0 ] && exec bash "${BASH_SOURCE[0]}" <<<"$INPUT"
+    sleep "${RUN_WAIT_POLL:-2}"
+  done
+  bouncer_state_update "$TASK" '.continue_streak = 0'
+  guarded_block "[$STAGE] 실행 중: $RUNNING — 끝나지 않아 다음 단계로 못 넘어간다. 끝나면 결과로 다시 판정한다."
 fi
 if [ -z "$FAILURES" ]; then
   # 반송돼 온 스테이지라면, 뭔가 달라졌을 때만 다시 내보낸다.
@@ -440,17 +353,15 @@ if [ -z "$FAILURES" ]; then
       _seq_ret="$(cat "$TASK/.tool_seq_at_return" 2>/dev/null)"; case "$_seq_ret" in ''|*[!0-9]*) _seq_ret=-1 ;; esac
       RETRY_SAME_TREE=0
       [ "$_seq_now" -gt "$_seq_ret" ] && RETRY_SAME_TREE=1
-      _seq_blk="$(cat "$TASK/.tool_seq_at_block" 2>/dev/null)"; case "$_seq_blk" in ''|*[!0-9]*) _seq_blk=-1 ;; esac
-      _idle=0; [ "$REENTRY" = "true" ] && [ "$_seq_now" = "$_seq_blk" ] && _idle=1
-      if [ "$RETRY_SAME_TREE" = 1 ] && [ "$_idle" = 0 ]; then
+      if [ "$RETRY_SAME_TREE" = 1 ]; then
         add_inject "ℹ️ [$STAGE] 작업 트리는 그대로지만 되돌아온 뒤 도구를 썼다 (환경 정리 등). 검증을 다시 시도한다."
       else
         # 여기서 그냥 막으면 아래 상한 검사에 영영 도달하지 못한다.
         # 고칠 의사가 없거나 고칠 수 없는 상황이면 세션을 사용자에게 돌려줘야 한다.
-        if [ "$_idle" = "1" ] || [ "$NS" -ge "$MAX_CONTINUE" ] 2>/dev/null; then
+        if [ "$NS" -ge "$MAX_CONTINUE" ] 2>/dev/null; then
           bouncer_state_update "$TASK" \
-            '.allowed_stop = true | .continue_streak = 0 | .returned_to = null | .returned_tree = null'
-          jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] 되돌아온 뒤 ${NS}번 동안 작업 트리가 그대로다$([ "$_idle" = "1" ] && printf ' (직전 차단 뒤 도구 호출 0회)').
+            '.continue_streak = 0 | .returned_to = null | .returned_tree = null'
+          jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] 되돌아온 뒤 ${NS}번 동안 작업 트리가 그대로다.
 고칠 수 없거나 고칠 것이 없는 상태로 보인다. 사용자에게 넘긴다.
 
 직전 실패:
@@ -464,7 +375,6 @@ $(skip_hint)
           offer_skip
           exit 0
         fi
-        printf '%s' "$_seq_now" > "$TASK/.tool_seq_at_block" 2>/dev/null || true
         guarded_block "[$STAGE] 되돌아온 뒤 작업 트리가 그대로다 — 아무것도 바뀌지 않았다. (${NS}/${MAX_CONTINUE})
 
 이대로 다시 검증에 보내면 같은 결과가 나온다. 무엇이 틀렸는지 다시 보고 실제로 고쳐라.
@@ -508,7 +418,7 @@ worktree가 정리된다. 지금 멈추면 커밋이 그 브랜치에 갇힌다.
     # 종단 도달 — lock 해제. 작업 문서는 남긴다.
     # 실패하면 .active 만 지워져 끝난 작업이 영구히 미완(ORPHAN)으로 뜬다
     if ! bouncer_state_update "$TASK" --arg t "$(date -u +%FT%TZ)" \
-      '.finished_at = $t | .allowed_stop = false'; then
+      '.finished_at = $t'; then
       guarded_block "⛔ [ai-bouncer] 완료를 기록하지 못했다 (상태 파일 잠금 경합).
 잠시 뒤 다시 시도하면 된다."
     fi
@@ -543,7 +453,7 @@ worktree가 정리된다. 지금 멈추면 커밋이 그 브랜치에 갇힌다.
      && { [ -z "$(bouncer_state "$TASK" '.worktree.path')" ] \
           || [ "$(bouncer_state "$TASK" '.worktree.merged')" = "true" ]; }; then
     if bouncer_state_update "$TASK" --arg n "$NEXT" --arg t "$(date -u +%FT%TZ)" \
-      '.current_stage = $n | .finished_at = $t | .allowed_stop = false
+      '.current_stage = $n | .finished_at = $t
        | .history += [{stage:$n, at:$t}]'; then
       rm -f "$TASK/.active"
       jq -n --arg c "${INJECT:+$INJECT$'\n\n'}✅ [$STAGE] 완료 → [$NEXT] 작업 종료(잠금 해제)${NEXT_TXT:+$'\n\n'}$NEXT_TXT" \
@@ -556,17 +466,10 @@ worktree가 정리된다. 지금 멈추면 커밋이 그 브랜치에 갇힌다.
   if ! bouncer_state_update "$TASK" --arg n "$NEXT" --arg t "$(date -u +%FT%TZ)" --arg s "$STAGE" \
     '.current_stage = $n
      | .continue_streak = 0
-     | .reentry_count = 0
-     | .allowed_stop = false
-     | .user_turns_at_wait = null
      | .returned_from = null
      | .history += [{stage:$n, at:$t}]'; then
     guarded_block "⛔ [ai-bouncer] 단계 전이를 기록하지 못했다 (상태 파일 잠금 경합).
 잠시 뒤 다시 시도하면 된다. 계속 반복되면 \`bouncer status\` 로 확인하라."
-  fi
-  # 읽기 전용 단계로 들어가면 그 순간의 작업 트리를 기준선으로 찍는다.
-  if [ "$(bouncer_stage "$CWD" "$NEXT" | jq -r '.forbid.edit_files // null')" = "true" ]; then
-    bouncer_ro_ensure_base "$TASK" "$WORK_ROOT" "$NEXT" || true
   fi
   # 이 턴에 쌓인 지시·게이트 출력을 함께 내보낸다. 버리면 `.shown` 은 이미
   # true 라 반송 뒤 재전달이 영영 안 되고, run 게이트 출력도 늘 사라진다.
@@ -580,7 +483,7 @@ STREAK="$(bouncer_state "$TASK" '.continue_streak')"; [ -n "$STREAK" ] || STREAK
 # 반송·재시도로 풀리지 않는다(실사용 6건). 한 번은 환경을 갖추게 하고, 또 그러면 사람에게 넘긴다.
 if [ -n "$BROKEN" ]; then
   if [ "$BROKEN_MAX" -ge 2 ]; then
-    bouncer_state_update "$TASK" '.allowed_stop = true | .continue_streak = 0 | .reentry_count = 0'
+    bouncer_state_update "$TASK" '.continue_streak = 0'
     offer_skip
     jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] $BROKEN — 명령을 찾을 수 없다 (exit 127, ${BROKEN_MAX}회).
 코드로 고칠 문제가 아니라 반송하지 않고 사용자에게 넘긴다.
@@ -604,30 +507,17 @@ $FAILURES${INJECT:+$'\n\n'}$INJECT"
 fi
 
 # ── on_fail 되돌아가기 ───────────────────────────────────────
-# 이 스테이지가 **모든** 파일 수정을 금지한다면 제자리 재시도는 무의미하다 → 1회로 반송.
-# 글로브 배열은 스코프 밖만 막는 것이라 제자리에서 고칠 수 있다 —
-# 여기서 배열까지 "수정 불가"로 보면 max_attempts가 무시되고 max_loops만 빨리 탄다.
 ON_FAIL="$(jq -r '.on_fail // empty' <<<"$STAGE_JSON")"
-# 사람을 기다리는 중이면 반송하지 않는다 — 답할 기회를 뺏기 때문이다.
-# 다만 사람과 무관한 조건(run 게이트)이 실패했다면 그건 반송 사유다.
-# 예전엔 HUMAN_WAIT 하나로 막아서, 기본 default.yaml 의 verify 처럼
-# 사람 확인이 함께 있는 스테이지는 on_fail 이 **절대** 발동하지 않았다.
-# 아직 done 표시를 안 한 것은 실패가 아니라 진행 중이다 — 그걸로 반송하면
-# 검증이 오래 걸리는 작업이 몇 번 멈췄다는 이유만으로 구현 단계로 쫓겨난다.
-if [ -n "$ON_FAIL" ] && { [ "$HARD_FAIL" = "1" ] || { [ "$HUMAN_WAIT" != "1" ] && [ "$PENDING_DONE" != "1" ]; }; }; then
-  CAN_FIX_HERE=1
-  [ "$(jq -r '.forbid.edit_files' <<<"$STAGE_JSON")" = "true" ] && CAN_FIX_HERE=0
-  # 사람 확인 게이트가 함께 미충족이면 즉시 반송하면 안 된다 — 답할 기회를
-  # 한 번도 안 주고 되돌려보내게 된다 (README 의 verify 예제가 정확히 그 모양).
-  [ "$HUMAN_WAIT" = "1" ] && CAN_FIX_HERE=1
+# 실제로 실패한 조건(run 실패 등)만 반송한다. 아직 안 돌렸거나 done 표시를 안 한 것은
+# 진행 중이다 — 그걸로 반송하면 검증을 시작도 안 했는데 구현 단계로 쫓겨난다.
+if [ -n "$ON_FAIL" ] && [ "$HARD_FAIL" = "1" ]; then
   ATTEMPTS="$(jq -r --arg s "$STAGE" '.stage_attempts[$s] // 0' "$TASK/state.json" 2>/dev/null)"
   [ -n "$ATTEMPTS" ] || ATTEMPTS=0
   ATTEMPTS=$(( ATTEMPTS + 1 ))
   [ "$ATTEMPTS" -le $(( MAX_ATTEMPTS + 1 )) ] 2>/dev/null \
     && bouncer_state_update "$TASK" --arg s "$STAGE" --argjson n "$ATTEMPTS" '.stage_attempts[$s] = $n'
 
-  LIMIT="$MAX_ATTEMPTS"; [ "$CAN_FIX_HERE" = "0" ] && LIMIT=1
-  if [ "$ATTEMPTS" -ge "$LIMIT" ] 2>/dev/null; then
+  if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ] 2>/dev/null; then
     if [ "$ON_FAIL" = "abort" ]; then
       bouncer_state_update "$TASK" --arg t "$(date -u +%FT%TZ)" \
         '.current_stage = "cancelled" | .cancelled_at = $t'
@@ -645,7 +535,7 @@ $FAILURES" '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
     if [ "$(( LOOPS + 1 ))" -gt "$MAX_LOOPS" ] 2>/dev/null; then
       # 이미 상한이면 카운터를 더 올리지 않는다 — 숫자가 실제 왕복 횟수와 어긋난다.
       bouncer_state_update "$TASK" \
-        '.allowed_stop = true | .continue_streak = 0 | .reentry_count = 0'
+        '.continue_streak = 0'
       jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] ↔ [$ON_FAIL] 사이를 ${LOOPS}번 왕복했다.
 같은 자리를 돌고 있으므로 더 밀지 않고 사용자에게 넘긴다.
 
@@ -693,7 +583,6 @@ $(skip_hint)
         | .attempts       |= ((. // {}) | with_entries(select(.key as $k | ($ids | index($k)) | not)))
         | .stage_attempts[$s] = 0
         | .continue_streak = 0
-        | .allowed_stop = false
         | .history += [{stage:$back, at:$t, returned_from:$s}]'; then
       guarded_block "⛔ [ai-bouncer] 반송을 기록하지 못했다 (상태 파일 잠금 경합).
 잠시 뒤 다시 시도하면 된다."
@@ -705,78 +594,8 @@ $FAILURES${INJECT:+$'\n\n'}$INJECT"
   fi
 fi
 
-if [ "$HUMAN_WAIT" = "1" ]; then
-  # 사람이 답해야 하는데 Stop을 막으면 답할 기회가 없다 — 멈추게 둔다.
-  # 다만 지시와 미충족 사유는 반드시 전달해야 한다. 여기서 버리면
-  # 이 스테이지의 프롬프트가 모델에게 한 번도 도달하지 않는다.
-  # 지금 시점의 턴 수를 새겨둔다. 이보다 늘어나야 사람이 답한 것으로 인정한다.
-  bouncer_state_update "$TASK" --argjson n "$UT_NOW" \
-    '.allowed_stop = true | .user_turns_at_wait = (.user_turns_at_wait // $n)'
-  # Stop 의 additionalContext 는 턴을 이어가게 만든다. 재진입 때마다 내보내면
-  # 사람을 기다리는 동안 hook 이 계속 깨워 Claude Code 상한(9회)까지 돈다.
-  # 재진입이면 조용히 멈추게 둔다 — 지시는 첫 Stop 에서 이미 전달됐다.
-  [ "$REENTRY" = "true" ] && exit 0
-  if [ -n "$INJECT" ] || [ -n "$FAILURES" ]; then
-    jq -n --arg c "[$STAGE] 아직 끝나지 않았다.${FAILURES:+$'\n\n'}${FAILURES:+미충족 조건:
-}$FAILURES${INJECT:+$'\n\n'}$INJECT" \
-      '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
-  fi
-  exit 0
-fi
-
-# 남은 게 done 표시뿐이면 한 번만 막는다. 백그라운드 작업을 기다리며 가벼운
-# 도구로 폴링하면 매 Stop 마다 같은 "완료 표시 안 됨" 차단이 반복됐다.
-# 스테이지나 남은 조건이 바뀌면 키가 달라져 다시 한 번 막는다.
-if [ "$N_FAIL" -gt 0 ] && [ "$N_FAIL" = "$N_PENDING" ] \
-   && [ "$HARD_FAIL" != "1" ] && [ "$HUMAN_WAIT" != "1" ]; then
-  _pkey="$STAGE:$(printf '%s' "$FAILURES" | cksum | cut -d' ' -f1)"
-  _pnote="$(bouncer_state "$TASK" '.pending_notice')"
-  if [ "$_pnote" = "$_pkey" ] || [ "$_pnote" = "$_pkey:told" ]; then
-    bouncer_state_update "$TASK" '.continue_streak = 0 | .reentry_count = 0'
-    # 안내는 한 번만. 백그라운드 알림마다 Stop 이 돌아서 같은 줄이 화면에 계속 쌓였다.
-    if [ "$_pnote" = "$_pkey" ]; then
-      bouncer_state_update "$TASK" --arg k "$_pkey:told" '.pending_notice = $k'
-      jq -n --arg m "[ai-bouncer] [$STAGE] 완료 표시 대기 중 — 끝났으면 실행: bouncer done '$(printf '%s' "$BLOCKING_IDS" | head -1)'" \
-        '{systemMessage:$m}'
-    fi
-    exit 0
-  fi
-  bouncer_state_update "$TASK" --arg k "$_pkey" '.pending_notice = $k'
-fi
-
-# 직전 차단 이후 도구를 하나도 안 썼는데 또 멈추려 한다 = 기다리는 중이다
-# (백그라운드 작업 완료 대기 등). 다시 막아봐야 같은 응답만 반복되므로 멈추게 둔다.
-# 백그라운드 작업이 끝나면 그 알림으로 턴이 다시 열리고, 그때 다시 판정한다.
-SEQ_NOW="$(cat "$TASK/.tool_seq" 2>/dev/null)"; case "$SEQ_NOW" in ''|*[!0-9]*) SEQ_NOW=0 ;; esac
-SEQ_AT_BLOCK="$(cat "$TASK/.tool_seq_at_block" 2>/dev/null)"; case "$SEQ_AT_BLOCK" in ''|*[!0-9]*) SEQ_AT_BLOCK=-1 ;; esac
-if [ "$REENTRY" = "true" ] && [ "$SEQ_NOW" = "$SEQ_AT_BLOCK" ]; then
-  bouncer_state_update "$TASK" '.continue_streak = 0 | .reentry_count = 0'
-  jq -n --arg m "[ai-bouncer] [$STAGE] 대기 중 — 미충족 조건이 남아 있어 다음 턴에 이어서 확인한다." \
-    '{systemMessage:$m}'
-  exit 0
-fi
-
-# 재진입 상태에서 상한의 두 배를 넘겼다면 카운터가 어딘가에서 리셋되고 있다는 뜻이다.
-# 그 경우 워크플로우 진행보다 세션을 사용자에게 돌려주는 쪽이 안전하다.
-REENTRY_N="$(jq -r '.reentry_count // 0' "$TASK/state.json" 2>/dev/null)"
-if [ "$REENTRY" = "true" ]; then
-  REENTRY_N=$(( REENTRY_N + 1 ))
-  bouncer_state_update "$TASK" --argjson n "$REENTRY_N" '.reentry_count = $n'
-else
-  bouncer_state_update "$TASK" '.reentry_count = 0'; REENTRY_N=0
-fi
-if [ "$REENTRY_N" -gt $(( MAX_CONTINUE * 2 )) ] 2>/dev/null; then
-  bouncer_state_update "$TASK" '.allowed_stop = true | .continue_streak = 0 | .reentry_count = 0'
-  jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] Stop hook 재진입이 비정상적으로 반복됐다 (${REENTRY_N}회).
-워크플로우를 더 밀지 않고 세션을 사용자에게 돌려준다.
-
-미충족 조건:
-$FAILURES" '{hookSpecificOutput:{hookEventName:"Stop", additionalContext:$c}}'
-  exit 0
-fi
-
 if [ "$STREAK" -ge "$MAX_CONTINUE" ] 2>/dev/null; then
-  bouncer_state_update "$TASK" '.allowed_stop = true | .continue_streak = 0'
+  bouncer_state_update "$TASK" '.continue_streak = 0'
   jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ ${MAX_CONTINUE}회 연속 진행했지만 [$STAGE] 단계를 벗어나지 못했다.
 
 미충족 조건:
@@ -792,8 +611,7 @@ $(skip_hint)
   exit 0
 fi
 
-bouncer_state_update "$TASK" '.continue_streak = (.continue_streak // 0) + 1 | .allowed_stop = false'
-printf '%s' "$SEQ_NOW" > "$TASK/.tool_seq_at_block" 2>/dev/null || true
+bouncer_state_update "$TASK" '.continue_streak = (.continue_streak // 0) + 1'
 guarded_block "[$STAGE] 아직 끝나지 않았다.
 
 미충족 조건:

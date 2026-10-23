@@ -8,7 +8,6 @@
 #   bouncer scope <step-id> [경로…|--clear]  run 명령의 {scope}(없으면 끝)에 넣을 이번 작업 범위 (없으면 전체)
 #   bouncer done <step-id>            사람 확인이 필요한 step을 완료 처리
 #   bouncer cancel                    작업 취소
-#   bouncer restore                   읽기 전용 단계에서 바뀐 작업 트리를 단계 진입 시점으로 되돌린다
 #   bouncer todo [add|done <n>|drop <n>]  할 일 목록 (checklist 게이트가 이걸 센다)
 #   bouncer skip <step-id>            엔진이 포기한 조건을 이번 작업에서만 건너뛴다
 #   bouncer release [--force]         죽은 세션이 남긴 잠금 확인 / 회수
@@ -232,7 +231,7 @@ $(jq -r 'keys[] | "  " + .' <<<"$choices")"
       repo_root:$root, work_root:$root, worktree:null,
       base_sha:$sha, base_branch:$branch,
       choices:$choices, evidence:{}, shown:{},
-      continue_streak:0, allowed_stop:false,
+      continue_streak:0,
       history:[{stage:$stage, at:$now}]
     }' > "$dir/state.json" || die "state.json 생성 실패"
 
@@ -441,47 +440,11 @@ cmd_done() {
   kind="$(jq -r '.kind' <<<"$step")"; blocking="$(jq -r '.blocking // empty' <<<"$step")"
   [ "$kind" = "run" ] && die "'$id'는 실행 step이다. 'bouncer run $id'를 써라 — 결과는 엔진이 판정한다."
   case "$blocking" in
-    plan_approved) die "'$id'는 plan mode 승인으로만 통과한다. ExitPlanMode를 호출하라." ;;
-    skill:*)       die "'$id'는 '${blocking#skill:}' 스킬을 실제로 실행해야 통과한다." ;;
     # 지시만 하는 step 이다. 거절하면 옛 습관대로 부른 모델이 오류를 고치느라 턴을 쓴다(258건).
     "")            printf 'DONE\t%s\t(blocking이 아니다 — 표시할 것 없다)\n' "$id"; return 0 ;;
   esac
   bouncer_state_update "$TASK" --arg k "$id" '.evidence[$k] = true'
   printf 'DONE\t%s\n' "$id"
-}
-
-# 읽기 전용 단계는 명령을 미리 막지 않고 실행 뒤 작업 트리 변화를 잡는다.
-# 잡혔을 때 모델이 손으로 되돌리게 하면(git checkout 등) 그 명령이 또 쓰기라 막히고,
-# 구현 단계에서 만든 미커밋 변경까지 날아간다. 그래서 엔진이 진입 시점 스냅샷으로 되돌린다.
-# 진짜 인덱스는 건드리지 않는다. 되돌리기 전 내용은 git tree 객체로 남겨 복구 경로를 알려준다.
-cmd_restore() {
-  need_task --mutating
-  [ "$(bouncer_stage "$PROJECT" "$STAGE" | jq -r '.forbid.edit_files // null')" = "true" ] \
-    || die "지금 단계($STAGE)는 읽기 전용이 아니다. 되돌릴 기준선이 없다."
-  local ch base w top now idx n=0 st path
-  ch="$(bouncer_ro_changes "$TASK" "$STAGE")"
-  if [ -z "$ch" ]; then
-    printf 'CLEAN\t작업 트리가 단계 진입 때와 같다.\n'; return 0
-  fi
-  base="$(bouncer_state "$TASK" '.ro_base.tree')"; w="$(bouncer_state "$TASK" '.ro_base.root')"
-  top="$(git -C "$w" rev-parse --show-toplevel 2>/dev/null)" || die "작업 트리를 찾을 수 없다: $w"
-  now="$(bouncer_tree_obj "$w" "$TASK/.ro.index")" || die "현재 작업 트리를 읽지 못했다."
-  idx="$TASK/.ro.restore.index"; rm -f "$idx"
-  GIT_INDEX_FILE="$idx" git -C "$top" read-tree "$base" 2>/dev/null || die "기준선($base)을 읽지 못했다."
-  while IFS= read -r -d '' st && IFS= read -r -d '' path; do
-    case "$st" in
-      A) rm -f -- "$top/$path" ;;          # 이 단계에서 새로 생긴 파일
-      *) GIT_INDEX_FILE="$idx" git -C "$top" checkout-index -f -- "$path" >/dev/null 2>&1 \
-           || die "되돌리지 못했다: $path" ;;
-    esac
-    n=$((n+1))
-  done < <(git -C "$top" diff-tree -r -z --no-renames --name-status "$base" "$now")
-  rm -f "$idx"
-  ch="$(bouncer_ro_changes "$TASK" "$STAGE")"
-  [ -z "$ch" ] || die "되돌린 뒤에도 차이가 남았다:
-$ch"
-  printf 'RESTORED\t%s개 경로를 단계 진입 시점으로 되돌렸다.\n' "$n"
-  printf '되돌리기 전 내용이 필요하면: git -C %s restore --source=%s -- <경로>\n' "$top" "$now"
 }
 
 cmd_cancel() {
@@ -632,9 +595,6 @@ cmd_skip() {
 cmd_todo() {
   need_task
   local sub="${1:-list}"; shift 2>/dev/null || true
-  # 필드가 없으면 bouncer_state 가 빈 값을 준다 — --argjson 이 깨진다.
-  local UT; UT="$(jq -r '.user_turns // 0' "$TASK/state.json" 2>/dev/null)"
-  [ "$UT" -eq "$UT" ] 2>/dev/null || UT=0
   case "$sub" in
     list|"")
       local n
@@ -658,8 +618,8 @@ cmd_todo() {
       local t
       for t in "$@"; do
         [ -n "$t" ] || continue
-        bouncer_state_update "$TASK" --arg t "$t" --argjson u "$UT" \
-          '.checklist = ((.checklist // []) + [{text:$t, done:false}]) | .checklist_turn = $u' \
+        bouncer_state_update "$TASK" --arg t "$t" \
+          '.checklist = ((.checklist // []) + [{text:$t, done:false}])' \
           || die "목록을 갱신하지 못했다."
       done
       cmd_todo list ;;
@@ -680,10 +640,8 @@ cmd_todo() {
         || die "그런 항목이 없다: $i"
       # 지운 항목은 기록에 남긴다. 조용히 사라지면 목록이 게이트 역할을 못 한다.
       bouncer_state_update "$TASK" --argjson i "$((i-1))" --arg t "$(date -u +%FT%TZ)" \
-        --argjson u "$UT" \
         '.dropped = ((.dropped // []) + [(.checklist[$i] + {dropped_at:$t})])
-         | .checklist = (.checklist | del(.[$i]))
-         | .checklist_turn = $u' || die "갱신 실패."
+         | .checklist = (.checklist | del(.[$i]))' || die "갱신 실패."
       printf '뺐다. 사용자에게 왜 뺐는지 알려라.\n'
       cmd_todo list ;;
     dropped)
@@ -773,7 +731,6 @@ case "${1:-}" in
   scope)     shift; cmd_scope "$@" ;;
   done)      shift; cmd_done "$@" ;;
   cancel)    shift; cmd_cancel "$@" ;;
-  restore)   shift; cmd_restore "$@" ;;
   workflows) shift; cmd_workflows "$@" ;;
   release)   shift; cmd_release "$@" ;;
   skip)      shift; cmd_skip "$@" ;;

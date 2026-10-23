@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """workflow.yaml -> workflow.compiled.json
 
+기본값(엔진 소유 default.yaml) + 레포 workflow.yaml(덧붙이거나 바꾼 것만)을 병합해 컴파일한다.
+병합 규칙은 merge_raw() 위의 주석을 본다.
+
 hook은 컴파일 결과(json)만 읽는다. yaml 파싱은 여기서 한 번만 일어난다.
 pyyaml이 있으면 쓰고, 없으면 내장 파서로 폴백한다 (macOS 기본 python3엔 pyyaml이 없다).
 """
@@ -286,18 +289,21 @@ def load_yaml(path, force_mini=False):
 STAGE_KEYS = {'steps', 'forbid', 'on_fail'}
 STEP_KEYS = {'label', 'inject', 'inject_file', 'run', 'by', 'timeout', 'blocking', 'optional'}
 ENGINE_TIMEOUT_MAX = 60   # Stop hook 예산을 먹지 않게. 넘으면 by: model을 써야 한다.
-FORBID_KEYS = {'edit_files', 'push', 'bash', 'reason'}
-# 플러그인 스킬은 이름에 콜론이 들어간다 (예: telegram:access)
-SKILL_RE = re.compile(r'^skill:[A-Za-z0-9][\w.:-]*$')
+FORBID_KEYS = {'push', 'reason'}
+# 폐기된 입력. 만나면 오류 없이 버린다(예전 yaml이 계속 컴파일되도록).
+#   forbid.edit_files — plan 은 Claude Code plan mode 가 막는다.
+#   forbid.bash — 셸 명령 정규식 차단. 실사용 차단은 push 뿐이었다.
+#   blocking: plan_approved — 계획 승인은 Claude Code plan mode 가 맡는다.
+#   blocking: done — true 와 같은 뜻이 됐다(옛 이름). true 로 읽는다.
+RETIRED_FORBID = {'edit_files', 'bash'}
+RETIRED_BLOCKING = ('plan_approved',)
 
 
 def _valid_blocking(v):
     # 파이썬에서 1 == True 라 정수 1이 조용히 통과한다. 타입을 정확히 본다.
     if isinstance(v, bool):
         return v is True
-    if isinstance(v, str):
-        return v in ('plan_approved', 'checklist', 'done') or bool(SKILL_RE.match(v))
-    return False
+    return v == 'checklist'
 
 
 class ConfigError(Exception):
@@ -319,7 +325,8 @@ def _compile_steps(stage, items, base_dir, sources):
         where = 'stages.%s.steps[%d]' % (stage, i)
         if not isinstance(item, dict):
             _err(where, '매핑이어야 한다')
-        unknown = set(item) - STEP_KEYS
+        item_dir = item.get('_dir', base_dir)
+        unknown = set(item) - STEP_KEYS - {'_dir'}
         if unknown:
             _err(where, '알 수 없는 키: %s' % ', '.join(sorted(unknown)))
 
@@ -330,9 +337,12 @@ def _compile_steps(stage, items, base_dir, sources):
         kind = kinds[0]
 
         blocking = item.get('blocking')
+        if isinstance(blocking, str) and blocking in RETIRED_BLOCKING:
+            blocking = None
+        elif blocking == 'done':
+            blocking = True
         if blocking is not None and not _valid_blocking(blocking):
-            _err(where, 'blocking 값은 true / plan_approved / checklist / done / skill:<이름> 만 가능하다 '
-                        '(현재: %r)' % blocking)
+            _err(where, 'blocking 값은 true / checklist 만 가능하다 (현재: %r)' % blocking)
         if blocking != True and blocking is not None and kind == 'run':
             _err(where, '%r는 inject 전용이다 — 도구 사용을 hook이 관찰하는 방식이라 '
                         '셸 명령에는 적용할 수 없다' % blocking)
@@ -380,13 +390,13 @@ def _compile_steps(stage, items, base_dir, sources):
                 if not isinstance(text, str) or not text.strip():
                     _err(where, 'inject는 비어 있지 않은 문자열이어야 한다')
             else:
-                path = os.path.join(base_dir, item['inject_file'])
+                path = os.path.join(item_dir, item['inject_file'])
                 if not os.path.isfile(path):
                     _err(where, '프롬프트 파일이 없다: %s' % path)
                 with open(path, encoding='utf-8') as fh:
                     text = fh.read()
                 sources.append(path)
-                step['source'] = item['inject_file']
+                step['source'] = os.path.relpath(path, base_dir)
             step['text'] = text.rstrip()
             for k in ('timeout', 'by'):
                 if k in item:
@@ -396,37 +406,23 @@ def _compile_steps(stage, items, base_dir, sources):
 
 
 def _compile_forbid(stage, forbid):
-    empty = {'edit_files': None, 'push': False, 'bash': [], 'reason': ''}
+    empty = {'push': False, 'reason': ''}
     if forbid is None:
         return empty
     if not isinstance(forbid, dict):
         _err('stages.%s.forbid' % stage, '매핑이어야 한다')
-    unknown = set(forbid) - FORBID_KEYS
+    unknown = set(forbid) - FORBID_KEYS - RETIRED_FORBID
     if unknown:
         _err('stages.%s.forbid' % stage, '알 수 없는 키: %s' % ', '.join(sorted(unknown)))
 
-    edit = forbid.get('edit_files')
-    if edit is not None and not isinstance(edit, (bool, list)):
-        _err('stages.%s.forbid.edit_files' % stage, 'true 또는 glob 배열이어야 한다')
-
-    patterns = forbid.get('bash') or []
-    if not isinstance(patterns, list):
-        _err('stages.%s.forbid.bash' % stage, '정규식 배열이어야 한다')
-    for p in patterns:
-        try:
-            re.compile(p)
-        except re.error as exc:
-            _err('stages.%s.forbid.bash' % stage, '정규식 오류 `%s` — %s' % (p, exc))
-
-    if (edit or forbid.get('push') or patterns) and not forbid.get('reason'):
+    if forbid.get('push') and not forbid.get('reason'):
         _err('stages.%s.forbid' % stage,
              'reason이 필요하다 — 차단당한 모델에게 이유를 알려주지 않으면 헤맨다')
 
-    return {'edit_files': edit, 'push': bool(forbid.get('push', False)),
-            'bash': list(patterns), 'reason': forbid.get('reason', '')}
+    return {'push': bool(forbid.get('push', False)), 'reason': forbid.get('reason', '')}
 
 
-ROOT_KEYS = {'version', 'settings', 'workflows', 'stages'}
+ROOT_KEYS = {'version', 'base', 'settings', 'workflows', 'stages'}
 
 # 기본값은 코드에 둔다. yaml은 덮어쓰기만 한다 —
 # 그래야 새 설정이 생겨도 기존 yaml을 고칠 필요가 없다.
@@ -442,6 +438,131 @@ SETTINGS = {
 RETIRED_SETTINGS = {'update_check', 'update_check_interval_hours'}
 
 
+# ─────────────────────────────────────────────────────────────
+# 기본값 + 레포 override 병합
+#
+# 기본값(default.yaml)은 엔진과 함께 설치되고 업데이트 때마다 덮어쓴다.
+# 레포 workflow.yaml 에는 덧붙이거나 바꾼 것만 적는다. 파일이 없거나 비어도 된다.
+#
+#   settings       키 단위로 덮는다.
+#   workflows      이름별로 병합한다. 같은 이름이면 label / stages 키 단위로 덮고, 새 이름이면 추가.
+#   stages         이름별로 병합한다. 새 이름이면 통째로 추가.
+#     steps        override 의 step 을 순서대로 적용한다:
+#                    · label 이 기본값 step 과 같으면 그 step 을 교체한다(자리 유지)
+#                    · 새 label(또는 label 없음)이면 기본값 step 들 뒤에 붙인다
+#                  `remove: [label…]` 은 기본값 step 을 지운다(교체·추가보다 먼저 적용, 없는 label 은 무시).
+#     forbid       키 단위로 덮는다(push: false 로 기본 금지를 끌 수 있다).
+#     on_fail      override 에 적혀 있으면 덮는다.
+#   루트 `base: none` 이면 기본값 없이 이 파일 하나만 쓴다(완전히 독립된 워크플로우).
+#
+# 기본값 step 의 inject_file 은 default.yaml 이 있는 디렉토리 기준, override step 은 workflow.yaml 기준이다.
+# ─────────────────────────────────────────────────────────────
+
+def _tag(steps, d):
+    out = []
+    for st in steps or []:
+        if isinstance(st, dict):
+            st = dict(st)
+            st['_dir'] = d
+        out.append(st)
+    return out
+
+
+def merge_raw(base, base_dir, ov, ov_dir):
+    """base(None 가능)와 override 를 병합한 raw 를 돌려준다. step 에는 '_dir' 가 붙는다."""
+    ov = ov or {}
+    if not isinstance(ov, dict):
+        _err('root', '최상위는 매핑이어야 한다')
+    unknown = set(ov) - ROOT_KEYS
+    if unknown:
+        _err('root', '알 수 없는 최상위 키: %s (가능: %s)'
+             % (', '.join(sorted(unknown)), ', '.join(sorted(ROOT_KEYS))))
+    if ov.get('version', 1) != 1:
+        _err('version', '지원하지 않는 버전 %r (1이어야 한다)' % ov.get('version'))
+    if base is None:
+        out = {k: v for k, v in ov.items() if k != 'base'}
+        stages = ov.get('stages')
+        if isinstance(stages, dict):
+            out['stages'] = {n: (dict(b, steps=_tag(b.get('steps'), ov_dir)) if isinstance(b, dict) else b)
+                             for n, b in stages.items()}
+        return out
+
+    out = {'version': 1}
+    for key in ('settings',):
+        given = ov.get(key) or {}
+        if not isinstance(given, dict):
+            _err(key, '매핑이어야 한다')
+        out[key] = dict(base.get(key) or {}, **given)
+
+    wfs = {n: dict(b or {}) for n, b in (base.get('workflows') or {}).items()}
+    given = ov.get('workflows') or {}
+    if not isinstance(given, dict):
+        _err('workflows', '매핑이어야 한다')
+    for n, b in given.items():
+        if b is not None and not isinstance(b, dict):
+            _err('workflows.%s' % n, '매핑이어야 한다')
+        wfs[n] = dict(wfs.get(n) or {}, **(b or {}))
+    out['workflows'] = wfs
+
+    stages = {}
+    for n, b in (base.get('stages') or {}).items():
+        b = dict(b or {})
+        b['steps'] = _tag(b.get('steps'), base_dir)
+        stages[n] = b
+    given = ov.get('stages') or {}
+    if not isinstance(given, dict):
+        _err('stages', '매핑이어야 한다')
+    for n, o in given.items():
+        o = o or {}
+        if not isinstance(o, dict):
+            _err('stages.%s' % n, '매핑이어야 한다')
+        unknown = set(o) - STAGE_KEYS - {'remove'}
+        if unknown:
+            _err('stages.%s' % n, '알 수 없는 키: %s' % ', '.join(sorted(unknown)))
+        if n not in stages:
+            stages[n] = dict(o, steps=_tag(o.get('steps'), ov_dir))
+            stages[n].pop('remove', None)
+            continue
+        cur = stages[n]
+        steps = list(cur['steps'])
+        remove = o.get('remove') or []
+        if not isinstance(remove, list):
+            _err('stages.%s.remove' % n, 'label 배열이어야 한다')
+        steps = [st for st in steps if st.get('label') not in remove]
+        add = o.get('steps')
+        if add is not None and not isinstance(add, list):
+            _err('stages.%s.steps' % n, '리스트여야 한다')
+        for st in _tag(add, ov_dir):
+            if not isinstance(st, dict):
+                steps.append(st)
+                continue
+            label = st.get('label')
+            idx = next((i for i, x in enumerate(steps) if label and x.get('label') == label), None)
+            if idx is None:
+                steps.append(st)
+            else:
+                steps[idx] = st
+        cur['steps'] = steps
+        if 'forbid' in o:
+            f = o['forbid'] or {}
+            if not isinstance(f, dict):
+                _err('stages.%s.forbid' % n, '매핑이어야 한다')
+            cur['forbid'] = dict(cur.get('forbid') or {}, **f)
+        if 'on_fail' in o:
+            cur['on_fail'] = o['on_fail']
+    out['stages'] = stages
+    return out
+
+
+def find_base(engine_dir):
+    """엔진과 함께 설치된 default.yaml. 소스 저장소에서는 ../config/default.yaml."""
+    for c in (os.path.join(engine_dir, 'default.yaml'),
+              os.path.join(engine_dir, '..', 'config', 'default.yaml')):
+        if os.path.isfile(c):
+            return os.path.abspath(c)
+    return None
+
+
 def compile_config(raw, base_dir, sources):
     if not isinstance(raw, dict):
         _err('root', '최상위는 매핑이어야 한다')
@@ -449,7 +570,7 @@ def compile_config(raw, base_dir, sources):
     if unknown:
         _err('root', '알 수 없는 최상위 키: %s (가능: %s)'
              % (', '.join(sorted(unknown)), ', '.join(sorted(ROOT_KEYS))))
-    if raw.get('version') != 1:
+    if raw.get('version', 1) != 1:
         _err('version', '지원하지 않는 버전 %r (1이어야 한다)' % raw.get('version'))
 
     settings = dict(SETTINGS)
@@ -546,15 +667,29 @@ def main(argv):
         sys.stderr.write('usage: compile.py <workflow.yaml> [out.json] [--builtin-parser]\n')
         return 2
     src, dst = argv[1], (argv[2] if len(argv) > 2 else None)
-    if not os.path.isfile(src):
-        sys.stderr.write('ai-bouncer: 워크플로우 파일 없음: %s\n' % src)
-        return 2
 
     base_dir = os.path.dirname(os.path.abspath(src))
     sources = [os.path.abspath(src)]
     try:
-        raw, parser = load_yaml(src, force_mini)
-        compiled = compile_config(raw, base_dir, sources)
+        # 레포 yaml 이 없거나 비어 있으면 빈 override 다(기본값만 쓴다).
+        if os.path.isfile(src):
+            ov, parser = load_yaml(src, force_mini)
+        else:
+            ov, parser = {}, 'none'
+        ov = ov or {}
+        if not isinstance(ov, dict):
+            raise ConfigError('최상위는 매핑이어야 한다')
+        base_raw = base_path = None
+        if ov.get('base') not in (None, 'none'):
+            raise ConfigError("base 는 `none` 만 쓸 수 있다 (현재: %r)" % ov.get('base'))
+        if ov.get('base') != 'none':
+            base_path = find_base(os.path.dirname(os.path.abspath(__file__)))
+            if base_path is None:
+                raise ConfigError('엔진 기본값(default.yaml)을 찾을 수 없다 — 다시 설치하라')
+            base_raw, parser = load_yaml(base_path, force_mini)
+            sources.append(base_path)
+        merged = merge_raw(base_raw, os.path.dirname(base_path) if base_path else None, ov, base_dir)
+        compiled = compile_config(merged, base_dir, sources)
     except ConfigError as exc:
         sys.stderr.write('ai-bouncer: workflow.yaml 오류 — %s\n' % exc)
         return 1
@@ -565,8 +700,9 @@ def main(argv):
     # yaml + 참조된 프롬프트 파일 전체의 해시 — 하나라도 바뀌면 재컴파일된다
     digest = hashlib.sha256()
     for path in sources:
-        with open(path, 'rb') as fh:
-            digest.update(fh.read())
+        if os.path.isfile(path):
+            with open(path, 'rb') as fh:
+                digest.update(fh.read())
     compiled['source_sha256'] = digest.hexdigest()
     compiled['sources'] = [os.path.relpath(p, base_dir) for p in sources]
     compiled['compiled_at'] = datetime.now(timezone.utc).isoformat()
