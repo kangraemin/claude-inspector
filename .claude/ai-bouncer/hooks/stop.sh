@@ -24,6 +24,39 @@ REENTRY="$(jq -r '.stop_hook_active // false' <<<"$INPUT")"
 
 TASK="$(bouncer_my_task "$CWD" "$SESSION")" || exit 0      # 내 작업 없으면 관여 안 함
 COMPILED="$(bouncer_compiled_file "$CWD")"
+
+# 출구 안전장치 — 턴을 다시 여는 출력(block / additionalContext)은 경로가 10곳이 넘는다.
+# 경로마다 막으면 새 경로가 생길 때 또 샌다: "실행 중" 안내 하나가 도구 없는 응답을
+# 939번 반복시켰다 (ttuk-chiro-clinic 2026-10-22, 5회 이상 연속 루프 54건).
+# 그래서 모든 출력을 여기서 거른다. 다시 연 뒤 모델이 도구를 하나도 안 쓰고 또 멈추는 일이
+# IDLE_REOPEN_MAX 번 이어지면, 무슨 출력이든 턴을 열지 않는 systemMessage 로 바꿔 돌려준다.
+IDLE_REOPEN_MAX=2
+_OUT="$(mktemp)"; exec 3>&1 >"$_OUT"
+reopen_guard() {
+  local out seq at n txt
+  out="$(cat "$_OUT" 2>/dev/null)"; rm -f "$_OUT"; exec 1>&3
+  if [ -n "$out" ] && jq -e '(.decision == "block") or ((.hookSpecificOutput.additionalContext // "") != "")' \
+       <<<"$out" >/dev/null 2>&1; then
+    seq="$(cat "$TASK/.tool_seq" 2>/dev/null)"; case "$seq" in ''|*[!0-9]*) seq=0 ;; esac
+    at="$(cat "$TASK/.tool_seq_at_reopen" 2>/dev/null)"
+    n="$(cat "$TASK/.idle_reopens" 2>/dev/null)"; case "$n" in ''|*[!0-9]*) n=0 ;; esac
+    if [ "$REENTRY" = "true" ] && [ "$seq" = "$at" ]; then n=$(( n + 1 )); else n=0; fi
+    printf '%s' "$seq" > "$TASK/.tool_seq_at_reopen" 2>/dev/null || true
+    if [ "$n" -ge "$IDLE_REOPEN_MAX" ]; then
+      printf 0 > "$TASK/.idle_reopens" 2>/dev/null || true
+      txt="$(jq -r '.reason // .hookSpecificOutput.additionalContext' <<<"$out")"
+      jq -n --arg m "[ai-bouncer] 도구 없이 ${n}번 연속 멈췄다 — 턴을 다시 열지 않고 돌려준다.
+
+$txt
+
+이어서 할 일을 지시해 주세요: 1. 계속 진행한다  2. 접근을 바꾼다  3. 작업을 중단한다 (bouncer cancel)" '{systemMessage:$m}'
+      return
+    fi
+    printf '%s' "$n" > "$TASK/.idle_reopens" 2>/dev/null || true
+  fi
+  [ -z "$out" ] || printf '%s\n' "$out"
+}
+trap reopen_guard EXIT
 # 진단은 guarded_block 이 정의된 뒤에 한다 — 직접 block 을 내보내면
 # 상한 카운터를 안 거쳐 세션이 영원히 안 돌아온다 (30/30 차단이 재현됐다).
 CONFIG_BROKEN=0
