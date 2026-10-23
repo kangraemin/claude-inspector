@@ -4,12 +4,12 @@
 #   bouncer scan                      시작 전에 알아야 할 것 전부 (상태 + 모드 + 선택 항목)
 #   bouncer start <workflow> <slug> [--parallel] [--off <id> ...]
 #   bouncer status                    현재 단계와 남은 조건
-#   bouncer run <step-id>             그 step의 명령을 실행하고 결과를 기록
+#   bouncer run <step-id> [--failed]  그 step의 명령을 실행하고 결과를 기록 (--failed: 직전 실패분만)
 #   bouncer scope <step-id> [경로…|--clear]  run 명령의 {scope}(없으면 끝)에 넣을 이번 작업 범위 (없으면 전체)
 #   bouncer done <step-id>            사람 확인이 필요한 step을 완료 처리
 #   bouncer cancel                    작업 취소
 #   bouncer todo [add|done <n>|drop <n>]  할 일 목록 (checklist 게이트가 이걸 센다)
-#   bouncer skip <step-id>            엔진이 포기한 조건을 이번 작업에서만 건너뛴다
+#   bouncer skip <step-id> [--user '<말>']  엔진이 포기했거나 사용자가 채팅에서 직접 시킨 조건을 이번 작업에서만 건너뛴다
 #   bouncer release [--force]         죽은 세션이 남긴 잠금 확인 / 회수
 #   bouncer resume [task-id]          회수된 작업을 이 세션이 다시 잡는다
 #   bouncer workflows                 정의된 모드 목록
@@ -337,7 +337,8 @@ hook은 이 상태에서 작업을 진행시키지 않는다.
 # ── 실행 / 완료 ──────────────────────────────────────────────
 cmd_run() {
   need_task --mutating
-  local id="${1:-}"; [ -n "$id" ] || die "usage: bouncer run <step-id>"
+  local id="${1:-}"; [ -n "$id" ] || die "usage: bouncer run <step-id> [--failed]"
+  local failed=""; [ "${2:-}" = "--failed" ] && failed=1
   local step; step="$(step_json "$id" "$STAGE")"
   [ -n "$step" ] || die "현재 단계($STAGE)에 '$id' step이 없다. 'bouncer status'로 확인하라."
   local kind cmd tmo
@@ -350,6 +351,25 @@ cmd_run() {
   kind="$(jq -r '.kind' <<<"$step")"
   [ "$kind" = "run" ] || die "'$id'는 실행 step이 아니다."
   cmd="$(jq -r '.run' <<<"$step")"; tmo="$(jq -r '.timeout' <<<"$step")"
+  local scope_now; scope_now="$(jq -c --arg k "$id" '.scope[$k] // []' "$TASK/state.json")"
+  if [ -n "$failed" ]; then
+    # 지난 실행에서 실패한 테스트만 다시 돌린다 (먹맵: 범위 e2e 중 1건 실패에 6분짜리를 처음부터).
+    # 같은 범위로 bouncer run 이 실패한 직후에만 — 그래야 나머지가 그 범위에서 통과했다는 게 기록에 있다.
+    [ "$(jq -c --arg k "$id" '.failed_scope[$k] // "none"' "$TASK/state.json")" = "$scope_now" ] \
+      || die "'$id' 를 지금 범위로 bouncer run 해서 실패한 기록이 없다. --failed 는 그 직후에만 쓴다."
+    local flag
+    case "$cmd" in
+      *playwright*) flag="--last-failed" ;;
+      *pytest*)     flag="--lf" ;;
+      *jest*)       flag="--onlyFailures" ;;
+      *) die "'$id' 명령에서 실패한 것만 다시 돌리는 옵션을 모른다 (playwright·pytest·jest 지원)." ;;
+    esac
+    bouncer_scopable "$cmd" || die "'$id' 명령은 여러 명령이 이어져 있어 옵션을 붙일 곳을 모른다."
+    case "$cmd" in
+      *'{scope}'*) local ph='{scope}'; cmd="${cmd//"$ph"/"$flag $ph"}" ;;
+      *) cmd="$cmd $flag" ;;
+    esac
+  fi
   cmd="$(bouncer_scoped_cmd "$TASK" "$id" "$cmd")"
 
   printf '▶ %s\n  $ %s\n\n' "$(jq -r '.label' <<<"$step")" "$cmd"
@@ -366,7 +386,7 @@ cmd_run() {
 
   if [ "$rc" -eq 0 ]; then
     bouncer_state_update "$TASK" --arg k "$id" --arg t "$(bouncer_evidence_tree "$TASK" "$WORK_ROOT")" \
-      '.evidence[$k] = true | .evidence_tree[$k] = $t | del(.broken[$k])'
+      '.evidence[$k] = true | .evidence_tree[$k] = $t | del(.broken[$k]) | del(.failed_scope[$k])'
     printf '\n✅ 통과 — %s\n' "$id"
   elif [ "$rc" -eq 127 ]; then
     # 명령 자체가 없다. 코드를 고쳐도 안 풀리므로 반송하지 않는다 — Stop 이 바로 판단을 넘긴다.
@@ -375,8 +395,9 @@ cmd_run() {
     printf '\n❌ 실패 (exit 127: 명령을 찾을 수 없다) — %s\n의존성·경로를 갖춘 뒤 다시 실행하라. 코드 수정으로는 풀리지 않는다.\n' "$id"
     return 1
   else
-    bouncer_state_update "$TASK" --arg k "$id" '.evidence[$k] = false
-      | .attempts[$k] = ((.attempts[$k] // 0) + 1)'
+    bouncer_state_update "$TASK" --arg k "$id" --argjson sc "$scope_now" \
+      --arg t "$(bouncer_evidence_tree "$TASK" "$WORK_ROOT")" '.evidence[$k] = false
+      | .attempts[$k] = ((.attempts[$k] // 0) + 1) | .failed_scope[$k] = $sc | .fail_tree[$k] = $t'
     printf '\n❌ 실패 (exit %s) — %s\n출력을 읽고 고친 뒤 다시 실행하라.\n' "$rc" "$id"
     return 1
   fi
@@ -562,7 +583,9 @@ cmd_resume() {
 # 그래야 게이트를 처음부터 우회하는 수단이 되지 않는다.
 cmd_skip() {
   need_task --mutating
-  local id="${1:-}"; [ -n "$id" ] || die "usage: bouncer skip <step-id>"
+  local id="${1:-}"; [ -n "$id" ] || die "usage: bouncer skip <step-id> [--user '<사용자가 한 말>']"
+  local said=""
+  if [ "${2:-}" = "--user" ]; then said="${3:-}"; [ -n "$said" ] || die "--user 뒤에 사용자가 채팅에서 한 말을 그대로 적어라."; fi
   # 막고 있는 게이트가 현재 스테이지 소속이 아닐 수 있다 (반송된 뒤가 그렇다).
   # 그래서 현재 스테이지가 아니라 이 워크플로우의 체인 전체에서 찾는다.
   local wf owner="" st
@@ -575,10 +598,24 @@ cmd_skip() {
 'bouncer status'로 현재 단계의 step id를 확인하라."
   # 엔진이 포기하며 **그 id 를 직접 제안했을 때만** 열어준다.
   # 스테이지 단위로 열면 제안하지 않은 게이트까지 같이 열린다.
+  # 사용자가 채팅에서 직접 건너뛰라고 했으면 연다 (먹맵 2026-10-23: 직접 돌려 통과한 e2e 를
+  # 기록용으로 6분 더 돌리라던 걸 사용자가 "바로 배포해"라고 해도 못 풀었다).
+  # 그 말이 이 세션 transcript 의 사용자 메시지에 실제로 있어야 한다 — 모델이 지어낸 말로는 안 열린다.
+  if [ -n "$said" ]; then
+    bouncer_user_said "$SESSION" "$said" \
+      || die "'$said' 를 이 세션의 사용자 메시지에서 찾지 못했다.
+사용자가 채팅에 직접 쓴 말을 글자 그대로(4자 이상) 적어라. 다른 세션 메시지·훅 안내는 사용자 말이 아니다."
+    bouncer_state_update "$TASK" --arg k "$id" --arg q "$said" \
+      '.skipped[$k] = true | .skip_reason[$k] = ("사용자: " + $q)' || die "state.json을 갱신하지 못했다."
+    printf 'SKIPPED\t%s\t(%s)\t사용자: %s\n' "$id" "$owner" "$said"
+    printf '이번 작업에서만 건너뛴다. workflow.yaml은 그대로다.\n'
+    return 0
+  fi
   jq -e --arg k "$id" '(.skip_allowed // []) | index($k)' "$TASK/state.json" >/dev/null 2>&1 \
     || die "'$id' 는 엔진이 건너뛰라고 제안한 조건이 아니다.
 건너뛰기는 엔진이 '이 조건을 이번 작업에서만 건너뛴다'와 함께 그 명령을
-찍어줬을 때만 쓸 수 있다. 지금은 조건을 충족시켜라 — 'bouncer status' 참고."
+찍어줬을 때, 또는 사용자가 채팅에서 직접 건너뛰라고 했을 때(--user '<그 말>')만 쓸 수 있다.
+지금은 조건을 충족시켜라 — 'bouncer status' 참고."
   # 제안을 소모한다. 같은 제안을 두 번 쓰지는 못한다.
   bouncer_state_update "$TASK" --arg k "$id" \
     '.skipped[$k] = true

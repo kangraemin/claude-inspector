@@ -221,13 +221,72 @@ bouncer_tree_hash() {
 # 추적 파일만 본다 — 추적 안 되는 테스트 산출물(리포트·스냅샷)까지 넣으면 step 둘이
 # 서로의 산출물로 서로를 무효로 만들며 끝없이 다시 돈다.
 bouncer_evidence_tree() {
-  local task="$1" w="$2" gi idx="$1/.ev.index"
+  # "<추적 파일 트리> <추적+미추적 트리>" 두 개를 남긴다. 미추적 새 파일을 커밋하면
+  # 추적 트리만으로는 "코드가 바뀌었다"가 되어 통과한 검사를 다시 돌렸다 (커밋할 때마다).
+  local task="$1" w="$2" gi idx="$1/.ev.index" u a
   gi="$(git -C "$w" rev-parse --path-format=absolute --git-path index 2>/dev/null)" || return 0
   [ -f "$gi" ] && cp "$gi" "$idx" 2>/dev/null || return 0
   GIT_INDEX_FILE="$idx" git -C "$w" add -u -- ':(top)' >/dev/null 2>&1 || return 0
   GIT_INDEX_FILE="$idx" git -C "$w" rm -r -q --cached --ignore-unmatch -- \
     ':(top).claude' ':(top).ai-bouncer' >/dev/null 2>&1 || return 0
-  GIT_INDEX_FILE="$idx" git -C "$w" write-tree 2>/dev/null || true
+  u="$(GIT_INDEX_FILE="$idx" git -C "$w" write-tree 2>/dev/null)" || return 0
+  # 무시된 경로를 exclude 로 적으면 git add 가 "ignored" 오류로 실패한다 — 넣은 뒤 뺀다.
+  GIT_INDEX_FILE="$idx" git -C "$w" add -A -- ':(top)' >/dev/null 2>&1 \
+    && GIT_INDEX_FILE="$idx" git -C "$w" rm -r -q --cached --ignore-unmatch -- \
+         ':(top).claude' ':(top).ai-bouncer' >/dev/null 2>&1 \
+    && a="$(GIT_INDEX_FILE="$idx" git -C "$w" write-tree 2>/dev/null)"
+  printf '%s%s' "$u" "${a:+ $a}"
+}
+
+# 통과 때 지문(EV)과 지금 지문(NOW) 사이에 내용이 바뀐 파일을 찍는다. 없으면 빈 출력.
+# 지금 추적 중인 파일이 그때(미추적 포함) 내용과 다르거나, 그때 추적하던 파일이 사라졌으면 바뀐 것이다.
+bouncer_evidence_changed() {
+  local w="$1" ev="$2" now="$3" evu eva nu
+  [ "$ev" = "$now" ] && return 0
+  evu="${ev%% *}"; eva="${ev#* }"; nu="${now%% *}"
+  if [ "$eva" = "$ev" ]; then             # 옛 기록(트리 하나)
+    git -C "$w" diff-tree -r --name-only "$evu" "$nu" 2>/dev/null || echo /
+    return 0
+  fi
+  { git -C "$w" diff-tree -r --name-only --diff-filter=ACMRTU "$eva" "$nu" 2>/dev/null || echo /
+    git -C "$w" diff-tree -r --name-only --diff-filter=D "$evu" "$nu" 2>/dev/null || echo /; } | sort -u
+}
+
+# ── 테스트만 바뀐 경우 ──────────────────────────────────────
+# 빌드·타입 검사가 통과한 뒤 테스트 파일만 고쳤는데 "코드가 바뀌었다"며 빌드를 다시
+# 돌리게 했다 (먹맵 2026-10-23). 테스트 파일만 바뀌었으면 테스트를 돌리는 step만 무효로 한다.
+bouncer_is_test_path() {
+  printf '%s' "$1" | grep -Eq '(^|/)(tests?|__tests__|e2e|spec)/|\.(test|spec)\.[A-Za-z0-9]+$|_test\.(go|py)$|(^|/)test_[^/]*\.py$'
+}
+bouncer_is_test_cmd() {
+  printf '%s' "$1" | grep -Eq 'playwright|jest|vitest|pytest|mocha|cypress|(^|[ /:])(test|e2e)([ :]|$)'
+}
+# 바뀐 파일 목록(줄 단위)이 전부 테스트 파일이면 참.
+bouncer_test_only_diff() {
+  local f any=""
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    any=1
+    bouncer_is_test_path "$f" || return 1
+  done <<<"$1"
+  [ -n "$any" ]
+}
+
+# ── 사용자 원문 확인 ─────────────────────────────────────────
+# 사용자가 채팅에서 직접 한 말인지 transcript 에서 확인한다. 다른 세션 메시지·훅 피드백·
+# 도구 결과는 사용자 말이 아니다 — 그걸로 게이트를 풀 수 있으면 대리 승인이 된다.
+bouncer_user_said() {
+  local sid="$1" quote="$2" tr
+  [ -n "$sid" ] && [ "${#quote}" -ge 4 ] || return 1
+  tr="$(ls "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/projects/*/"$sid".jsonl 2>/dev/null | head -1)"
+  [ -f "$tr" ] || return 1
+  # 메시지 단위로 거른다 — 줄 단위로 거르면 다른 세션 메시지의 나머지 줄이 사용자 말로 남는다.
+  jq -r 'select(.type == "user" and (.isMeta // false | not))
+    | .message.content
+    | if type == "string" then . else (map(select(.type == "text") | .text) | join(" ")) end
+    | select(test("<cross-session-message|<system-reminder|<task-notification|<command-|^Stop hook feedback") | not)
+    | gsub("\\s+"; " ")' "$tr" 2>/dev/null \
+  | tail -200 | grep -qF -- "$(printf '%s' "$quote" | tr -s '[:space:]' ' ')"
 }
 
 # ── 실행 범위 ────────────────────────────────────────────────

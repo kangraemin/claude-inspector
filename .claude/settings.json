@@ -32,10 +32,10 @@
             "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/ai-bouncer/hooks/post-tool.sh",
             "args": [],
-            "timeout": 10
+            "timeout": 30
           }
         ],
-        "matcher": "ExitPlanMode"
+        "matcher": "ExitPlanMode|Bash"
       }
     ],
     "Stop": [

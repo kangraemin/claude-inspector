@@ -66,7 +66,9 @@ add_inject()  { INJECT="${INJECT}${INJECT:+$'\n\n'}$1"; }
 guarded_block() {
   local key seq
   # 사유는 미충족 조건 목록으로 비교한다 (첫 차단에만 붙는 안내 문구로 키가 달라지지 않게).
-  key="$STAGE:$(printf '%s' "${FAILURES:-$1}" | cksum | cut -d' ' -f1)"
+  # 숫자는 뺀다 — "(3/10)" 같은 횟수가 매번 바뀌어 같은 차단을 새 차단으로 보고
+  # 먹맵에서 "대기 중이다"만 10번 반복했다.
+  key="$STAGE:$(printf '%s' "${FAILURES:-$1}" | tr -d '0-9' | cksum | cut -d' ' -f1)"
   seq="$(cat "$TASK/.tool_seq" 2>/dev/null)"; case "$seq" in ''|*[!0-9]*) seq=0 ;; esac
   if [ "$REENTRY" = "true" ] && [ "$(cat "$TASK/.block_key" 2>/dev/null)" = "$key" ] \
      && [ "$(cat "$TASK/.tool_seq_at_block" 2>/dev/null)" = "$seq" ]; then
@@ -227,7 +229,11 @@ while IFS= read -r step; do
     EV_TREE="$(jq -r --arg k "$ID" '.evidence_tree[$k] // ""' "$TASK/state.json" 2>/dev/null)"
     if [ -n "$EV_TREE" ]; then
       [ -n "${NOW_EV_TREE+x}" ] || NOW_EV_TREE="$(bouncer_evidence_tree "$TASK" "$WORK_ROOT")"
-      if [ -n "$NOW_EV_TREE" ] && [ "$NOW_EV_TREE" != "$EV_TREE" ]; then
+      EV_CHANGED=""; [ -n "$NOW_EV_TREE" ] && EV_CHANGED="$(bouncer_evidence_changed "$WORK_ROOT" "$EV_TREE" "$NOW_EV_TREE")"
+      if [ -n "$EV_CHANGED" ] \
+         && { bouncer_is_test_cmd "$(jq -r '.run' <<<"$step")" \
+              || ! bouncer_test_only_diff "$EV_CHANGED"; }; then
+        # 테스트 파일만 바뀌었으면 테스트를 돌리지 않는 step(빌드·타입·린트)의 통과는 그대로 둔다.
         bouncer_state_update "$TASK" --arg k "$ID" '.evidence[$k] = false | del(.evidence_tree[$k])'
         DONE=false
         add_inject "[$LABEL] 통과한 뒤 코드가 바뀌었다 — 바뀐 코드로 다시 실행해야 한다."
@@ -290,7 +296,13 @@ while IFS= read -r step; do
       # (읽기 전용 verify 에서 .venv 가 없어 스크린샷이 exit 127 로 실패한 채 갇혔다).
       RUN_FAILS="$(jq -r --arg k "$ID" '.attempts[$k] // 0' "$TASK/state.json" 2>/dev/null)"
       case "$RUN_FAILS" in ''|*[!0-9]*) RUN_FAILS=0 ;; esac
-      if [ "$RUN_FAILS" -gt 0 ]; then
+      FAIL_TREE="$(jq -r --arg k "$ID" '.fail_tree[$k] // ""' "$TASK/state.json" 2>/dev/null)"
+      if [ "$RUN_FAILS" -gt 0 ] && [ -n "$FAIL_TREE" ] \
+         && [ -n "$(bouncer_evidence_changed "$WORK_ROOT" "$FAIL_TREE" "${NOW_EV_TREE:=$(bouncer_evidence_tree "$TASK" "$WORK_ROOT")}")" ]; then
+        # 실패 뒤 이미 고쳤다. 구현 단계로 되돌리면 고칠 게 없어 헛돈다 — 다시 돌리게만 한다.
+        add_failure "$LABEL — 실패 뒤 코드가 바뀌었다. 다시 실행: bouncer run '$ID' (실패한 것만: --failed)"
+        add_blocking_id "$ID"
+      elif [ "$RUN_FAILS" -gt 0 ]; then
         add_failure "$LABEL — \`bouncer run '$ID'\` 실패 (${RUN_FAILS}회)"; HARD_FAIL=1
         note_broken "$ID" "$LABEL"
         # 전체를 돌려 무관한 기존 실패에 막히면 같은 전체 실행만 반복하게 된다 (먹맵 e2e).
@@ -358,7 +370,8 @@ if [ -z "$FAILURES" ]; then
       else
         # 여기서 그냥 막으면 아래 상한 검사에 영영 도달하지 못한다.
         # 고칠 의사가 없거나 고칠 수 없는 상황이면 세션을 사용자에게 돌려줘야 한다.
-        if [ "$NS" -ge "$MAX_CONTINUE" ] 2>/dev/null; then
+        # 도구 없이 같은 답을 두 번 했으면 고칠 게 없다는 뜻이다 — 10번까지 끌지 않는다.
+        if [ "$NS" -ge 2 ] || [ "$NS" -ge "$MAX_CONTINUE" ] 2>/dev/null; then
           bouncer_state_update "$TASK" \
             '.continue_streak = 0 | .returned_to = null | .returned_tree = null'
           jq -n --arg c "${INJECT:+$INJECT$'\n\n'}⛔ [$STAGE] 되돌아온 뒤 ${NS}번 동안 작업 트리가 그대로다.

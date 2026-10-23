@@ -179,11 +179,11 @@ Step 1에 `OTHER`가 있었으면 그냥 `start`하면 거부된다. 사용자�
 | `bouncer todo done <n>` | 그 항목을 **실제로 구현한 뒤** 체크 |
 | `bouncer todo drop <n>` | 범위에서 뺀다 (기록에 남으니 사유를 사용자에게 알린다) |
 | `bouncer status` | 현재 단계와 남은 조건 (각 step의 `id:` 도 함께 나온다) |
-| `bouncer run <step-id>` | 검증 명령 실행 후 결과 기록. 명령 문자열은 엔진이 소유한다 |
+| `bouncer run <step-id> [--failed]` | 검증 명령 실행 후 결과 기록. 명령 문자열은 엔진이 소유한다. 같은 범위로 방금 실패했으면 `--failed`로 실패한 테스트만 다시 돌린다(playwright·pytest·jest) |
 | `bouncer scope <step-id> <경로…>` | e2e 같은 검증 step을 이번 작업에서 새로 만들었거나 영향받는 테스트로 좁힌다(`{scope}` 자리, 없으면 단일 명령 끝에 붙는다). 안 적으면 전체. `--clear`로 되돌린다 |
 | `bouncer done <step-id>` | 할 일을 마친 step 완료 표시 (사람 확인은 없다) |
 | `bouncer cancel` | 작업 취소 |
-| `bouncer skip <step-id>` | 엔진이 포기한 조건을 이번 작업에서만 건너뛴다 (사용자가 요청할 때만) |
+| `bouncer skip <step-id> [--user '<말>']` | 엔진이 포기한 조건을 이번 작업에서만 건너뛴다. 사용자가 채팅에서 직접 건너뛰라고 했으면 그 말을 글자 그대로 `--user`에 적는다(엔진이 transcript에서 확인) |
 | `bouncer release [--force]` | 죽은 세션이 남긴 잠금 확인 / 회수 |
 | `bouncer resume` | 이어받을 수 있는 미완 작업 목록 (인자 없으면 조회) |
 | `bouncer resume <task-id>` | 그 작업을 이어받는다 (`scan`의 `ORPHAN` 줄) |
