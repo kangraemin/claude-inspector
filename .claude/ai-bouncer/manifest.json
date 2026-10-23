@@ -6,6 +6,7 @@
     ".claude/ai-bouncer/engine/bouncer.sh",
     ".claude/ai-bouncer/engine/lib/common.sh",
     ".claude/ai-bouncer/engine/lib/guard.py",
+    ".claude/ai-bouncer/engine/lib/match_run.py",
     ".claude/ai-bouncer/hooks/session-start.sh",
     ".claude/ai-bouncer/hooks/pre-tool.sh",
     ".claude/ai-bouncer/hooks/post-tool.sh",
