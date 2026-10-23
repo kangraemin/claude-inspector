@@ -1,3 +1,4 @@
 workflow.compiled.json
 .update-check
 workflow.yaml.bak*
+__pycache__/
